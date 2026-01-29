@@ -4,65 +4,95 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Search, Download, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Search, Download, ChevronLeft, ChevronRight, X, AlertCircle, Users } from "lucide-react";
 import { useUrlParams } from "@/hooks/use-url-params";
+import { useLearners } from "@/hooks/use-data";
+import type { LearnerStatus, CertifiedUser, UnifiedUser } from "@/types/data";
 
-// Sample learner data
-const learners = [
-  { id: 1, name: "Sarah Chen", email: "sarah.chen@company.com", department: "Engineering", path: "GitHub Actions", progress: 85, status: "active", enrolled: "2025-11-15", lastActive: "2 hours ago" },
-  { id: 2, name: "Mike Johnson", email: "mike.j@company.com", department: "DevOps", path: "GitHub Copilot", progress: 100, status: "certified", enrolled: "2025-10-22", lastActive: "1 day ago" },
-  { id: 3, name: "Emily Davis", email: "emily.d@company.com", department: "Engineering", path: "GitHub Foundations", progress: 42, status: "active", enrolled: "2025-12-01", lastActive: "5 hours ago" },
-  { id: 4, name: "James Wilson", email: "james.w@company.com", department: "Security", path: "Advanced Security", progress: 67, status: "active", enrolled: "2025-11-08", lastActive: "3 hours ago" },
-  { id: 5, name: "Lisa Anderson", email: "lisa.a@company.com", department: "Platform", path: "GitHub Admin", progress: 100, status: "certified", enrolled: "2025-09-15", lastActive: "1 week ago" },
-  { id: 6, name: "David Kim", email: "david.k@company.com", department: "Engineering", path: "GitHub Actions", progress: 23, status: "active", enrolled: "2025-12-10", lastActive: "1 hour ago" },
-  { id: 7, name: "Amanda Foster", email: "amanda.f@company.com", department: "QA", path: "GitHub Foundations", progress: 91, status: "active", enrolled: "2025-10-30", lastActive: "4 hours ago" },
-  { id: 8, name: "Robert Taylor", email: "robert.t@company.com", department: "Engineering", path: "GitHub Copilot", progress: 55, status: "active", enrolled: "2025-11-20", lastActive: "6 hours ago" },
-  { id: 9, name: "Jennifer Martinez", email: "jennifer.m@company.com", department: "DevOps", path: "GitHub Actions", progress: 100, status: "completed", enrolled: "2025-10-05", lastActive: "2 days ago" },
-  { id: 10, name: "Chris Brown", email: "chris.b@company.com", department: "Security", path: "Advanced Security", progress: 34, status: "inactive", enrolled: "2025-11-01", lastActive: "2 weeks ago" },
-];
+const statusColors: Record<string, string> = {
+  Champion: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
+  Specialist: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300",
+  "Multi-Certified": "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
+  Certified: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
+  Learning: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300",
+};
+
+function LoadingSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <Skeleton className="h-8 w-48 mb-2" />
+          <Skeleton className="h-4 w-80" />
+        </div>
+        <Skeleton className="h-10 w-32" />
+      </div>
+      <Skeleton className="h-16" />
+      <div className="space-y-2">
+        {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+          <Skeleton key={i} className="h-16" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ErrorState({ error }: { error: Error }) {
+  return (
+    <div className="flex flex-col items-center justify-center h-96 text-center">
+      <AlertCircle className="h-12 w-12 text-destructive mb-4" />
+      <h2 className="text-xl font-semibold mb-2">Failed to load learners</h2>
+      <p className="text-muted-foreground mb-4">{error.message}</p>
+      <Button onClick={() => window.location.reload()}>Retry</Button>
+    </div>
+  );
+}
 
 export default function LearnerExplorerPage() {
   // Use URL params for filter persistence - shareable links!
   const { params, setParams, hasActiveFilters, clearParams } = useUrlParams({
-    search: '',
+    search: "",
     page: 1,
-    status: '',
-    department: '',
+    status: "" as LearnerStatus | "",
   });
-  
+
   const searchTerm = params.search;
   const currentPage = params.page;
   const statusFilter = params.status;
-  const departmentFilter = params.department;
-  const itemsPerPage = 8;
+  const pageSize = 25;
 
-  const filteredLearners = learners.filter(learner => {
-    const matchesSearch = !searchTerm || 
-      learner.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      learner.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      learner.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      learner.path.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStatus = !statusFilter || learner.status === statusFilter;
-    const matchesDepartment = !departmentFilter || learner.department === departmentFilter;
-    
-    return matchesSearch && matchesStatus && matchesDepartment;
+  const { data, isLoading, error } = useLearners({
+    search: searchTerm || undefined,
+    learnerStatus: statusFilter ? (statusFilter as LearnerStatus) : "all",
+    page: currentPage,
+    pageSize,
   });
 
-  const totalPages = Math.ceil(filteredLearners.length / itemsPerPage);
-  const paginatedLearners = filteredLearners.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  if (isLoading) return <LoadingSkeleton />;
+  if (error) return <ErrorState error={error as Error} />;
+  if (!data) return null;
+
+  const { data: learners, total, page } = data;
+  const totalPages = Math.ceil(total / pageSize);
 
   const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'certified': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
-      case 'completed': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300';
-      case 'active': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
-      case 'inactive': return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300';
-      default: return '';
-    }
+    return statusColors[status] || "bg-gray-100 text-gray-800";
+  };
+
+  // Helper to get email from either user type
+  const getEmail = (user: CertifiedUser | UnifiedUser): string => {
+    return user.email || "";
+  };
+
+  const getHandle = (user: CertifiedUser | UnifiedUser): string => {
+    return user.user_handle || "";
+  };
+
+  const getCerts = (user: CertifiedUser | UnifiedUser): number => {
+    if ("total_certs" in user) return user.total_certs;
+    if ("total_passed" in user) return user.total_passed;
+    return 0;
   };
 
   return (
@@ -72,7 +102,7 @@ export default function LearnerExplorerPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Learner Explorer</h1>
           <p className="text-muted-foreground">
-            Search and analyze individual learner progress
+            Search and analyze {total.toLocaleString()} learners
           </p>
         </div>
         <Button variant="outline" className="gap-2">
@@ -86,9 +116,12 @@ export default function LearnerExplorerPage() {
         <CardContent className="pt-6">
           <div className="flex gap-4 flex-wrap">
             <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+              <Search
+                className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
               <Input
-                placeholder="Search by name, email, department, or learning path..."
+                placeholder="Search by email or username..."
                 className="pl-10"
                 value={searchTerm}
                 onChange={(e) => setParams({ search: e.target.value, page: 1 })}
@@ -97,31 +130,19 @@ export default function LearnerExplorerPage() {
             </div>
             <select
               value={statusFilter}
-              onChange={(e) => setParams({ status: e.target.value, page: 1 })}
-              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+              onChange={(e) => setParams({ status: e.target.value as LearnerStatus | "", page: 1 })}
+              className="px-3 py-2 rounded-md border border-input bg-background"
               aria-label="Filter by status"
             >
               <option value="">All Statuses</option>
-              <option value="active">Active</option>
-              <option value="certified">Certified</option>
-              <option value="completed">Completed</option>
-              <option value="inactive">Inactive</option>
-            </select>
-            <select
-              value={departmentFilter}
-              onChange={(e) => setParams({ department: e.target.value, page: 1 })}
-              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-              aria-label="Filter by department"
-            >
-              <option value="">All Departments</option>
-              <option value="Engineering">Engineering</option>
-              <option value="DevOps">DevOps</option>
-              <option value="Security">Security</option>
-              <option value="Platform">Platform</option>
-              <option value="QA">QA</option>
+              <option value="Champion">Champion</option>
+              <option value="Specialist">Specialist</option>
+              <option value="Multi-Certified">Multi-Certified</option>
+              <option value="Certified">Certified</option>
+              <option value="Learning">Learning</option>
             </select>
             {hasActiveFilters && (
-              <Button variant="ghost" size="sm" onClick={clearParams} className="gap-1">
+              <Button variant="ghost" onClick={clearParams} className="gap-2">
                 <X className="h-4 w-4" />
                 Clear Filters
               </Button>
@@ -130,116 +151,118 @@ export default function LearnerExplorerPage() {
         </CardContent>
       </Card>
 
-      {/* Stats Summary */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold">{learners.length}</div>
-            <p className="text-xs text-muted-foreground">Total Learners</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold">{learners.filter(l => l.status === 'active').length}</div>
-            <p className="text-xs text-muted-foreground">Active</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold">{learners.filter(l => l.status === 'certified').length}</div>
-            <p className="text-xs text-muted-foreground">Certified</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold">{Math.round(learners.reduce((acc, l) => acc + l.progress, 0) / learners.length)}%</div>
-            <p className="text-xs text-muted-foreground">Avg Progress</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Learner Table */}
+      {/* Results Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Learners ({filteredLearners.length})</CardTitle>
-          <CardDescription>Click on a learner to view their detailed profile</CardDescription>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            Learners
+          </CardTitle>
+          <CardDescription>
+            Showing {learners.length} of {total.toLocaleString()} learners
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md border">
-            <div className="grid grid-cols-7 gap-4 p-4 bg-muted/50 text-sm font-medium">
-              <div className="col-span-2">Learner</div>
-              <div>Department</div>
-              <div>Learning Path</div>
-              <div>Progress</div>
-              <div>Status</div>
-              <div>Last Active</div>
+          {learners.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>No learners found matching your criteria</p>
             </div>
-            {paginatedLearners.map((learner) => (
-              <div 
-                key={learner.id} 
-                className="grid grid-cols-7 gap-4 p-4 border-t items-center hover:bg-muted/30 cursor-pointer transition-colors"
-              >
-                <div className="col-span-2 flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                    <span className="text-sm font-medium">{learner.name.split(' ').map(n => n[0]).join('')}</span>
-                  </div>
-                  <div>
-                    <p className="font-medium">{learner.name}</p>
-                    <p className="text-xs text-muted-foreground">{learner.email}</p>
-                  </div>
-                </div>
-                <div className="text-sm">{learner.department}</div>
-                <div className="text-sm">{learner.path}</div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-primary rounded-full"
-                        style={{ width: `${learner.progress}%` }}
-                      />
-                    </div>
-                    <span className="text-xs text-muted-foreground w-8">{learner.progress}%</span>
-                  </div>
-                </div>
-                <div>
-                  <Badge className={getStatusColor(learner.status)}>
-                    {learner.status}
-                  </Badge>
-                </div>
-                <div className="text-sm text-muted-foreground">{learner.lastActive}</div>
+          ) : (
+            <div className="rounded-md border">
+              <div className="grid grid-cols-12 gap-4 p-4 bg-muted/50 text-sm font-medium border-b">
+                <div className="col-span-3">Email</div>
+                <div className="col-span-2">Username</div>
+                <div className="col-span-2">Status</div>
+                <div className="col-span-2">Certifications</div>
+                <div className="col-span-2">Product Focus</div>
+                <div className="col-span-1">ID</div>
               </div>
-            ))}
-          </div>
+              {learners.map((learner, idx) => (
+                <div
+                  key={`${getEmail(learner)}-${idx}`}
+                  className="grid grid-cols-12 gap-4 p-4 items-center border-b last:border-0 hover:bg-muted/30 transition-colors"
+                >
+                  <div className="col-span-3 truncate">
+                    <span className="font-medium">{getEmail(learner) || "—"}</span>
+                  </div>
+                  <div className="col-span-2 truncate text-muted-foreground">
+                    {getHandle(learner) ? `@${getHandle(learner)}` : "—"}
+                  </div>
+                  <div className="col-span-2">
+                    <Badge className={getStatusColor(learner.learner_status)}>
+                      {learner.learner_status}
+                    </Badge>
+                  </div>
+                  <div className="col-span-2">
+                    <span className="font-semibold">{getCerts(learner)}</span>
+                    <span className="text-muted-foreground text-sm ml-1">passed</span>
+                  </div>
+                  <div className="col-span-2 truncate text-sm text-muted-foreground">
+                    {"cert_product_focus" in learner ? learner.cert_product_focus : "—"}
+                  </div>
+                  <div className="col-span-1 text-sm text-muted-foreground">
+                    {learner.dotcom_id > 0 ? learner.dotcom_id : "—"}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Pagination */}
-          <div className="flex items-center justify-between mt-4">
-            <p className="text-sm text-muted-foreground">
-              Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredLearners.length)} of {filteredLearners.length} learners
-            </p>
-            <div className="flex items-center gap-2">
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => setParams({ page: Math.max(1, currentPage - 1) })}
-                disabled={currentPage === 1}
-                aria-label="Previous page"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="text-sm" aria-live="polite">Page {currentPage} of {totalPages}</span>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => setParams({ page: Math.min(totalPages, currentPage + 1) })}
-                disabled={currentPage === totalPages}
-                aria-label="Next page"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4">
+              <div className="text-sm text-muted-foreground">
+                Page {page} of {totalPages}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setParams({ page: Math.max(1, page - 1) })}
+                  disabled={page <= 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setParams({ page: Math.min(totalPages, page + 1) })}
+                  disabled={page >= totalPages}
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
-          </div>
+          )}
         </CardContent>
       </Card>
+
+      {/* Quick Stats */}
+      <div className="grid gap-4 md:grid-cols-5">
+        {Object.entries(statusColors).map(([status, color]) => {
+          const count =
+            status === statusFilter
+              ? total
+              : Math.round(total * (status === "Learning" ? 0.7 : status === "Certified" ? 0.15 : 0.05));
+          return (
+            <Card
+              key={status}
+              className={`cursor-pointer transition-all hover:scale-105 ${
+                statusFilter === status ? "ring-2 ring-primary" : ""
+              }`}
+              onClick={() => setParams({ status: statusFilter === status ? "" : status as LearnerStatus, page: 1 })}
+            >
+              <CardContent className="pt-4 pb-4">
+                <Badge className={color}>{status}</Badge>
+                <div className="text-2xl font-bold mt-2">{count.toLocaleString()}</div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -1,9 +1,10 @@
 "use client";
 
-import { MetricCard, SimpleBarChart, SimpleAreaChart, DonutChart } from "@/components/dashboard";
+import { MetricCard, SimpleAreaChart, DonutChart } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
 import { 
   TrendingUp, 
   Users, 
@@ -12,85 +13,60 @@ import {
   ArrowRight,
   CheckCircle2,
   Target,
-  Sparkles
+  Sparkles,
+  AlertCircle
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useImpact } from "@/hooks/use-data";
 
-// Learning to Impact Flow Data
-const impactFlowData = {
-  learningHours: 12500,
-  skillsAcquired: 847,
-  productAdoption: 78,
-  timeOnPlatform: 156,
-};
+function LoadingSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <Skeleton className="h-8 w-48 mb-2" />
+          <Skeleton className="h-4 w-80" />
+        </div>
+        <Skeleton className="h-6 w-32" />
+      </div>
+      <Skeleton className="h-40" />
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {[1, 2, 3, 4].map((i) => (
+          <Skeleton key={i} className="h-32" />
+        ))}
+      </div>
+      <Skeleton className="h-96" />
+    </div>
+  );
+}
 
-// Learning Stage Impact
-const stageImpactData = [
-  { 
-    stage: "Awareness", 
-    learners: 4586, 
-    avgUsageIncrease: 12, 
-    platformTimeIncrease: 8,
-    topProduct: "Docs & Guides"
-  },
-  { 
-    stage: "Exploration", 
-    learners: 3421, 
-    avgUsageIncrease: 28, 
-    platformTimeIncrease: 22,
-    topProduct: "GitHub Copilot"
-  },
-  { 
-    stage: "Active Learning", 
-    learners: 2156, 
-    avgUsageIncrease: 45, 
-    platformTimeIncrease: 38,
-    topProduct: "Actions"
-  },
-  { 
-    stage: "Proficiency", 
-    learners: 1256, 
-    avgUsageIncrease: 67, 
-    platformTimeIncrease: 52,
-    topProduct: "Advanced Security"
-  },
-  { 
-    stage: "Mastery", 
-    learners: 523, 
-    avgUsageIncrease: 89, 
-    platformTimeIncrease: 71,
-    topProduct: "Enterprise Features"
-  },
-];
-
-// Learning → Usage Correlation Over Time
-const correlationData = [
-  { name: "Jul", learningHours: 1200, productUsage: 45, platformTime: 32 },
-  { name: "Aug", learningHours: 1450, productUsage: 52, platformTime: 38 },
-  { name: "Sep", learningHours: 1680, productUsage: 61, platformTime: 45 },
-  { name: "Oct", learningHours: 1920, productUsage: 68, platformTime: 51 },
-  { name: "Nov", learningHours: 2100, productUsage: 74, platformTime: 58 },
-  { name: "Dec", learningHours: 2340, productUsage: 78, platformTime: 62 },
-  { name: "Jan", learningHours: 2580, productUsage: 82, platformTime: 67 },
-];
-
-// Product Adoption by Learning Stage
-const productAdoptionData = [
-  { name: "Copilot", before: 23, after: 78 },
-  { name: "Actions", before: 34, after: 72 },
-  { name: "Codespaces", before: 12, after: 56 },
-  { name: "Security", before: 18, after: 64 },
-  { name: "Packages", before: 15, after: 48 },
-];
-
-// ROI Breakdown
-const roiBreakdown = [
-  { name: "Developer Productivity", value: 42, color: "#22c55e" },
-  { name: "Reduced Onboarding Time", value: 28, color: "#3b82f6" },
-  { name: "Feature Adoption", value: 18, color: "#8b5cf6" },
-  { name: "Support Ticket Reduction", value: 12, color: "#f59e0b" },
-];
+function ErrorState({ error }: { error: Error }) {
+  return (
+    <div className="flex flex-col items-center justify-center h-96 text-center">
+      <AlertCircle className="h-12 w-12 text-destructive mb-4" />
+      <h2 className="text-xl font-semibold mb-2">Failed to load impact data</h2>
+      <p className="text-muted-foreground mb-4">{error.message}</p>
+      <Button onClick={() => window.location.reload()}>Retry</Button>
+    </div>
+  );
+}
 
 export default function LearningImpactPage() {
+  const { data, isLoading, error } = useImpact();
+
+  if (isLoading) return <LoadingSkeleton />;
+  if (error) return <ErrorState error={error as Error} />;
+  if (!data) return null;
+
+  const { impactFlow, productAdoption, stageImpact, correlationData, roiBreakdown, metrics } = data;
+
+  // Calculate impact score
+  const impactScore = Math.min(100, Math.round(
+    (metrics.avgUsageIncrease / 100) * 40 +
+    (metrics.featuresAdopted / 5) * 30 +
+    30
+  ));
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -103,7 +79,7 @@ export default function LearningImpactPage() {
         </div>
         <Badge variant="default" className="bg-gradient-to-r from-violet-500 to-purple-600">
           <Sparkles className="h-3 w-3 mr-1" />
-          Impact Score: 87/100
+          Impact Score: {impactScore}/100
         </Badge>
       </div>
 
@@ -126,7 +102,7 @@ export default function LearningImpactPage() {
                 Learning Investment
               </div>
               <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-                {impactFlowData.learningHours.toLocaleString()}
+                {impactFlow.learningHours.toLocaleString()}
               </div>
               <div className="text-sm text-muted-foreground">hours consumed</div>
               <ArrowRight className="absolute right-[-20px] top-1/2 -translate-y-1/2 h-6 w-6 text-muted-foreground z-10" />
@@ -138,9 +114,9 @@ export default function LearningImpactPage() {
                 Skills Developed
               </div>
               <div className="text-3xl font-bold text-violet-600 dark:text-violet-400">
-                {impactFlowData.skillsAcquired}
+                {impactFlow.skillsAcquired.toLocaleString()}
               </div>
-              <div className="text-sm text-muted-foreground">skills acquired</div>
+              <div className="text-sm text-muted-foreground">certifications earned</div>
               <ArrowRight className="absolute right-[-20px] top-1/2 -translate-y-1/2 h-6 w-6 text-muted-foreground z-10" />
             </div>
 
@@ -150,7 +126,7 @@ export default function LearningImpactPage() {
                 Product Adoption
               </div>
               <div className="text-3xl font-bold text-green-600 dark:text-green-400">
-                +{impactFlowData.productAdoption}%
+                +{impactFlow.productAdoption}%
               </div>
               <div className="text-sm text-muted-foreground">usage increase</div>
               <ArrowRight className="absolute right-[-20px] top-1/2 -translate-y-1/2 h-6 w-6 text-muted-foreground z-10" />
@@ -162,7 +138,7 @@ export default function LearningImpactPage() {
                 Platform Engagement
               </div>
               <div className="text-3xl font-bold text-amber-600 dark:text-amber-400">
-                +{impactFlowData.timeOnPlatform}%
+                +{impactFlow.timeOnPlatform}%
               </div>
               <div className="text-sm text-muted-foreground">time on platform</div>
             </div>
@@ -174,28 +150,28 @@ export default function LearningImpactPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           title="Active Learners"
-          value="4,586"
+          value={metrics.activeLearners.toLocaleString()}
           description="Enrolled in learning paths"
           trend={{ value: 18.2, isPositive: true }}
           icon={<Users className="h-4 w-4" />}
         />
         <MetricCard
           title="Avg Usage Increase"
-          value="+67%"
+          value={`+${metrics.avgUsageIncrease}%`}
           description="After completing courses"
           trend={{ value: 12.5, isPositive: true }}
           icon={<TrendingUp className="h-4 w-4" />}
         />
         <MetricCard
           title="Features Adopted"
-          value="4.2"
+          value={metrics.featuresAdopted.toString()}
           description="New features per learner"
           trend={{ value: 8.3, isPositive: true }}
           icon={<Zap className="h-4 w-4" />}
         />
         <MetricCard
           title="Time to Value"
-          value="-42%"
+          value={`${metrics.timeToValue}%`}
           description="Faster onboarding"
           trend={{ value: 15.1, isPositive: true }}
           icon={<Clock className="h-4 w-4" />}
@@ -212,7 +188,7 @@ export default function LearningImpactPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {stageImpactData.map((stage, index) => (
+            {stageImpact.map((stage, index) => (
               <div 
                 key={stage.stage}
                 className="flex items-center gap-4 p-4 rounded-lg bg-muted/50"
@@ -315,40 +291,47 @@ export default function LearningImpactPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-6">
-            {productAdoptionData.map((product) => (
-              <div key={product.name} className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">{product.name}</span>
-                  <span className="text-sm text-green-600 dark:text-green-400 font-medium">
-                    +{product.after - product.before}% increase
-                  </span>
-                </div>
-                <div className="flex gap-2 items-center">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs text-muted-foreground w-16">Before</span>
-                      <div className="flex-1 h-4 bg-muted rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-muted-foreground/40 rounded-full"
-                          style={{ width: `${product.before}%` }}
-                        />
+            {productAdoption.map((product) => {
+              const increase = product.before > 0 
+                ? Math.round(((product.after - product.before) / product.before) * 100)
+                : product.after > 0 ? 100 : 0;
+              const maxValue = Math.max(product.before, product.after);
+              
+              return (
+                <div key={product.name} className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">{product.name}</span>
+                    <span className="text-sm text-green-600 dark:text-green-400 font-medium">
+                      +{increase}% increase
+                    </span>
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs text-muted-foreground w-16">Before</span>
+                        <div className="flex-1 h-4 bg-muted rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-muted-foreground/40 rounded-full"
+                            style={{ width: `${maxValue > 0 ? (product.before / maxValue) * 100 : 0}%` }}
+                          />
+                        </div>
+                        <span className="text-xs font-medium w-12">{product.before}</span>
                       </div>
-                      <span className="text-xs font-medium w-10">{product.before}%</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground w-16">After</span>
-                      <div className="flex-1 h-4 bg-muted rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-gradient-to-r from-green-500 to-emerald-500 rounded-full"
-                          style={{ width: `${product.after}%` }}
-                        />
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground w-16">After</span>
+                        <div className="flex-1 h-4 bg-muted rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-gradient-to-r from-green-500 to-emerald-500 rounded-full"
+                            style={{ width: `${maxValue > 0 ? (product.after / maxValue) * 100 : 0}%` }}
+                          />
+                        </div>
+                        <span className="text-xs font-medium w-12">{product.after}</span>
                       </div>
-                      <span className="text-xs font-medium w-10">{product.after}%</span>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </CardContent>
       </Card>
@@ -365,16 +348,16 @@ export default function LearningImpactPage() {
               <div>
                 <div className="font-medium">Strong Correlation</div>
                 <div className="text-sm text-muted-foreground">
-                  Learners who complete 3+ courses show 67% higher product usage
+                  Certified users show {metrics.avgUsageIncrease}% higher product usage
                 </div>
               </div>
             </div>
             <div className="flex items-start gap-3">
               <CheckCircle2 className="h-5 w-5 text-green-500 mt-0.5" />
               <div>
-                <div className="font-medium">Copilot Leading</div>
+                <div className="font-medium">Multi-Product Adoption</div>
                 <div className="text-sm text-muted-foreground">
-                  Copilot learning paths drive highest adoption increase at 55%
+                  Learners adopt {metrics.featuresAdopted} features on average
                 </div>
               </div>
             </div>
@@ -383,7 +366,7 @@ export default function LearningImpactPage() {
               <div>
                 <div className="font-medium">Faster Onboarding</div>
                 <div className="text-sm text-muted-foreground">
-                  New users with training reach proficiency 42% faster
+                  New users with training reach proficiency {Math.abs(metrics.timeToValue)}% faster
                 </div>
               </div>
             </div>
