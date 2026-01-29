@@ -43,53 +43,36 @@ import { SearchTrigger } from "@/components/global-search";
 
 const navItems = [
   {
-    title: "Dashboard",
+    title: "Overview",
     items: [
       { title: "Home", href: "/", icon: Home },
-      { title: "Events", href: "/events", icon: Calendar },
+      { title: "Executive Summary", href: "/executive/summary", icon: FileText },
     ],
   },
   {
-    title: "Learner Journey",
+    title: "Learning Journey",
     items: [
-      { title: "Overview", href: "/journey/overview", icon: Target },
-      { title: "Funnel", href: "/journey/funnel", icon: Filter },
-      { title: "Explorer", href: "/journey/explorer", icon: Users },
-      { title: "Profile", href: "/journey/profile", icon: UserCircle },
+      { title: "Journey Overview", href: "/journey/overview", icon: Target },
+      { title: "Journey Funnel", href: "/journey/funnel", icon: Filter },
+      { title: "Learner Explorer", href: "/journey/explorer", icon: Users },
+      { title: "Learner Profile", href: "/journey/profile", icon: UserCircle },
+    ],
+  },
+  {
+    title: "Skills & Growth",
+    items: [
       { title: "Progression", href: "/progression", icon: LineChart },
-    ],
-  },
-  {
-    title: "Analytics",
-    items: [
-      { title: "Copilot", href: "/analytics/copilot", icon: Bot },
-      { title: "Insights & ROI", href: "/analytics/insights", icon: TrendingUp },
+      { title: "Skills Analysis", href: "/skills", icon: Zap },
       { title: "Certifications", href: "/analytics/certification", icon: Award },
-      { title: "Skills", href: "/skills", icon: Zap },
+    ],
+  },
+  {
+    title: "Impact & Correlation",
+    items: [
+      { title: "Learning Impact", href: "/impact", icon: TrendingUp },
       { title: "Product Alignment", href: "/alignment", icon: Package },
-      { title: "Compare", href: "/compare", icon: BarChart2 },
-    ],
-  },
-  {
-    title: "Tools",
-    items: [
-      { title: "Ask AI", href: "/query", icon: MessageSquare },
-      { title: "Reports", href: "/reports", icon: Download },
-    ],
-  },
-  {
-    title: "Executive",
-    items: [
-      { title: "Summary", href: "/executive/summary", icon: FileText },
-      { title: "Health Check", href: "/executive/health", icon: Activity },
-    ],
-  },
-  {
-    title: "Admin",
-    items: [
-      { title: "Alerts", href: "/admin/alerts", icon: Bell },
-      { title: "Performance", href: "/admin/performance", icon: Gauge },
-      { title: "Settings", href: "/admin/settings", icon: Settings },
+      { title: "Behavior Change", href: "/behavior", icon: Activity },
+      { title: "Compare Cohorts", href: "/compare", icon: BarChart2 },
     ],
   },
 ];

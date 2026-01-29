@@ -3,13 +3,21 @@
 import { MetricCard, DonutChart, SimpleBarChart, SimpleAreaChart } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, Award, DollarSign, Target, CheckCircle, AlertTriangle, ArrowUpRight } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Users, Award, DollarSign, Target, CheckCircle, AlertTriangle, ArrowUpRight, TrendingUp, Zap } from "lucide-react";
 
 // Executive summary data
 const programHealthData = [
   { name: "On Track", value: 78, color: "#22c55e" },
   { name: "At Risk", value: 15, color: "#f59e0b" },
   { name: "Off Track", value: 7, color: "#ef4444" },
+];
+
+const impactMetrics = [
+  { name: "Platform Usage", before: 45, after: 78, unit: "%" },
+  { name: "Feature Adoption", before: 23, after: 67, unit: "%" },
+  { name: "Time to Productivity", before: 45, after: 26, unit: "days", inverse: true },
+  { name: "Support Tickets", before: 156, after: 89, unit: "/mo", inverse: true },
 ];
 
 const quarterlyPerformanceData = [
@@ -39,7 +47,7 @@ const keyInitiatives = [
 const highlights = [
   { title: "Certification Rate Up 23%", description: "Exceeded Q4 target by 150 certifications", type: "success" },
   { title: "$825K Annual ROI", description: "Productivity and quality improvements", type: "success" },
-  { title: "DevOps Training Delayed", description: "Resource constraints - mitigation plan in place", type: "warning" },
+  { title: "67% Usage Increase", description: "Average platform usage post-learning", type: "success" },
   { title: "76% Copilot Adoption", description: "Highest adoption rate across enterprise", type: "success" },
 ];
 
@@ -70,16 +78,16 @@ export default function ExecutiveSummaryPage() {
         <MetricCard
           title="Total Learners"
           value="4,586"
-          description="Active participants"
+          description="Active in journey"
           trend={{ value: 15.2, isPositive: true }}
           icon={<Users className="h-4 w-4" />}
         />
         <MetricCard
-          title="Certifications"
-          value="1,256"
-          description="Completed this year"
-          trend={{ value: 23.1, isPositive: true }}
-          icon={<Award className="h-4 w-4" />}
+          title="Usage Increase"
+          value="+67%"
+          description="Post-learning engagement"
+          trend={{ value: 12.5, isPositive: true }}
+          icon={<TrendingUp className="h-4 w-4" />}
         />
         <MetricCard
           title="Annual ROI"
@@ -89,13 +97,45 @@ export default function ExecutiveSummaryPage() {
           icon={<DollarSign className="h-4 w-4" />}
         />
         <MetricCard
-          title="Goal Achievement"
-          value="112%"
-          description="vs annual target"
-          trend={{ value: 12.0, isPositive: true }}
-          icon={<Target className="h-4 w-4" />}
+          title="Products Adopted"
+          value="4.2"
+          description="Avg per learner"
+          trend={{ value: 18.0, isPositive: true }}
+          icon={<Zap className="h-4 w-4" />}
         />
       </div>
+
+      {/* Learning Impact Summary */}
+      <Card className="border-2 border-green-500/20 bg-gradient-to-br from-green-500/5 to-transparent">
+        <CardHeader>
+          <CardTitle className="text-green-700 dark:text-green-400">Learning → Impact Summary</CardTitle>
+          <CardDescription>Key metrics showing the direct impact of learning on platform engagement</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid md:grid-cols-4 gap-6">
+            {impactMetrics.map((metric) => {
+              const improvement = metric.inverse 
+                ? ((metric.before - metric.after) / metric.before) * 100
+                : ((metric.after - metric.before) / metric.before) * 100;
+              return (
+                <div key={metric.name} className="space-y-2">
+                  <div className="text-sm font-medium">{metric.name}</div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-bold">{metric.after}{metric.unit}</span>
+                    <span className="text-sm text-green-600 dark:text-green-400">
+                      {metric.inverse ? '↓' : '↑'}{Math.abs(improvement).toFixed(0)}%
+                    </span>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    was {metric.before}{metric.unit}
+                  </div>
+                  <Progress value={metric.inverse ? (1 - metric.after/metric.before) * 100 : (metric.after/100) * 100} className="h-1.5" />
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Highlights */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

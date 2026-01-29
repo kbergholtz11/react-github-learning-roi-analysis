@@ -1,44 +1,88 @@
 "use client";
 
-import { MetricCard, DonutChart, SimpleBarChart, SimpleAreaChart } from "@/components/dashboard";
+import Link from "next/link";
+import { MetricCard, DonutChart, SimpleAreaChart } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, Award, Clock, Target } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { 
+  Users, 
+  Award, 
+  TrendingUp, 
+  ArrowRight,
+  Sparkles,
+  GraduationCap,
+  Zap,
+  Activity,
+  Target
+} from "lucide-react";
 
-// Sample data - will be replaced with API calls
-const engagementData = [
-  { name: "Active", value: 2847, color: "#22c55e" },
-  { name: "Completed", value: 1256, color: "#3b82f6" },
-  { name: "In Progress", value: 1591, color: "#f59e0b" },
-  { name: "Not Started", value: 892, color: "#ef4444" },
+// Learning Journey Stages
+const journeyStages = [
+  { stage: "Awareness", count: 4586, percentage: 100, color: "#94a3b8" },
+  { stage: "Exploration", count: 3421, percentage: 75, color: "#3b82f6" },
+  { stage: "Active Learning", count: 2156, percentage: 47, color: "#8b5cf6" },
+  { stage: "Proficiency", count: 1256, percentage: 27, color: "#22c55e" },
+  { stage: "Mastery", count: 523, percentage: 11, color: "#f59e0b" },
 ];
 
-const weeklyActivityData = [
-  { name: "Mon", learners: 420, completions: 85 },
-  { name: "Tue", learners: 380, completions: 72 },
-  { name: "Wed", learners: 510, completions: 95 },
-  { name: "Thu", learners: 450, completions: 88 },
-  { name: "Fri", learners: 320, completions: 65 },
-  { name: "Sat", learners: 180, completions: 42 },
-  { name: "Sun", learners: 150, completions: 35 },
+// Impact Summary
+const impactSummary = [
+  { name: "Usage Increase", value: 67, color: "#22c55e" },
+  { name: "Time on Platform", value: 52, color: "#3b82f6" },
+  { name: "Feature Adoption", value: 78, color: "#8b5cf6" },
+  { name: "Productivity Gain", value: 45, color: "#f59e0b" },
 ];
 
-const monthlyProgressData = [
-  { name: "Jan", active: 1200, certified: 180 },
-  { name: "Feb", active: 1350, certified: 220 },
-  { name: "Mar", active: 1580, certified: 280 },
-  { name: "Apr", active: 1890, certified: 350 },
-  { name: "May", active: 2200, certified: 420 },
-  { name: "Jun", active: 2500, certified: 520 },
+// Learning Activity Trend
+const activityTrend = [
+  { name: "Aug", learners: 2800, completions: 420, usage: 45 },
+  { name: "Sep", learners: 3200, completions: 520, usage: 52 },
+  { name: "Oct", learners: 3600, completions: 640, usage: 58 },
+  { name: "Nov", learners: 4100, completions: 780, usage: 65 },
+  { name: "Dec", learners: 4400, completions: 920, usage: 71 },
+  { name: "Jan", learners: 4586, completions: 1048, usage: 78 },
 ];
 
-const topCourses = [
-  { name: "GitHub Actions Fundamentals", completions: 847, trend: "+12%" },
-  { name: "GitHub Copilot for Developers", completions: 732, trend: "+28%" },
-  { name: "Advanced Git Workflows", completions: 589, trend: "+8%" },
-  { name: "Security Best Practices", completions: 456, trend: "+15%" },
-  { name: "GitHub Enterprise Admin", completions: 324, trend: "+5%" },
+// Top Learning Paths by Impact
+const topPaths = [
+  { name: "GitHub Copilot Mastery", learners: 1247, impact: 89, adoption: "+55%" },
+  { name: "Actions & Automation", learners: 982, impact: 82, adoption: "+48%" },
+  { name: "Security Fundamentals", learners: 756, impact: 76, adoption: "+42%" },
+  { name: "Code Review Excellence", learners: 634, impact: 71, adoption: "+38%" },
+];
+
+// Quick Navigation Cards
+const quickNavCards = [
+  {
+    title: "Learning Impact",
+    description: "See how learning drives platform engagement",
+    href: "/impact",
+    icon: TrendingUp,
+    color: "from-green-500 to-emerald-500",
+  },
+  {
+    title: "Journey Overview",
+    description: "Explore the full learner journey",
+    href: "/journey/overview",
+    icon: Target,
+    color: "from-blue-500 to-cyan-500",
+  },
+  {
+    title: "Behavior Change",
+    description: "Track workflow transformations",
+    href: "/behavior",
+    icon: Activity,
+    color: "from-violet-500 to-purple-500",
+  },
+  {
+    title: "Compare Cohorts",
+    description: "Learners vs non-learners analysis",
+    href: "/compare",
+    icon: Users,
+    color: "from-amber-500 to-orange-500",
+  },
 ];
 
 export default function DashboardPage() {
@@ -47,198 +91,238 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Learning Dashboard</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Learning Journey Analytics</h1>
           <p className="text-muted-foreground">
-            Track GitHub Learning program performance and ROI metrics
+            Track how GitHub Learning transforms users into platform experts
           </p>
         </div>
-        <Badge variant="outline" className="text-sm">
-          Last updated: Just now
+        <Badge variant="default" className="bg-gradient-to-r from-violet-500 to-purple-600">
+          <Sparkles className="h-3 w-3 mr-1" />
+          Impact Score: 87/100
         </Badge>
       </div>
 
-      {/* KPI Cards */}
+      {/* Primary KPIs */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <MetricCard
-          title="Total Learners"
+          title="Active Learners"
           value="4,586"
-          description="Active in the program"
-          trend={{ value: 12.5, isPositive: true }}
+          description="In learning journey"
+          trend={{ value: 18.2, isPositive: true }}
           icon={<Users className="h-4 w-4" />}
         />
         <MetricCard
-          title="Certified Users"
+          title="Reached Proficiency"
           value="1,256"
-          description="Completed certifications"
-          trend={{ value: 8.2, isPositive: true }}
+          description="Demonstrating mastery"
+          trend={{ value: 12.5, isPositive: true }}
           icon={<Award className="h-4 w-4" />}
         />
         <MetricCard
-          title="Completion Rate"
-          value="73.2%"
-          description="Course completion average"
-          trend={{ value: 4.1, isPositive: true }}
-          icon={<Target className="h-4 w-4" />}
+          title="Avg. Usage Increase"
+          value="+67%"
+          description="After learning completion"
+          trend={{ value: 8.3, isPositive: true }}
+          icon={<TrendingUp className="h-4 w-4" />}
         />
         <MetricCard
-          title="Avg. Time to Cert"
-          value="24 days"
-          description="From start to certification"
-          trend={{ value: 2.3, isPositive: false }}
-          icon={<Clock className="h-4 w-4" />}
+          title="Products Adopted"
+          value="4.2"
+          description="New products per learner"
+          trend={{ value: 15.1, isPositive: true }}
+          icon={<Zap className="h-4 w-4" />}
         />
       </div>
+
+      {/* Journey Funnel Overview */}
+      <Card className="border-2 border-primary/20">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <GraduationCap className="h-5 w-5 text-primary" />
+            Learning Journey Overview
+          </CardTitle>
+          <CardDescription>
+            User progression through the learning stages
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {journeyStages.map((stage) => (
+              <div key={stage.stage} className="flex items-center gap-4">
+                <div className="w-32 text-sm font-medium">{stage.stage}</div>
+                <div className="flex-1">
+                  <div className="h-8 bg-muted rounded-lg overflow-hidden">
+                    <div 
+                      className="h-full rounded-lg transition-all duration-500"
+                      style={{ 
+                        width: `${stage.percentage}%`,
+                        backgroundColor: stage.color,
+                      }}
+                    />
+                  </div>
+                </div>
+                <div className="w-20 text-right">
+                  <span className="font-semibold">{stage.count.toLocaleString()}</span>
+                  <span className="text-muted-foreground text-xs ml-1">({stage.percentage}%)</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-6 flex justify-end">
+            <Button variant="outline" asChild>
+              <Link href="/journey/funnel">
+                View Detailed Funnel <ArrowRight className="h-4 w-4 ml-2" />
+              </Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Charts Row */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        {/* Engagement Breakdown */}
-        <Card className="col-span-3">
-          <CardHeader>
-            <CardTitle>Learner Engagement</CardTitle>
-            <CardDescription>Current status distribution</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <DonutChart data={engagementData} />
-          </CardContent>
-        </Card>
-
-        {/* Weekly Activity */}
+        {/* Activity & Impact Trend */}
         <Card className="col-span-4">
           <CardHeader>
-            <CardTitle>Weekly Activity</CardTitle>
-            <CardDescription>Active learners and completions this week</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <SimpleBarChart 
-              data={weeklyActivityData} 
-              dataKey="learners"
-              secondaryDataKey="completions"
-              color="#3b82f6"
-              secondaryColor="#22c55e"
-            />
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Second Row */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        {/* Monthly Progress */}
-        <Card className="col-span-4">
-          <CardHeader>
-            <CardTitle>Monthly Progress</CardTitle>
-            <CardDescription>Active learners vs certified users over time</CardDescription>
+            <CardTitle>Learning Activity & Platform Usage</CardTitle>
+            <CardDescription>Correlation between learning and engagement over time</CardDescription>
           </CardHeader>
           <CardContent>
             <SimpleAreaChart 
-              data={monthlyProgressData}
-              dataKey="active"
-              secondaryDataKey="certified"
-              color="#3b82f6"
-              secondaryColor="#22c55e"
+              data={activityTrend}
+              dataKey="completions"
+              secondaryDataKey="usage"
+              color="#22c55e"
+              secondaryColor="#3b82f6"
             />
+            <div className="flex justify-center gap-6 mt-4 text-sm">
+              <div className="flex items-center gap-2">
+                <div className="h-3 w-3 rounded-full bg-green-500" />
+                <span className="text-muted-foreground">Course Completions</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="h-3 w-3 rounded-full bg-blue-500" />
+                <span className="text-muted-foreground">Usage Score %</span>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
-        {/* Top Courses */}
+        {/* Impact Distribution */}
         <Card className="col-span-3">
           <CardHeader>
-            <CardTitle>Top Courses</CardTitle>
-            <CardDescription>Most completed this month</CardDescription>
+            <CardTitle>Impact Distribution</CardTitle>
+            <CardDescription>Where learning makes the difference</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {topCourses.map((course, index) => (
-                <div key={course.name} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-medium">
-                      {index + 1}
-                    </span>
-                    <div>
-                      <p className="text-sm font-medium leading-none">{course.name}</p>
-                      <p className="text-sm text-muted-foreground">{course.completions} completions</p>
-                    </div>
-                  </div>
-                  <Badge variant="secondary" className="text-green-600">
-                    {course.trend}
-                  </Badge>
-                </div>
-              ))}
-            </div>
+            <DonutChart data={impactSummary} />
           </CardContent>
         </Card>
       </div>
 
-      {/* Quick Stats Tabs */}
-      <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
-          <TabsTrigger value="reports">Reports</TabsTrigger>
-        </TabsList>
-        <TabsContent value="overview" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-3">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">This Week</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">2,410</div>
-                <p className="text-xs text-muted-foreground">
-                  <span className="text-green-600">+180</span> from last week
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Active Courses</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">48</div>
-                <p className="text-xs text-muted-foreground">
-                  Across 12 learning paths
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Avg. Score</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">87.3%</div>
-                <p className="text-xs text-muted-foreground">
-                  <span className="text-green-600">+2.1%</span> from last month
-                </p>
-              </CardContent>
-            </Card>
+      {/* Top Learning Paths by Impact */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Top Learning Paths by Impact</CardTitle>
+          <CardDescription>Courses driving the most behavior change and adoption</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {topPaths.map((path, index) => (
+              <div key={path.name} className="flex items-center gap-4 p-4 rounded-lg bg-muted/50">
+                <div className="flex items-center justify-center h-10 w-10 rounded-full bg-primary/10 text-primary font-bold">
+                  {index + 1}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-semibold">{path.name}</span>
+                    <Badge variant="secondary" className="text-green-600 dark:text-green-400">
+                      {path.adoption} adoption
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <span className="text-sm text-muted-foreground">
+                      {path.learners.toLocaleString()} learners
+                    </span>
+                    <div className="flex-1 flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">Impact:</span>
+                      <Progress value={path.impact} className="h-2 flex-1" />
+                      <span className="text-sm font-medium">{path.impact}%</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
-        </TabsContent>
-        <TabsContent value="analytics" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Analytics</CardTitle>
-              <CardDescription>
-                Detailed analytics will be displayed here.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">Coming soon...</p>
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="reports" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Reports</CardTitle>
-              <CardDescription>
-                Generate and view reports here.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">Coming soon...</p>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+        </CardContent>
+      </Card>
+
+      {/* Quick Navigation */}
+      <div>
+        <h2 className="text-lg font-semibold mb-4">Explore More</h2>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {quickNavCards.map((card) => (
+            <Link key={card.href} href={card.href}>
+              <Card className="h-full hover:shadow-lg transition-all hover:scale-[1.02] cursor-pointer group">
+                <CardContent className="pt-6">
+                  <div className={`inline-flex p-3 rounded-lg bg-gradient-to-br ${card.color} text-white mb-4 group-hover:scale-110 transition-transform`}>
+                    <card.icon className="h-5 w-5" />
+                  </div>
+                  <h3 className="font-semibold mb-1">{card.title}</h3>
+                  <p className="text-sm text-muted-foreground">{card.description}</p>
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {/* Quick Stats Row */}
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">This Week</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">2,410</div>
+            <p className="text-xs text-muted-foreground">
+              <span className="text-green-600">+180</span> active learners
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Completions</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">1,048</div>
+            <p className="text-xs text-muted-foreground">
+              <span className="text-green-600">+128</span> this month
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Avg. Impact Score</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">87.3</div>
+            <p className="text-xs text-muted-foreground">
+              <span className="text-green-600">+4.2</span> from last month
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Retention Rate</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">94.2%</div>
+            <p className="text-xs text-muted-foreground">
+              Learners still active at 90 days
+            </p>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
