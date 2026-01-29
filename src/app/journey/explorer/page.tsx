@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Search, Filter, Download, ChevronLeft, ChevronRight, User, Mail, Building } from "lucide-react";
+import { Search, Filter, Download, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { useUrlParams } from "@/hooks/use-url-params";
 
 // Sample learner data
 const learners = [
@@ -22,16 +22,32 @@ const learners = [
 ];
 
 export default function LearnerExplorerPage() {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
+  // Use URL params for filter persistence - shareable links!
+  const { params, setParams, hasActiveFilters, clearParams } = useUrlParams({
+    search: '',
+    page: 1,
+    status: '',
+    department: '',
+  });
+  
+  const searchTerm = params.search;
+  const currentPage = params.page;
+  const statusFilter = params.status;
+  const departmentFilter = params.department;
   const itemsPerPage = 8;
 
-  const filteredLearners = learners.filter(learner => 
-    learner.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    learner.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    learner.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    learner.path.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredLearners = learners.filter(learner => {
+    const matchesSearch = !searchTerm || 
+      learner.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      learner.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      learner.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      learner.path.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = !statusFilter || learner.status === statusFilter;
+    const matchesDepartment = !departmentFilter || learner.department === departmentFilter;
+    
+    return matchesSearch && matchesStatus && matchesDepartment;
+  });
 
   const totalPages = Math.ceil(filteredLearners.length / itemsPerPage);
   const paginatedLearners = filteredLearners.slice(
@@ -68,20 +84,48 @@ export default function LearnerExplorerPage() {
       {/* Search and Filters */}
       <Card>
         <CardContent className="pt-6">
-          <div className="flex gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <div className="flex gap-4 flex-wrap">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
               <Input
                 placeholder="Search by name, email, department, or learning path..."
                 className="pl-10"
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => setParams({ search: e.target.value, page: 1 })}
+                aria-label="Search learners"
               />
             </div>
-            <Button variant="outline" className="gap-2">
-              <Filter className="h-4 w-4" />
-              Filters
-            </Button>
+            <select
+              value={statusFilter}
+              onChange={(e) => setParams({ status: e.target.value, page: 1 })}
+              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+              aria-label="Filter by status"
+            >
+              <option value="">All Statuses</option>
+              <option value="active">Active</option>
+              <option value="certified">Certified</option>
+              <option value="completed">Completed</option>
+              <option value="inactive">Inactive</option>
+            </select>
+            <select
+              value={departmentFilter}
+              onChange={(e) => setParams({ department: e.target.value, page: 1 })}
+              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+              aria-label="Filter by department"
+            >
+              <option value="">All Departments</option>
+              <option value="Engineering">Engineering</option>
+              <option value="DevOps">DevOps</option>
+              <option value="Security">Security</option>
+              <option value="Platform">Platform</option>
+              <option value="QA">QA</option>
+            </select>
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" onClick={clearParams} className="gap-1">
+                <X className="h-4 w-4" />
+                Clear Filters
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -176,17 +220,19 @@ export default function LearnerExplorerPage() {
               <Button 
                 variant="outline" 
                 size="sm"
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                onClick={() => setParams({ page: Math.max(1, currentPage - 1) })}
                 disabled={currentPage === 1}
+                aria-label="Previous page"
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <span className="text-sm">Page {currentPage} of {totalPages}</span>
+              <span className="text-sm" aria-live="polite">Page {currentPage} of {totalPages}</span>
               <Button 
                 variant="outline" 
                 size="sm"
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                onClick={() => setParams({ page: Math.min(totalPages, currentPage + 1) })}
                 disabled={currentPage === totalPages}
+                aria-label="Next page"
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>

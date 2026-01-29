@@ -9,6 +9,7 @@ import { GlobalSearch } from "@/components/global-search";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { QueryProvider } from "@/components/query-provider";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { SkipToContent } from "@/lib/accessibility";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -42,14 +43,15 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <QueryProvider>
+            <SkipToContent />
             <SidebarProvider>
               <DashboardSidebar />
               <SidebarInset>
                 <header className="flex h-14 items-center gap-4 border-b bg-background px-6 lg:hidden">
-                  <SidebarTrigger />
+                  <SidebarTrigger aria-label="Toggle navigation sidebar" />
                   <span className="font-semibold">Learning Journey Analytics</span>
                 </header>
-                <main className="flex-1 p-6 bg-muted/40">
+                <main id="main-content" className="flex-1 p-6 bg-muted/40" role="main" tabIndex={-1}>
                   <Breadcrumbs />
                   <ErrorBoundary>
                     {children}

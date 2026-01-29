@@ -98,10 +98,10 @@ export function DashboardSidebar() {
   const pathname = usePathname();
 
   return (
-    <Sidebar className="border-r border-border/40">
+    <Sidebar className="border-r border-border/40" aria-label="Main navigation">
       <SidebarHeader className="border-b border-border/40 px-6 py-4">
-        <Link href="/" className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 text-white">
+        <Link href="/" className="flex items-center gap-3" aria-label="Learning Journey Analytics - Go to home">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 text-white" aria-hidden="true">
             <GraduationCap className="h-5 w-5" />
           </div>
           <div className="flex flex-col">
@@ -115,6 +115,7 @@ export function DashboardSidebar() {
         <div className="px-2 mb-4">
           <SearchTrigger />
         </div>
+        <nav aria-label="Primary navigation">
         {navItems.map((group) => (
           <SidebarGroup key={group.title}>
             <SidebarGroupLabel className="px-4 text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -134,8 +135,8 @@ export function DashboardSidebar() {
                           : "text-muted-foreground hover:bg-accent hover:text-foreground"
                       )}
                     >
-                      <Link href={item.href}>
-                        <item.icon className="h-4 w-4" />
+                      <Link href={item.href} aria-current={pathname === item.href ? 'page' : undefined}>
+                        <item.icon className="h-4 w-4" aria-hidden="true" />
                         {item.title}
                       </Link>
                     </SidebarMenuButton>
@@ -145,6 +146,7 @@ export function DashboardSidebar() {
             </SidebarGroupContent>
           </SidebarGroup>
         ))}
+        </nav>
       </SidebarContent>
       <SidebarFooter className="border-t border-border/40 p-4">
         <div className="flex items-center justify-between">

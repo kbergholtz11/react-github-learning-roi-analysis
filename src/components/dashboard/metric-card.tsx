@@ -41,15 +41,17 @@ export function MetricCard({
         "relative overflow-hidden transition-all hover:shadow-lg hover:shadow-primary/5 hover:-translate-y-0.5",
         className
       )}
+      role="region"
+      aria-label={`${title} metric`}
     >
       <CardContent className="p-6">
         <div className="flex items-start justify-between">
           <div className="space-y-2">
-            <p className="text-sm font-medium text-muted-foreground">{title}</p>
-            <p className="text-3xl font-bold tracking-tight">{value}</p>
+            <p className="text-sm font-medium text-muted-foreground" id={`metric-${title.toLowerCase().replace(/\s/g, '-')}-label`}>{title}</p>
+            <p className="text-3xl font-bold tracking-tight" aria-labelledby={`metric-${title.toLowerCase().replace(/\s/g, '-')}-label`}>{value}</p>
             {trend && (
-              <div className={cn("flex items-center gap-1 text-sm", trendColor)}>
-                <TrendIcon className="h-4 w-4" />
+              <div className={cn("flex items-center gap-1 text-sm", trendColor)} aria-label={`Trend: ${isPositive ? 'up' : 'down'} ${Math.abs(trend.value)}%${trend.label ? `, ${trend.label}` : ''}`}>
+                <TrendIcon className="h-4 w-4" aria-hidden="true" />
                 <span className="font-medium">{Math.abs(trend.value)}%</span>
                 <span className="text-muted-foreground">{trend.label}</span>
               </div>
@@ -59,13 +61,13 @@ export function MetricCard({
             )}
           </div>
           {icon && (
-            <div className="rounded-lg bg-primary/10 p-3 text-primary">
+            <div className="rounded-lg bg-primary/10 p-3 text-primary" aria-hidden="true">
               {icon}
             </div>
           )}
         </div>
       </CardContent>
-      <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-violet-500 via-purple-500 to-pink-500 opacity-0 transition-opacity group-hover:opacity-100" />
+      <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-violet-500 via-purple-500 to-pink-500 opacity-0 transition-opacity group-hover:opacity-100" aria-hidden="true" />
     </Card>
   );
 }
