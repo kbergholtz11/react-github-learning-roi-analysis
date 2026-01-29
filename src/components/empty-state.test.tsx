@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@/test/test-utils'
 import userEvent from '@testing-library/user-event'
-import { EmptyState, ErrorState, LoadingState, NoResultsState } from './empty-state'
+import { EmptyState, ErrorState, NoSearchResults, NoData, NoLearners } from './empty-state'
 
 describe('EmptyState', () => {
   it('renders with title and description', () => {
@@ -34,13 +34,13 @@ describe('EmptyState', () => {
 
 describe('ErrorState', () => {
   it('renders error message', () => {
-    render(<ErrorState message="Something went wrong" />)
-    expect(screen.getByText('Something went wrong')).toBeInTheDocument()
+    render(<ErrorState message="Connection failed" />)
+    expect(screen.getByText('Connection failed')).toBeInTheDocument()
   })
 
   it('shows retry button when onRetry is provided', async () => {
     const handleRetry = vi.fn()
-    render(<ErrorState message="Error" onRetry={handleRetry} />)
+    render(<ErrorState message="Error occurred" onRetry={handleRetry} />)
 
     const button = screen.getByRole('button', { name: /try again/i })
     await userEvent.click(button)
@@ -48,31 +48,24 @@ describe('ErrorState', () => {
   })
 })
 
-describe('LoadingState', () => {
-  it('renders loading message', () => {
-    render(<LoadingState />)
-    expect(screen.getByText(/loading/i)).toBeInTheDocument()
-  })
-
-  it('renders custom message', () => {
-    render(<LoadingState message="Fetching data..." />)
-    expect(screen.getByText('Fetching data...')).toBeInTheDocument()
+describe('NoSearchResults', () => {
+  it('renders no results message with query', () => {
+    render(<NoSearchResults query="test search" />)
+    expect(screen.getByText(/no results found/i)).toBeInTheDocument()
+    expect(screen.getByText(/test search/i)).toBeInTheDocument()
   })
 })
 
-describe('NoResultsState', () => {
-  it('renders no results message', () => {
-    render(<NoResultsState query="test search" />)
-    expect(screen.getByText(/no results/i)).toBeInTheDocument()
-    expect(screen.getByText(/test search/i)).toBeInTheDocument()
+describe('NoData', () => {
+  it('renders no data message', () => {
+    render(<NoData entity="learners" />)
+    expect(screen.getByText(/no learners yet/i)).toBeInTheDocument()
   })
+})
 
-  it('shows clear button when onClear is provided', async () => {
-    const handleClear = vi.fn()
-    render(<NoResultsState query="search" onClear={handleClear} />)
-
-    const button = screen.getByRole('button', { name: /clear/i })
-    await userEvent.click(button)
-    expect(handleClear).toHaveBeenCalled()
+describe('NoLearners', () => {
+  it('renders no learners message', () => {
+    render(<NoLearners />)
+    expect(screen.getByText(/no learners found/i)).toBeInTheDocument()
   })
 })

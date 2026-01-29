@@ -17,21 +17,23 @@ vi.mock('next/navigation', async () => {
 })
 
 describe('Breadcrumbs', () => {
-  it('renders home link', () => {
+  it('renders home link with icon', () => {
     render(<Breadcrumbs />)
-    expect(screen.getByText('Home')).toBeInTheDocument()
+    // Home link uses an icon, not text
+    const homeLink = screen.getByRole('link', { name: '' })
+    expect(homeLink).toHaveAttribute('href', '/')
   })
 
   it('renders path segments', () => {
     render(<Breadcrumbs />)
-    // Should show "Journey" and "Explorer" for /journey/explorer path
-    expect(screen.getByText('Journey')).toBeInTheDocument()
+    // Should show "Learner Journey" and "Explorer" for /journey/explorer path
+    expect(screen.getByText('Learner Journey')).toBeInTheDocument()
     expect(screen.getByText('Explorer')).toBeInTheDocument()
   })
 
   it('makes intermediate segments clickable links', () => {
     render(<Breadcrumbs />)
-    const journeyLink = screen.getByRole('link', { name: /journey/i })
+    const journeyLink = screen.getByRole('link', { name: /learner journey/i })
     expect(journeyLink).toHaveAttribute('href', '/journey')
   })
 

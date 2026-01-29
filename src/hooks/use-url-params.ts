@@ -79,7 +79,7 @@ export function useUrlParams<T extends Record<string, ParamValue>>(
   // Set a single param
   const setParam = useCallback(
     <K extends keyof T>(key: K, value: T[K]) => {
-      setParams({ [key]: value } as Partial<T>)
+      setParams({ [key]: value } as unknown as Partial<T>)
     },
     [setParams]
   )
@@ -193,7 +193,7 @@ export function useFilterParams<T extends Record<string, string>>(defaults: T) {
 
   const setFilter = useCallback(
     <K extends keyof T>(key: K, value: T[K]) => {
-      setParams({ [key]: value } as Partial<T>)
+      setParams({ [key]: value } as unknown as Partial<T>)
     },
     [setParams]
   )
@@ -205,9 +205,9 @@ export function useFilterParams<T extends Record<string, string>>(defaults: T) {
       
       if (values.includes(value)) {
         const newValues = values.filter(v => v !== value)
-        setParams({ [key]: newValues.join(',') || undefined } as Partial<T>)
+        setParams({ [key]: newValues.join(',') || undefined } as unknown as Partial<T>)
       } else {
-        setParams({ [key]: [...values, value].join(',') } as Partial<T>)
+        setParams({ [key]: [...values, value].join(',') } as unknown as Partial<T>)
       }
     },
     [params, setParams]

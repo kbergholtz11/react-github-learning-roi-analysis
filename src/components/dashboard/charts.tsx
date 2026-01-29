@@ -1,11 +1,8 @@
 "use client";
 
 import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
 import {
-  PieChart,
-  Pie,
-  Cell,
   ResponsiveContainer,
   BarChart,
   Bar,
@@ -27,29 +24,22 @@ function formatNumber(value: number): string {
 // Hook to get theme-aware colors
 function useChartColors() {
   const { resolvedTheme } = useTheme();
-  const [colors, setColors] = useState({
-    text: "#6b7280",
-    grid: "#e5e7eb",
-    background: "#ffffff",
-    border: "#e5e7eb",
-  });
-
-  useEffect(() => {
+  
+  const colors = useMemo(() => {
     if (resolvedTheme === "dark") {
-      setColors({
+      return {
         text: "#9ca3af",
         grid: "#374151",
         background: "#1f2937",
         border: "#374151",
-      });
-    } else {
-      setColors({
-        text: "#6b7280",
-        grid: "#e5e7eb",
-        background: "#ffffff",
-        border: "#e5e7eb",
-      });
+      };
     }
+    return {
+      text: "#6b7280",
+      grid: "#e5e7eb",
+      background: "#ffffff",
+      border: "#e5e7eb",
+    };
   }, [resolvedTheme]);
 
   return colors;

@@ -1,5 +1,5 @@
-import type { Meta, StoryObj } from '@storybook/react'
-import { EmptyState, ErrorState, LoadingState, NoResultsState } from './empty-state'
+import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { EmptyState, ErrorState, NoSearchResults, NoData, NoLearners } from './empty-state'
 
 const meta: Meta<typeof EmptyState> = {
   title: 'Components/EmptyState',
@@ -47,26 +47,34 @@ export const Error: Story = {
   ),
 }
 
-export const Loading: Story = {
-  render: () => <LoadingState />,
+export const SearchNoResults: Story = {
+  render: () => <NoSearchResults query="advanced security" />,
 }
 
-export const LoadingCustomMessage: Story = {
-  render: () => <LoadingState message="Fetching learner data..." />,
+export const NoDataState: Story = {
+  render: () => <NoData entity="certifications" />,
 }
 
-export const NoResults: Story = {
-  render: () => (
-    <NoResultsState 
-      query="advanced security"
-      onClear={() => alert('Clear clicked')}
-    />
-  ),
+export const NoLearnersState: Story = {
+  render: () => <NoLearners />,
 }
 
-export const CustomIcon: Story = {
+export const WithSearchIcon: Story = {
   args: {
-    title: 'Inbox Zero!',
-    description: 'You have no pending notifications.',
+    icon: 'search',
+    title: 'Search for learners',
+    description: 'Enter a name or email to find learners.',
+  },
+}
+
+export const WithErrorIcon: Story = {
+  args: {
+    icon: 'error',
+    title: 'Connection failed',
+    description: 'Unable to connect to the server.',
+    action: {
+      label: 'Retry',
+      onClick: () => alert('Retry clicked'),
+    },
   },
 }

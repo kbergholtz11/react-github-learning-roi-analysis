@@ -9,7 +9,7 @@ describe('MetricCard', () => {
       <MetricCard
         title="Total Users"
         value="1,234"
-        icon={Users}
+        icon={<Users className="h-5 w-5" />}
       />
     )
 
@@ -22,7 +22,7 @@ describe('MetricCard', () => {
       <MetricCard
         title="Revenue"
         value="$50,000"
-        icon={Users}
+        icon={<Users className="h-5 w-5" />}
         trend={{ value: 12.5, isPositive: true }}
       />
     )
@@ -35,7 +35,7 @@ describe('MetricCard', () => {
       <MetricCard
         title="Churn Rate"
         value="5%"
-        icon={Users}
+        icon={<Users className="h-5 w-5" />}
         trend={{ value: 2.3, isPositive: false }}
       />
     )
@@ -49,7 +49,7 @@ describe('MetricCard', () => {
       <MetricCard
         title="Active Learners"
         value="500"
-        icon={Users}
+        icon={<Users className="h-5 w-5" />}
         description="Currently enrolled"
       />
     )
@@ -62,12 +62,11 @@ describe('MetricCard', () => {
       <MetricCard
         title="Test"
         value="123"
-        icon={Users}
+        icon={<Users className="h-5 w-5" data-testid="metric-icon" />}
       />
     )
 
     // Icon should be present (rendered as SVG)
-    const card = screen.getByText('Test').closest('div')
-    expect(card?.querySelector('svg')).toBeInTheDocument()
+    expect(screen.getByTestId('metric-icon')).toBeInTheDocument()
   })
 })
