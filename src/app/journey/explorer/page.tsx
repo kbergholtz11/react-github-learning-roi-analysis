@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Search, Filter, Download, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { Search, Download, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useUrlParams } from "@/hooks/use-url-params";
 
 // Sample learner data

@@ -3,7 +3,7 @@
 import { MetricCard, DonutChart, SimpleBarChart, SimpleAreaChart } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { DollarSign, TrendingUp, Users, BarChart3, Target, Percent } from "lucide-react";
+import { DollarSign, TrendingUp, Users, Target, Percent } from "lucide-react";
 
 // Sample ROI data
 const roiBreakdownData = [

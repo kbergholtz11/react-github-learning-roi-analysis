@@ -3,7 +3,7 @@
 import { MetricCard, DonutChart, SimpleBarChart, SimpleAreaChart } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, TrendingUp, Award, DollarSign, Target, CheckCircle, AlertTriangle, ArrowUpRight } from "lucide-react";
+import { Users, Award, DollarSign, Target, CheckCircle, AlertTriangle, ArrowUpRight } from "lucide-react";
 
 // Executive summary data
 const programHealthData = [

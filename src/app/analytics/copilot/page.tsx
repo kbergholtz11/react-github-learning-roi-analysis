@@ -3,8 +3,7 @@
 import { MetricCard, DonutChart, SimpleBarChart, SimpleAreaChart } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Bot, Code, Zap, TrendingUp, Users, Clock, CheckCircle } from "lucide-react";
+import { Bot, Code, Users, Clock, CheckCircle } from "lucide-react";
 
 // Sample Copilot analytics data
 const adoptionData = [

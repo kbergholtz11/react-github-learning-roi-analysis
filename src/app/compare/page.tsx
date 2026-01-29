@@ -3,11 +3,10 @@
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SimpleBarChart, SimpleAreaChart } from "@/components/dashboard";
 import { ExportButton } from "@/components/export-button";
-import { ArrowUp, ArrowDown, Minus, TrendingUp, Building, Calendar, Target } from "lucide-react";
+import { ArrowUp, ArrowDown, Minus, Building, Calendar, Target } from "lucide-react";
 
 // Department comparison data
 const departmentData = [

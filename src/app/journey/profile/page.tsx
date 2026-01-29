@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { SimpleAreaChart } from "@/components/dashboard";
-import { User, Mail, Building, Award, Calendar, TrendingUp, BookOpen, Clock, ArrowLeft } from "lucide-react";
+import { Mail, Building, Award, Calendar, TrendingUp, BookOpen, Clock, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 // Sample learner profile data

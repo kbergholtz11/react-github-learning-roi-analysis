@@ -1,9 +1,9 @@
 "use client";
 
-import { MetricCard, DonutChart, SimpleBarChart, SimpleAreaChart } from "@/components/dashboard";
+import { MetricCard, DonutChart, SimpleBarChart } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, GraduationCap, TrendingUp, Clock, CheckCircle, XCircle } from "lucide-react";
+import { Users, TrendingUp, Clock, CheckCircle } from "lucide-react";
 
 // Sample journey funnel data
 const funnelData = [
@@ -96,7 +96,7 @@ export default function JourneyOverviewPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {funnelData.map((stage, index) => {
+              {funnelData.map((stage) => {
                 const percentage = (stage.value / funnelData[0].value) * 100;
                 return (
                   <div key={stage.name} className="space-y-2">

@@ -58,14 +58,14 @@ interface DonutChartProps {
 
 // Replaced pie/donut chart with horizontal stacked bar for better readability
 export function DonutChart({ data }: DonutChartProps) {
-  const colors = useChartColors();
+  useChartColors(); // Keep hook for potential future use with themed charts
   const total = data.reduce((sum, item) => sum + (item.value || 0), 0);
   
   return (
     <div className="h-[280px] w-full flex flex-col justify-center">
       {/* Stacked horizontal bar */}
       <div className="h-8 w-full rounded-lg overflow-hidden flex mb-4">
-        {data.map((item, index) => {
+        {data.map((item) => {
           const percentage = total > 0 ? ((item.value || 0) / total) * 100 : 0;
           return (
             <div

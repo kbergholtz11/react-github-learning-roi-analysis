@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { Settings, Database, Bell, Palette, Shield, RefreshCw, Save, User } from "lucide-react";
+import { Database, Bell, Palette, Shield, RefreshCw, Save, User } from "lucide-react";
 
 export default function SettingsPage() {
   return (

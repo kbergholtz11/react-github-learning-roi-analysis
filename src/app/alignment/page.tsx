@@ -2,7 +2,6 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Target, TrendingUp, Users, CheckCircle, ArrowRight, Package } from "lucide-react";
 import { SimpleBarChart } from "@/components/dashboard/charts";

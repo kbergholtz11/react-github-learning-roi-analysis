@@ -4,7 +4,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Activity, 
   Clock, 
@@ -14,10 +13,9 @@ import {
   Trash2,
   CheckCircle,
   AlertCircle,
-  Server,
-  HardDrive
+  Server
 } from "lucide-react";
-import { DonutChart, SimpleBarChart } from "@/components/dashboard/charts";
+import { DonutChart } from "@/components/dashboard/charts";
 
 // Performance metrics
 const performanceMetrics = {
@@ -95,21 +93,6 @@ const cacheHitMissData = [
   { name: "Hits", value: 39412, color: "#22c55e" },
   { name: "Misses", value: 6480, color: "#ef4444" },
 ];
-
-const queryTimeData = queryTypeData.map(q => ({
-  name: q.name.replace("_", " "),
-  avgTime: q.avgTimeMs,
-  p95Time: q.p95TimeMs,
-}));
-
-function getStateColor(state: string): string {
-  switch (state) {
-    case "closed": return "bg-green-500";
-    case "open": return "bg-red-500";
-    case "half_open": return "bg-yellow-500";
-    default: return "bg-gray-500";
-  }
-}
 
 function getStateEmoji(state: string): string {
   switch (state) {

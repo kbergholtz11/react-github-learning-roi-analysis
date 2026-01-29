@@ -2,10 +2,9 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Zap, Award, TrendingUp, Users, Target, Clock, ArrowRight } from "lucide-react";
+import { Zap, Award, TrendingUp, Users, Target, ArrowRight } from "lucide-react";
 import { useState } from "react";
 
 // Skills data

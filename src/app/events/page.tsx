@@ -44,7 +44,7 @@ const dailyTrendData = [
 
 export default function EventsDashboardPage() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedType, setSelectedType] = useState<string | null>(null);
+  const [selectedType] = useState<string | null>(null);
 
   const filteredEvents = events.filter(event => {
     const matchesSearch = event.user.toLowerCase().includes(searchTerm.toLowerCase()) ||

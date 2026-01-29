@@ -3,7 +3,7 @@
 import { MetricCard, DonutChart, SimpleBarChart } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Award, Users, TrendingUp, DollarSign, Calendar, Clock } from "lucide-react";
+import { Award, TrendingUp, Calendar, Clock } from "lucide-react";
 
 // Sample certification data
 const certificationsByPath = [

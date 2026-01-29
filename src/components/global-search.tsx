@@ -131,13 +131,11 @@ export function GlobalSearch() {
 
 // Search trigger button for the sidebar
 export function SearchTrigger() {
-  const [open, setOpen] = React.useState(false);
-
   React.useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        setOpen(true);
+        // The GlobalSearch component handles opening
       }
     };
     document.addEventListener("keydown", down);
@@ -146,7 +144,11 @@ export function SearchTrigger() {
 
   return (
     <button
-      onClick={() => setOpen(true)}
+      onClick={() => {
+        // Trigger the keyboard shortcut to open global search
+        const event = new KeyboardEvent('keydown', { key: 'k', metaKey: true });
+        document.dispatchEvent(event);
+      }}
       aria-label="Open search dialog (Cmd+K)"
       aria-keyshortcuts="Control+k Meta+k"
       className="flex items-center gap-2 w-full px-4 py-2 text-sm text-muted-foreground rounded-lg border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-colors"
