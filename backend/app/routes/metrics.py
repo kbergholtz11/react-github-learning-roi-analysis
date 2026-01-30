@@ -99,6 +99,43 @@ async def get_realtime_metrics():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/sync-status")
+async def get_sync_status():
+    """
+    Get the status of all data sources.
+    
+    Returns when each data source was last synced and its status.
+    """
+    import json
+    from pathlib import Path
+    
+    settings = get_settings()
+    sync_file = Path(settings.data_dir) / "sync_status.json"
+    
+    if not sync_file.exists():
+        return {
+            "status": "unknown",
+            "message": "No sync status available. Run sync-all-data.py to populate.",
+            "sources": {}
+        }
+    
+    with open(sync_file) as f:
+        sources = json.load(f)
+    
+    # Add file row counts
+    data_dir = Path(settings.data_dir)
+    for source_name in sources:
+        csv_file = data_dir / f"{source_name}.csv"
+        if csv_file.exists():
+            with open(csv_file) as f:
+                sources[source_name]["file_rows"] = sum(1 for _ in f) - 1  # Subtract header
+    
+    return {
+        "status": "ok",
+        "sources": sources
+    }
+
+
 @router.post("/cache/clear")
 async def clear_metrics_cache():
     """Clear the metrics cache."""

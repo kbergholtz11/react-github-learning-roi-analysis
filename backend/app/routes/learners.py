@@ -213,6 +213,7 @@ async def get_learner_exams(email: str):
     Data is pulled from both FY22-25 (gh-analytics) and FY26 (Pearson) sources.
     """
     from app.csv_service import get_individual_exams, normalize_cert_name
+    from app.config import CLUSTER_CSE
     
     try:
         kusto = get_kusto_service()
@@ -221,7 +222,7 @@ async def get_learner_exams(email: str):
             try:
                 rows = kusto.execute_query(
                     LearnerQueries.get_individual_exams_by_email(email),
-                    cluster="cse-analytics"  # Primary cluster for cross-cluster query
+                    cluster=CLUSTER_CSE  # Use config constant for cluster name
                 )
                 if rows:
                     # Normalize exam names and calculate time between exams
