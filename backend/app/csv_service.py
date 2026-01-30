@@ -187,12 +187,13 @@ def get_individual_exams(email: str) -> List[Dict[str, Any]]:
                 if not exam_status:
                     exam_status = "Passed" if str(row.get("passed", "")).lower() == "true" else "Failed"
                 
-                # Get score if available (FY26 Pearson exams have scores)
+                # Get score if available
+                # Scores are already in percentage form (0-100)
                 score_percent = None
                 try:
                     score_val = row.get("score_percent", "")
                     if score_val and str(score_val).strip():
-                        score_percent = float(score_val)
+                        score_percent = int(round(float(score_val)))
                 except (ValueError, TypeError):
                     pass
                 

@@ -308,11 +308,13 @@ export default function LearnerProfilePage() {
                         <p className="font-medium">{exam.exam_name}</p>
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <span>{formatDate(exam.exam_date)}</span>
-                          {exam.score_percent !== null && exam.score_percent > 0 && (
-                            <span className="font-medium text-purple-600 dark:text-purple-400">
-                              {exam.score_percent}%
-                            </span>
-                          )}
+                          <span className={exam.score_percent !== null && exam.score_percent > 0 
+                            ? "font-medium text-purple-600 dark:text-purple-400" 
+                            : "text-muted-foreground/60"}>
+                            {exam.score_percent !== null && exam.score_percent > 0 
+                              ? `${Math.round(exam.score_percent)}%` 
+                              : "No score"}
+                          </span>
                           {exam.days_since_previous !== null && exam.days_since_previous > 0 && (
                             <span className="text-blue-600 dark:text-blue-400">
                               (+{exam.days_since_previous}d)
@@ -359,21 +361,79 @@ export default function LearnerProfilePage() {
           </CardContent>
         </Card>
 
-        {/* Certification Distribution Chart */}
+        {/* Exam Performance Stats */}
         <Card>
           <CardHeader>
-            <CardTitle>Certification Types</CardTitle>
-            <CardDescription>Distribution of certifications</CardDescription>
+            <CardTitle>Exam Performance</CardTitle>
+            <CardDescription>
+              {examsData ? `${examsData.passed_count} of ${examsData.total_exams} exams passed` : 'Performance summary'}
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            {certChartData.length > 0 ? (
-              <SimpleBarChart 
-                data={certChartData}
-                dataKey="value"
-                color="#22c55e"
-              />
+            {examsData?.exams && examsData.exams.length > 0 ? (
+              <div className="space-y-4">
+                {/* Pass Rate */}
+                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  <span className="text-sm font-medium">Pass Rate</span>
+                  <span className="text-2xl font-bold text-green-600 dark:text-green-400">
+                    {Math.round((examsData.passed_count / examsData.total_exams) * 100)}%
+                  </span>
+                </div>
+                
+                {/* Average Score (if scores available) */}
+                {(() => {
+                  const scoresWithData = examsData.exams.filter((e: IndividualExam) => e.score_percent !== null && e.score_percent > 0);
+                  if (scoresWithData.length > 0) {
+                    const avgScore = scoresWithData.reduce((sum: number, e: IndividualExam) => sum + (e.score_percent || 0), 0) / scoresWithData.length;
+                    return (
+                      <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                        <span className="text-sm font-medium">Average Score</span>
+                        <span className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                          {Math.round(avgScore)}%
+                        </span>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+                
+                {/* Certification Journey Duration */}
+                {certJourneyDays !== null && certJourneyDays > 0 && (
+                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                    <span className="text-sm font-medium">Journey Duration</span>
+                    <span className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                      {certJourneyDays < 30 ? `${certJourneyDays}d` : 
+                       certJourneyDays < 365 ? `${Math.round(certJourneyDays / 30)}mo` :
+                       `${(certJourneyDays / 365).toFixed(1)}yr`}
+                    </span>
+                  </div>
+                )}
+                
+                {/* Exam Breakdown by Type */}
+                <div className="pt-2">
+                  <p className="text-sm font-medium mb-2">By Certification</p>
+                  <div className="space-y-2">
+                    {Object.entries(
+                      examsData.exams.reduce((acc: Record<string, {passed: number, total: number}>, exam: IndividualExam) => {
+                        const name = exam.exam_name;
+                        if (!acc[name]) acc[name] = { passed: 0, total: 0 };
+                        acc[name].total++;
+                        if (exam.passed) acc[name].passed++;
+                        return acc;
+                      }, {})
+                    ).map(([name, stats]) => (
+                      <div key={name} className="flex items-center justify-between text-sm">
+                        <span className="truncate mr-2">{name}</span>
+                        <Badge variant="outline" className={stats.passed > 0 ? 'border-green-500 text-green-600' : 'border-red-500 text-red-600'}>
+                          {stats.passed}/{stats.total}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             ) : (
-              <p className="text-muted-foreground text-center py-8">No certification data to display</p>
+              <p className="text-muted-foreground text-center py-8">No exam performance data available</p>
             )}
           </CardContent>
         </Card>
@@ -393,7 +453,11 @@ export default function LearnerProfilePage() {
               const learnerStatus = 'learner_status' in learner ? learner.learner_status : '';
               const learnerCerts = 'total_certs' in learner ? (learner.total_certs as number) : 0;
               return (
-                <div key={index} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors">
+                <Link 
+                  key={index} 
+                  href={`/journey/profile?email=${encodeURIComponent(learnerEmail)}`}
+                  className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+                >
                   <div className="flex items-center gap-3">
                     <Avatar className="h-10 w-10">
                       <AvatarFallback className="text-sm">{learnerHandle.slice(0, 2).toUpperCase()}</AvatarFallback>
@@ -407,7 +471,7 @@ export default function LearnerProfilePage() {
                     <Badge variant="outline">{learnerStatus}</Badge>
                     <Badge className="bg-green-600">{learnerCerts} certs</Badge>
                   </div>
-                </div>
+                </Link>
               );
             })}
           </div>
