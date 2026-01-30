@@ -1,18 +1,34 @@
 import { NextResponse } from "next/server";
-import { getDashboardMetrics, getJourneyFunnel, getLearnerStatusBreakdown, getProductAdoptionComparison } from "@/lib/data-service";
+import { readFileSync, existsSync } from "fs";
+import { join } from "path";
+
+// Read pre-aggregated JSON (instant load, ~<10ms)
+function getAggregatedData(filename: string) {
+  const filepath = join(process.cwd(), "data", "aggregated", filename);
+  if (!existsSync(filepath)) {
+    return null;
+  }
+  return JSON.parse(readFileSync(filepath, "utf-8"));
+}
 
 export async function GET() {
   try {
-    const metrics = getDashboardMetrics();
-    const funnel = getJourneyFunnel();
-    const statusBreakdown = getLearnerStatusBreakdown();
-    const productAdoption = getProductAdoptionComparison();
+    // Read from pre-aggregated JSON files (instant response)
+    const metricsData = getAggregatedData("metrics.json");
+    
+    if (!metricsData) {
+      return NextResponse.json(
+        { error: "Aggregated data not found. Run 'npm run aggregate-data' first." },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
-      metrics,
-      funnel,
-      statusBreakdown,
-      productAdoption,
+      metrics: metricsData.metrics,
+      funnel: metricsData.funnel,
+      statusBreakdown: metricsData.statusBreakdown,
+      productAdoption: metricsData.productAdoption,
+      generatedAt: metricsData.generatedAt,
     });
   } catch (error) {
     console.error("Error fetching dashboard metrics:", error);

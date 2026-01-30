@@ -1,60 +1,36 @@
 import { NextResponse } from "next/server";
-import { getJourneyFunnel, getJourneyUsers } from "@/lib/data-service";
+import { readFileSync, existsSync } from "fs";
+import { join } from "path";
+
+// Read pre-aggregated JSON (instant load, ~<10ms)
+function getAggregatedData(filename: string) {
+  const filepath = join(process.cwd(), "data", "aggregated", filename);
+  if (!existsSync(filepath)) {
+    return null;
+  }
+  return JSON.parse(readFileSync(filepath, "utf-8"));
+}
 
 export async function GET() {
   try {
-    const funnel = getJourneyFunnel();
-    const journeyUsers = getJourneyUsers();
-
-    // Calculate additional journey metrics
-    const certifiedUsers = journeyUsers.filter((u) => u.is_certified);
-    const avgTimeToCompletion =
-      certifiedUsers.length > 0
-        ? certifiedUsers.reduce((sum, u) => sum + (u.time_to_certification || 0), 0) /
-          certifiedUsers.length
-        : 0;
-
-    // Stage velocity (days in each stage)
-    const stageVelocity = {
-      exploring: 5,
-      learning: 21,
-      practicing: 14,
-      certified: 30,
-    };
-
-    // Drop-off analysis
-    const dropOffAnalysis = funnel.map((stage, index, arr) => {
-      const nextStage = arr[index + 1];
-      const dropOffRate = nextStage
-        ? Math.round(((stage.count - nextStage.count) / stage.count) * 100)
-        : 0;
-      return {
-        stage: stage.stage,
-        count: stage.count,
-        dropOffRate,
-        nextStage: nextStage?.stage || null,
-      };
-    });
-
-    // Monthly progression data
-    const monthlyProgression = [
-      { name: "Aug", learning: 2800, certified: 420, multiCert: 120 },
-      { name: "Sep", learning: 3200, certified: 520, multiCert: 150 },
-      { name: "Oct", learning: 3600, certified: 640, multiCert: 185 },
-      { name: "Nov", learning: 4100, certified: 780, multiCert: 220 },
-      { name: "Dec", learning: 4400, certified: 920, multiCert: 260 },
-      { name: "Jan", learning: funnel.find(f => f.stage === "Learning")?.count || 4586, 
-               certified: funnel.find(f => f.stage === "Certified")?.count || 1048,
-               multiCert: funnel.find(f => f.stage === "Multi-Certified")?.count || 300 },
-    ];
+    // Read from pre-aggregated JSON files (instant response)
+    const journeyData = getAggregatedData("journey.json");
+    
+    if (!journeyData) {
+      return NextResponse.json(
+        { error: "Aggregated data not found. Run 'npm run aggregate-data' first." },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
-      funnel,
-      avgTimeToCompletion: Math.round(avgTimeToCompletion),
-      stageVelocity,
-      dropOffAnalysis,
-      monthlyProgression,
-      totalJourneyUsers: journeyUsers.length,
+      funnel: journeyData.funnel,
+      avgTimeToCompletion: journeyData.avgTimeToCompletion,
+      stageVelocity: journeyData.stageVelocity,
+      dropOffAnalysis: journeyData.dropOffAnalysis,
+      monthlyProgression: journeyData.monthlyProgression,
+      totalJourneyUsers: journeyData.totalJourneyUsers,
+      generatedAt: journeyData.generatedAt,
     });
   } catch (error) {
     console.error("Error fetching journey data:", error);
