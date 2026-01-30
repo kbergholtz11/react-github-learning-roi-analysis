@@ -37,7 +37,7 @@ export function useMetrics() {
 
 // Learners list hook
 interface LearnersResponse {
-  data: (CertifiedUser | UnifiedUser)[];
+  learners: (CertifiedUser | UnifiedUser)[];
   total: number;
   page: number;
   pageSize: number;

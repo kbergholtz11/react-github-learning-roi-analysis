@@ -129,13 +129,17 @@ export type JourneyStage =
 // Aggregated metrics for dashboard
 export interface DashboardMetrics {
   totalLearners: number;
+  activeLearners: number;
   certifiedUsers: number;
   learningUsers: number;
+  prospectUsers: number;
   avgUsageIncrease: number;
   avgProductsAdopted: number;
   avgLearningHours: number;
   impactScore: number;
   retentionRate: number;
+  totalLearningHours: number;
+  totalCertsEarned: number;
 }
 
 // Journey funnel data

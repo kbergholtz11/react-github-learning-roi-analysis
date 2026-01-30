@@ -3,78 +3,56 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, TrendingUp, Target, Zap, Award, Rocket, ChevronDown } from "lucide-react";
+import { Users, TrendingUp, Target, Zap, Award, Rocket, ChevronDown, Loader2 } from "lucide-react";
+import { useJourney, useMetrics, useImpact } from "@/hooks/use-data";
 
-// Funnel stage data
-const funnelStages = [
-  { 
-    name: "Registered", 
-    count: 5000, 
-    percentage: 100, 
-    color: "from-violet-500 to-purple-600",
-    description: "Users who have registered for learning",
-    icon: Users 
-  },
-  { 
-    name: "Learning Started", 
-    count: 4250, 
-    percentage: 85, 
-    color: "from-blue-500 to-cyan-500",
-    description: "Started at least one learning activity",
-    icon: Target 
-  },
-  { 
-    name: "Engaged Learner", 
-    count: 2875, 
-    percentage: 57.5, 
-    color: "from-green-500 to-emerald-500",
-    description: "Meaningful engagement (5+ sessions or event attendance)",
-    icon: Zap 
-  },
-  { 
-    name: "Certified", 
-    count: 1625, 
-    percentage: 32.5, 
-    color: "from-amber-500 to-yellow-500",
-    description: "Achieved GitHub certification",
-    icon: Award 
-  },
-  { 
-    name: "Copilot Trial", 
-    count: 1125, 
-    percentage: 22.5, 
-    color: "from-pink-500 to-rose-500",
-    description: "Started Copilot trial after certification",
-    icon: Rocket 
-  },
-  { 
-    name: "Copilot Active", 
-    count: 875, 
-    percentage: 17.5, 
-    color: "from-purple-600 to-indigo-600",
-    description: "Active paid Copilot subscriber",
-    icon: TrendingUp 
-  },
-];
+// Icon mapping for stages
+const stageIcons: Record<string, React.ComponentType<{ className?: string }>> = {
+  Learning: Target,
+  Certified: Award,
+  "Multi-Certified": Zap,
+  Specialist: Rocket,
+  Champion: TrendingUp,
+};
 
-// Conversion metrics between stages
-const conversionMetrics = [
-  { from: "Registered", to: "Learning Started", rate: 85, avgDays: 3 },
-  { from: "Learning Started", to: "Engaged Learner", rate: 67.6, avgDays: 14 },
-  { from: "Engaged Learner", to: "Certified", rate: 56.5, avgDays: 45 },
-  { from: "Certified", to: "Copilot Trial", rate: 69.2, avgDays: 7 },
-  { from: "Copilot Trial", to: "Copilot Active", rate: 77.8, avgDays: 30 },
-];
-
-// Product breakdown
-const productBreakdown = [
-  { product: "GitHub Copilot", learners: 2100, certified: 892, adoptionRate: 78 },
-  { product: "GitHub Actions", learners: 1650, certified: 498, adoptionRate: 65 },
-  { product: "Advanced Security", learners: 875, certified: 235, adoptionRate: 52 },
-  { product: "Admin & Platform", learners: 375, certified: 0, adoptionRate: 41 },
-];
+// Stage colors
+const stageGradients: Record<string, string> = {
+  Learning: "from-blue-500 to-cyan-500",
+  Certified: "from-green-500 to-emerald-500",
+  "Multi-Certified": "from-purple-500 to-violet-500",
+  Specialist: "from-amber-500 to-yellow-500",
+  Champion: "from-pink-500 to-rose-500",
+};
 
 export default function JourneyFunnelPage() {
+  const { data: journeyData, isLoading: journeyLoading } = useJourney();
+  const { data: metricsData, isLoading: metricsLoading } = useMetrics();
+  const { data: impactData, isLoading: impactLoading } = useImpact();
+
+  const isLoading = journeyLoading || metricsLoading || impactLoading;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  const funnel = journeyData?.funnel || [];
+  const metrics = metricsData?.metrics;
+  const dropOffAnalysis = journeyData?.dropOffAnalysis || [];
+  const stageImpact = impactData?.stageImpact || [];
+
+  // Calculate overall conversion (Learning → Champion)
+  const learningCount = funnel.find(f => f.stage === "Learning")?.count || 1;
+  const championCount = funnel.find(f => f.stage === "Champion")?.count || 0;
+  const overallConversion = ((championCount / learningCount) * 100).toFixed(1);
+
+  // Certification rate (Certified + above / Learning)
+  const certifiedTotal = funnel.filter(f => f.stage !== "Learning").reduce((sum, f) => sum + f.count, 0);
+  const certificationRate = ((certifiedTotal / learningCount) * 100).toFixed(1);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -89,45 +67,45 @@ export default function JourneyFunnelPage() {
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>Overall Conversion</CardDescription>
-            <CardTitle className="text-2xl">17.5%</CardTitle>
+            <CardDescription>Total Learners</CardDescription>
+            <CardTitle className="text-2xl">{metrics?.totalLearners?.toLocaleString()}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-xs text-muted-foreground">
-              Registered → Active Copilot User
+              All registered users
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Certification Rate</CardDescription>
-            <CardTitle className="text-2xl">32.5%</CardTitle>
+            <CardTitle className="text-2xl">{certificationRate}%</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-xs text-muted-foreground">
-              Of all registered learners
+              Learning → Certified+
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Avg Time to Cert</CardDescription>
-            <CardTitle className="text-2xl">62 days</CardTitle>
+            <CardTitle className="text-2xl">{journeyData?.avgTimeToCompletion || 45} days</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-xs text-muted-foreground">
-              From registration to certification
+              From first learning activity
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>Product Adoption</CardDescription>
-            <CardTitle className="text-2xl">77.8%</CardTitle>
+            <CardDescription>Champions</CardDescription>
+            <CardTitle className="text-2xl">{championCount.toLocaleString()}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-xs text-muted-foreground">
-              Trial to active conversion
+              {overallConversion}% of learners
             </p>
           </CardContent>
         </Card>
@@ -138,41 +116,52 @@ export default function JourneyFunnelPage() {
         <CardHeader>
           <CardTitle>Journey Funnel</CardTitle>
           <CardDescription>
-            Progressive conversion through learning stages
+            Progressive conversion through learning stages ({metrics?.totalLearners?.toLocaleString()} total)
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
-            {funnelStages.map((stage, index) => {
-              const Icon = stage.icon;
+            {funnel.map((stage, index) => {
+              const Icon = stageIcons[stage.stage] || Users;
+              const gradient = stageGradients[stage.stage] || "from-gray-500 to-gray-600";
+              const percentage = (stage.count / learningCount) * 100;
+              const nextStage = funnel[index + 1];
+              const conversionToNext = nextStage ? ((nextStage.count / stage.count) * 100).toFixed(1) : null;
+              
               return (
-                <div key={stage.name} className="relative">
+                <div key={stage.stage} className="relative">
                   {/* Funnel bar */}
                   <div 
-                    className={`relative h-16 rounded-lg bg-gradient-to-r ${stage.color} transition-all duration-500`}
-                    style={{ width: `${Math.max(stage.percentage, 20)}%` }}
+                    className={`relative h-16 rounded-lg bg-gradient-to-r ${gradient} transition-all duration-500`}
+                    style={{ width: `${Math.max(percentage, 20)}%` }}
                   >
                     <div className="absolute inset-0 flex items-center justify-between px-4">
                       <div className="flex items-center gap-3">
                         <Icon className="h-5 w-5 text-white" />
                         <div>
-                          <p className="font-semibold text-white">{stage.name}</p>
-                          <p className="text-xs text-white/80">{stage.description}</p>
+                          <p className="font-semibold text-white">{stage.stage}</p>
+                          <p className="text-xs text-white/80">
+                            {stage.stage === "Learning" ? "Started learning journey" : 
+                             stage.stage === "Certified" ? "Earned first certification" :
+                             stage.stage === "Multi-Certified" ? "Multiple certifications" :
+                             stage.stage === "Specialist" ? "Product specialist" :
+                             "Community champion"}
+                          </p>
                         </div>
                       </div>
                       <div className="text-right">
                         <p className="font-bold text-white">{stage.count.toLocaleString()}</p>
-                        <p className="text-xs text-white/80">{stage.percentage}%</p>
+                        <p className="text-xs text-white/80">{percentage.toFixed(1)}%</p>
                       </div>
                     </div>
                   </div>
                   
                   {/* Conversion arrow */}
-                  {index < funnelStages.length - 1 && (
+                  {conversionToNext && (
                     <div className="flex items-center justify-center py-1">
                       <ChevronDown className="h-4 w-4 text-muted-foreground" />
                       <span className="ml-2 text-xs text-muted-foreground">
-                        {conversionMetrics[index]?.rate}% conversion
+                        {conversionToNext}% conversion
                       </span>
                     </div>
                   )}
@@ -187,7 +176,7 @@ export default function JourneyFunnelPage() {
       <Tabs defaultValue="conversions" className="space-y-4">
         <TabsList>
           <TabsTrigger value="conversions">Stage Conversions</TabsTrigger>
-          <TabsTrigger value="products">By Product</TabsTrigger>
+          <TabsTrigger value="impact">Stage Impact</TabsTrigger>
           <TabsTrigger value="time">Time Analysis</TabsTrigger>
         </TabsList>
 
@@ -195,55 +184,58 @@ export default function JourneyFunnelPage() {
           <Card>
             <CardHeader>
               <CardTitle>Stage-to-Stage Conversions</CardTitle>
-              <CardDescription>Detailed conversion metrics between each funnel stage</CardDescription>
+              <CardDescription>Drop-off and conversion metrics between each funnel stage</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {conversionMetrics.map((metric) => (
-                  <div key={`${metric.from}-${metric.to}`} className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
-                    <div>
-                      <p className="font-medium">{metric.from} → {metric.to}</p>
-                      <p className="text-sm text-muted-foreground">Avg. {metric.avgDays} days</p>
+                {dropOffAnalysis.filter(d => d.nextStage).map((stage) => {
+                  const conversionRate = 100 - stage.dropOffRate;
+                  return (
+                    <div key={`${stage.stage}-${stage.nextStage}`} className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+                      <div>
+                        <p className="font-medium">{stage.stage} → {stage.nextStage}</p>
+                        <p className="text-sm text-muted-foreground">{stage.count.toLocaleString()} learners at this stage</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-2xl font-bold">{conversionRate}%</p>
+                        <Badge variant={conversionRate > 70 ? "default" : conversionRate > 30 ? "secondary" : "destructive"}>
+                          {conversionRate > 70 ? "Strong" : conversionRate > 30 ? "Moderate" : "Needs Attention"}
+                        </Badge>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-bold">{metric.rate}%</p>
-                      <Badge variant={metric.rate > 70 ? "default" : metric.rate > 50 ? "secondary" : "destructive"}>
-                        {metric.rate > 70 ? "Strong" : metric.rate > 50 ? "Moderate" : "Needs Attention"}
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="products" className="space-y-4">
+        <TabsContent value="impact" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Funnel by Product Focus</CardTitle>
-              <CardDescription>How different product tracks perform through the funnel</CardDescription>
+              <CardTitle>Impact by Stage</CardTitle>
+              <CardDescription>How each journey stage affects product usage and platform engagement</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {productBreakdown.map((product) => (
-                  <div key={product.product} className="p-4 rounded-lg border">
+                {stageImpact.map((stage) => (
+                  <div key={stage.stage} className="p-4 rounded-lg border">
                     <div className="flex items-center justify-between mb-3">
-                      <h4 className="font-semibold">{product.product}</h4>
-                      <Badge>{product.adoptionRate}% adoption</Badge>
+                      <h4 className="font-semibold">{stage.stage}</h4>
+                      <Badge>{stage.learners.toLocaleString()} learners</Badge>
                     </div>
                     <div className="grid grid-cols-3 gap-4 text-center">
                       <div>
-                        <p className="text-2xl font-bold">{product.learners.toLocaleString()}</p>
-                        <p className="text-xs text-muted-foreground">Learners</p>
+                        <p className="text-2xl font-bold text-green-600">+{stage.avgUsageIncrease}%</p>
+                        <p className="text-xs text-muted-foreground">Usage Increase</p>
                       </div>
                       <div>
-                        <p className="text-2xl font-bold">{product.certified.toLocaleString()}</p>
-                        <p className="text-xs text-muted-foreground">Certified</p>
+                        <p className="text-2xl font-bold text-blue-600">+{stage.platformTimeIncrease}%</p>
+                        <p className="text-xs text-muted-foreground">Platform Time</p>
                       </div>
                       <div>
-                        <p className="text-2xl font-bold">{((product.certified / product.learners) * 100).toFixed(0)}%</p>
-                        <p className="text-xs text-muted-foreground">Cert Rate</p>
+                        <p className="text-2xl font-bold text-purple-600">{stage.topProduct}</p>
+                        <p className="text-xs text-muted-foreground">Top Product</p>
                       </div>
                     </div>
                   </div>
@@ -262,26 +254,18 @@ export default function JourneyFunnelPage() {
             <CardContent>
               <div className="space-y-6">
                 <div className="grid gap-4 md:grid-cols-2">
-                  <div className="p-4 rounded-lg bg-muted/50">
-                    <p className="text-sm text-muted-foreground">Fast Track ({"<"}60 days)</p>
-                    <p className="text-3xl font-bold mt-1">423</p>
-                    <p className="text-sm text-green-600">26% of certified users</p>
-                  </div>
-                  <div className="p-4 rounded-lg bg-muted/50">
-                    <p className="text-sm text-muted-foreground">Steady Progress (60-180 days)</p>
-                    <p className="text-3xl font-bold mt-1">892</p>
-                    <p className="text-sm text-blue-600">55% of certified users</p>
-                  </div>
-                  <div className="p-4 rounded-lg bg-muted/50">
-                    <p className="text-sm text-muted-foreground">Long Journey (180+ days)</p>
-                    <p className="text-3xl font-bold mt-1">310</p>
-                    <p className="text-sm text-amber-600">19% of certified users</p>
-                  </div>
-                  <div className="p-4 rounded-lg bg-muted/50">
-                    <p className="text-sm text-muted-foreground">Median Time to Certification</p>
-                    <p className="text-3xl font-bold mt-1">62 days</p>
-                    <p className="text-sm text-muted-foreground">Across all learners</p>
-                  </div>
+                  {Object.entries(journeyData?.stageVelocity || {}).map(([stage, days]) => (
+                    <div key={stage} className="p-4 rounded-lg bg-muted/50">
+                      <p className="text-sm text-muted-foreground capitalize">{stage} Stage</p>
+                      <p className="text-3xl font-bold mt-1">{days} days</p>
+                      <p className="text-sm text-muted-foreground">Average time in stage</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="p-4 rounded-lg bg-primary/10">
+                  <p className="text-sm font-medium">Total Journey Time (Avg)</p>
+                  <p className="text-3xl font-bold mt-1">{journeyData?.avgTimeToCompletion || 45} days</p>
+                  <p className="text-sm text-muted-foreground">From first activity to certification</p>
                 </div>
               </div>
             </CardContent>

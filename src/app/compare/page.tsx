@@ -6,52 +6,17 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SimpleBarChart, SimpleAreaChart } from "@/components/dashboard";
 import { ExportButton } from "@/components/export-button";
-import { ArrowUp, ArrowDown, Minus, Building, Calendar, Target } from "lucide-react";
-
-// Department comparison data
-const departmentData = [
-  { name: "Engineering", learners: 1250, completions: 892, certifications: 423, engagementRate: 85, trend: 12 },
-  { name: "DevOps", learners: 680, completions: 534, certifications: 287, engagementRate: 82, trend: 8 },
-  { name: "Security", learners: 420, completions: 356, certifications: 189, engagementRate: 88, trend: 15 },
-  { name: "Platform", learners: 380, completions: 298, certifications: 145, engagementRate: 79, trend: -3 },
-  { name: "QA", learners: 290, completions: 212, certifications: 98, engagementRate: 75, trend: 5 },
-];
-
-// Quarterly comparison data
-const quarterlyData = [
-  { metric: "Total Learners", q1: 3200, q2: 3650, q3: 4100, q4: 4586, change: 12 },
-  { metric: "Completions", q1: 1850, q2: 2100, q3: 2450, q4: 2892, change: 18 },
-  { metric: "Certifications", q1: 680, q2: 820, q3: 1050, q4: 1256, change: 20 },
-  { metric: "Avg. Score", q1: 82, q2: 84, q3: 85, q4: 87, change: 2 },
-  { metric: "Completion Rate", q1: 68, q2: 71, q3: 73, q4: 76, change: 4 },
-];
-
-// Course comparison data
-const courseComparisonData = [
-  { name: "GitHub Actions", enrollments: 1250, completions: 892, rate: 71, avgTime: 14 },
-  { name: "GitHub Copilot", enrollments: 1180, completions: 920, rate: 78, avgTime: 10 },
-  { name: "GitHub Foundations", enrollments: 980, completions: 756, rate: 77, avgTime: 12 },
-  { name: "Advanced Security", enrollments: 650, completions: 456, rate: 70, avgTime: 18 },
-  { name: "GitHub Admin", enrollments: 420, completions: 287, rate: 68, avgTime: 21 },
-];
-
-const departmentChartData = departmentData.map(d => ({
-  name: d.name,
-  learners: d.learners,
-  completions: d.completions,
-}));
-
-const trendChartData = [
-  { name: "Jan", current: 3200, previous: 2800 },
-  { name: "Feb", current: 3400, previous: 2950 },
-  { name: "Mar", current: 3650, previous: 3100 },
-  { name: "Apr", current: 3800, previous: 3200 },
-  { name: "May", current: 4100, previous: 3400 },
-  { name: "Jun", current: 4586, previous: 3650 },
-];
+import { ArrowUp, ArrowDown, Minus, Layers, Calendar, Target, Loader2 } from "lucide-react";
+import { useMetrics, useJourney, useImpact } from "@/hooks/use-data";
 
 export default function ComparisonPage() {
-  const [selectedTab, setSelectedTab] = useState("departments");
+  const [selectedTab, setSelectedTab] = useState("stages");
+  
+  const { data: metrics, isLoading: metricsLoading } = useMetrics();
+  const { data: journey, isLoading: journeyLoading } = useJourney();
+  const { data: impact, isLoading: impactLoading } = useImpact();
+  
+  const isLoading = metricsLoading || journeyLoading || impactLoading;
 
   const getTrendIcon = (value: number) => {
     if (value > 0) return <ArrowUp className="h-4 w-4 text-green-500" />;
@@ -65,10 +30,46 @@ export default function ComparisonPage() {
     return "text-gray-600";
   };
 
-  const departmentExportData = {
-    title: "Department Comparison",
-    headers: ["Department", "Learners", "Completions", "Certifications", "Engagement %", "Trend %"],
-    rows: departmentData.map(d => [d.name, d.learners, d.completions, d.certifications, d.engagementRate, d.trend]),
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  // Build stage data from journey funnel
+  const stageData = journey?.funnel?.map((stage: { stage: string; count: number }, index: number, arr: { stage: string; count: number }[]) => {
+    const prevCount = index > 0 ? arr[index - 1].count : stage.count;
+    const conversionRate = prevCount > 0 ? ((stage.count / prevCount) * 100) : 100;
+    return {
+      name: stage.stage,
+      learners: stage.count,
+      conversionRate: Math.round(conversionRate),
+    };
+  }) || [];
+
+  // Stage chart data
+  const stageChartData = stageData.map((s: { name: string; learners: number }) => ({
+    name: s.name,
+    value: s.learners,
+  }));
+
+  // Monthly progression data - use correct property names
+  const monthlyData = journey?.monthlyProgression?.map((m: { name: string; certified: number; learning: number; multiCert: number }) => ({
+    name: m.name,
+    certified: m.certified,
+    learning: m.learning,
+  })) || [];
+
+  // Stage impact data
+  const stageImpact = impact?.stageImpact || [];
+
+  // Build export data
+  const stageExportData = {
+    title: "Stage Comparison",
+    headers: ["Stage", "Learners", "Conversion Rate"],
+    rows: stageData.map((s: { name: string; learners: number; conversionRate: number }) => [s.name, s.learners, `${s.conversionRate}%`]),
   };
 
   return (
@@ -81,56 +82,54 @@ export default function ComparisonPage() {
             Compare performance across departments, courses, and time periods
           </p>
         </div>
-        <ExportButton data={departmentExportData} filename="comparison-data" />
+        <ExportButton data={stageExportData} filename="comparison-data" />
       </div>
 
       {/* Tabs */}
       <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-4">
         <TabsList className="grid w-full grid-cols-3 lg:w-[400px]">
-          <TabsTrigger value="departments" className="gap-2">
-            <Building className="h-4 w-4" />
-            Departments
+          <TabsTrigger value="stages" className="gap-2">
+            <Layers className="h-4 w-4" />
+            Stages
           </TabsTrigger>
-          <TabsTrigger value="quarterly" className="gap-2">
+          <TabsTrigger value="monthly" className="gap-2">
             <Calendar className="h-4 w-4" />
-            Quarterly
+            Monthly
           </TabsTrigger>
-          <TabsTrigger value="courses" className="gap-2">
+          <TabsTrigger value="impact" className="gap-2">
             <Target className="h-4 w-4" />
-            Courses
+            Impact
           </TabsTrigger>
         </TabsList>
 
-        {/* Departments Tab */}
-        <TabsContent value="departments" className="space-y-4">
+        {/* Stages Tab */}
+        <TabsContent value="stages" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle>Learners vs Completions by Department</CardTitle>
-                <CardDescription>Comparison across all departments</CardDescription>
+                <CardTitle>Learners by Journey Stage</CardTitle>
+                <CardDescription>Distribution across the learning funnel</CardDescription>
               </CardHeader>
               <CardContent>
                 <SimpleBarChart 
-                  data={departmentChartData} 
-                  dataKey="learners"
-                  secondaryDataKey="completions"
-                  color="#3b82f6"
-                  secondaryColor="#22c55e"
+                  data={stageChartData} 
+                  dataKey="value"
+                  color="#8b5cf6"
                 />
               </CardContent>
             </Card>
             <Card>
               <CardHeader>
-                <CardTitle>Year-over-Year Trend</CardTitle>
-                <CardDescription>Current vs previous year</CardDescription>
+                <CardTitle>Monthly Progression</CardTitle>
+                <CardDescription>Certified vs Learning over time</CardDescription>
               </CardHeader>
               <CardContent>
                 <SimpleAreaChart 
-                  data={trendChartData} 
-                  dataKey="current"
-                  secondaryDataKey="previous"
-                  color="#8b5cf6"
-                  secondaryColor="#94a3b8"
+                  data={monthlyData} 
+                  dataKey="certified"
+                  secondaryDataKey="learning"
+                  color="#22c55e"
+                  secondaryColor="#3b82f6"
                 />
               </CardContent>
             </Card>
@@ -138,31 +137,27 @@ export default function ComparisonPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Department Performance Table</CardTitle>
-              <CardDescription>Detailed metrics by department</CardDescription>
+              <CardTitle>Stage Performance Table</CardTitle>
+              <CardDescription>Detailed metrics by journey stage</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="rounded-md border">
-                <div className="grid grid-cols-6 gap-4 p-4 bg-muted/50 text-sm font-medium">
-                  <div>Department</div>
+                <div className="grid grid-cols-3 gap-4 p-4 bg-muted/50 text-sm font-medium">
+                  <div>Stage</div>
                   <div className="text-right">Learners</div>
-                  <div className="text-right">Completions</div>
-                  <div className="text-right">Certifications</div>
-                  <div className="text-right">Engagement</div>
-                  <div className="text-right">Trend</div>
+                  <div className="text-right">Conversion</div>
                 </div>
-                {departmentData.map((dept) => (
-                  <div key={dept.name} className="grid grid-cols-6 gap-4 p-4 border-t items-center">
-                    <div className="font-medium">{dept.name}</div>
-                    <div className="text-right font-mono">{dept.learners.toLocaleString()}</div>
-                    <div className="text-right font-mono">{dept.completions.toLocaleString()}</div>
-                    <div className="text-right font-mono">{dept.certifications}</div>
+                {stageData.map((stage: { name: string; learners: number; conversionRate: number }) => (
+                  <div key={stage.name} className="grid grid-cols-3 gap-4 p-4 border-t items-center">
+                    <div className="font-medium">{stage.name}</div>
+                    <div className="text-right font-mono">{stage.learners.toLocaleString()}</div>
                     <div className="text-right">
-                      <Badge variant="outline">{dept.engagementRate}%</Badge>
-                    </div>
-                    <div className={`text-right flex items-center justify-end gap-1 ${getTrendColor(dept.trend)}`}>
-                      {getTrendIcon(dept.trend)}
-                      <span className="font-medium">{Math.abs(dept.trend)}%</span>
+                      <Badge 
+                        variant="secondary" 
+                        className={stage.conversionRate >= 50 ? "bg-green-100 text-green-700" : stage.conversionRate >= 30 ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700"}
+                      >
+                        {stage.conversionRate}%
+                      </Badge>
                     </div>
                   </div>
                 ))}
@@ -171,73 +166,71 @@ export default function ComparisonPage() {
           </Card>
         </TabsContent>
 
-        {/* Quarterly Tab */}
-        <TabsContent value="quarterly" className="space-y-4">
+        {/* Monthly Tab */}
+        <TabsContent value="monthly" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Quarterly Performance Comparison</CardTitle>
-              <CardDescription>Key metrics across quarters</CardDescription>
+              <CardTitle>Monthly Learner Distribution</CardTitle>
+              <CardDescription>Certified, Learning, and Prospects over time</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="rounded-md border">
-                <div className="grid grid-cols-6 gap-4 p-4 bg-muted/50 text-sm font-medium">
-                  <div>Metric</div>
-                  <div className="text-right">Q1</div>
-                  <div className="text-right">Q2</div>
-                  <div className="text-right">Q3</div>
-                  <div className="text-right">Q4</div>
+                <div className="grid grid-cols-4 gap-4 p-4 bg-muted/50 text-sm font-medium">
+                  <div>Month</div>
+                  <div className="text-right">Certified</div>
+                  <div className="text-right">Learning</div>
                   <div className="text-right">Change</div>
                 </div>
-                {quarterlyData.map((row) => (
-                  <div key={row.metric} className="grid grid-cols-6 gap-4 p-4 border-t items-center">
-                    <div className="font-medium">{row.metric}</div>
-                    <div className="text-right font-mono text-muted-foreground">{row.q1.toLocaleString()}</div>
-                    <div className="text-right font-mono text-muted-foreground">{row.q2.toLocaleString()}</div>
-                    <div className="text-right font-mono text-muted-foreground">{row.q3.toLocaleString()}</div>
-                    <div className="text-right font-mono font-medium">{row.q4.toLocaleString()}</div>
-                    <div className={`text-right flex items-center justify-end gap-1 ${getTrendColor(row.change)}`}>
-                      {getTrendIcon(row.change)}
-                      <span className="font-medium">{Math.abs(row.change)}%</span>
+                {journey?.monthlyProgression?.map((row: { name: string; certified: number; learning: number; multiCert: number }, index: number, arr: { name: string; certified: number; learning: number; multiCert: number }[]) => {
+                  const prevCertified = index > 0 ? arr[index - 1].certified : row.certified;
+                  const change = prevCertified > 0 ? Math.round(((row.certified - prevCertified) / prevCertified) * 100) : 0;
+                  return (
+                    <div key={row.name} className="grid grid-cols-4 gap-4 p-4 border-t items-center">
+                      <div className="font-medium">{row.name}</div>
+                      <div className="text-right font-mono">{row.certified.toLocaleString()}</div>
+                      <div className="text-right font-mono">{row.learning.toLocaleString()}</div>
+                      <div className={`text-right flex items-center justify-end gap-1 ${getTrendColor(change)}`}>
+                        {getTrendIcon(change)}
+                        <span className="font-medium">{Math.abs(change)}%</span>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Courses Tab */}
-        <TabsContent value="courses" className="space-y-4">
+        {/* Impact Tab */}
+        <TabsContent value="impact" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Course Performance Comparison</CardTitle>
-              <CardDescription>Metrics across all courses</CardDescription>
+              <CardTitle>Learning Impact by Stage</CardTitle>
+              <CardDescription>Adoption and engagement metrics</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="rounded-md border">
                 <div className="grid grid-cols-5 gap-4 p-4 bg-muted/50 text-sm font-medium">
-                  <div>Course</div>
-                  <div className="text-right">Enrollments</div>
-                  <div className="text-right">Completions</div>
-                  <div className="text-right">Completion Rate</div>
-                  <div className="text-right">Avg. Time (days)</div>
+                  <div>Stage</div>
+                  <div className="text-right">Learners</div>
+                  <div className="text-right">Top Product</div>
+                  <div className="text-right">Usage Increase</div>
+                  <div className="text-right">Platform Time</div>
                 </div>
-                {courseComparisonData.map((course) => (
-                  <div key={course.name} className="grid grid-cols-5 gap-4 p-4 border-t items-center">
-                    <div className="font-medium">{course.name}</div>
-                    <div className="text-right font-mono">{course.enrollments.toLocaleString()}</div>
-                    <div className="text-right font-mono">{course.completions.toLocaleString()}</div>
-                    <div className="text-right">
-                      <Badge 
-                        variant="secondary" 
-                        className={course.rate >= 75 ? "bg-green-100 text-green-700" : course.rate >= 70 ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700"}
-                      >
-                        {course.rate}%
-                      </Badge>
+                {stageImpact.map((stage: { stage: string; learners: number; avgUsageIncrease: number; platformTimeIncrease: number; topProduct: string }) => {
+                  return (
+                    <div key={stage.stage} className="grid grid-cols-5 gap-4 p-4 border-t items-center">
+                      <div className="font-medium">{stage.stage}</div>
+                      <div className="text-right font-mono text-muted-foreground">{stage.learners.toLocaleString()}</div>
+                      <div className="text-right font-mono font-medium">{stage.topProduct}</div>
+                      <div className={`text-right flex items-center justify-end gap-1 ${getTrendColor(stage.avgUsageIncrease)}`}>
+                        {getTrendIcon(stage.avgUsageIncrease)}
+                        <span className="font-medium">{Math.abs(stage.avgUsageIncrease)}%</span>
+                      </div>
+                      <div className="text-right font-mono">+{stage.platformTimeIncrease}%</div>
                     </div>
-                    <div className="text-right font-mono">{course.avgTime}</div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </CardContent>
           </Card>

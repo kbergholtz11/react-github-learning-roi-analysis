@@ -1,11 +1,13 @@
 "use client";
 
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Download, ChevronLeft, ChevronRight, X, AlertCircle, Users } from "lucide-react";
+import { Search, Download, ChevronLeft, ChevronRight, X, AlertCircle, Users, Loader2 } from "lucide-react";
 import { useUrlParams } from "@/hooks/use-url-params";
 import { useLearners } from "@/hooks/use-data";
 import type { LearnerStatus, CertifiedUser, UnifiedUser } from "@/types/data";
@@ -50,6 +52,8 @@ function ErrorState({ error }: { error: Error }) {
 }
 
 export default function LearnerExplorerPage() {
+  const router = useRouter();
+  
   // Use URL params for filter persistence - shareable links!
   const { params, setParams, hasActiveFilters, clearParams } = useUrlParams({
     search: "",
@@ -57,23 +61,43 @@ export default function LearnerExplorerPage() {
     status: "" as LearnerStatus | "",
   });
 
+  // Local state for immediate input feedback
+  const [localSearch, setLocalSearch] = useState(params.search);
+  
+  // Debounce search - update URL params after user stops typing
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (localSearch !== params.search) {
+        setParams({ search: localSearch, page: 1 });
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [localSearch, params.search, setParams]);
+
+  // Sync local state when URL params change externally
+  useEffect(() => {
+    setLocalSearch(params.search);
+  }, [params.search]);
+
   const searchTerm = params.search;
   const currentPage = params.page;
   const statusFilter = params.status;
   const pageSize = 25;
 
-  const { data, isLoading, error } = useLearners({
+  const { data, isLoading, error, isFetching } = useLearners({
     search: searchTerm || undefined,
     learnerStatus: statusFilter ? (statusFilter as LearnerStatus) : "all",
     page: currentPage,
     pageSize,
   });
 
-  if (isLoading) return <LoadingSkeleton />;
+  // Only show full skeleton on initial load, not during search/filter
+  if (isLoading && !data) return <LoadingSkeleton />;
   if (error) return <ErrorState error={error as Error} />;
-  if (!data) return null;
 
-  const { data: learners, total, page } = data;
+  const learners = data?.learners || [];
+  const total = data?.total || 0;
+  const page = data?.page || currentPage;
   const totalPages = Math.ceil(total / pageSize);
 
   const getStatusColor = (status: string) => {
@@ -122,11 +146,14 @@ export default function LearnerExplorerPage() {
               />
               <Input
                 placeholder="Search by email or username..."
-                className="pl-10"
-                value={searchTerm}
-                onChange={(e) => setParams({ search: e.target.value, page: 1 })}
+                className="pl-10 pr-10"
+                value={localSearch}
+                onChange={(e) => setLocalSearch(e.target.value)}
                 aria-label="Search learners"
               />
+              {isFetching && (
+                <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground animate-spin" />
+              )}
             </div>
             <select
               value={statusFilter}
@@ -181,7 +208,11 @@ export default function LearnerExplorerPage() {
               {learners.map((learner, idx) => (
                 <div
                   key={`${getEmail(learner)}-${idx}`}
-                  className="grid grid-cols-12 gap-4 p-4 items-center border-b last:border-0 hover:bg-muted/30 transition-colors"
+                  className="grid grid-cols-12 gap-4 p-4 items-center border-b last:border-0 hover:bg-muted/30 transition-colors cursor-pointer"
+                  onClick={() => router.push(`/journey/profile?email=${encodeURIComponent(getEmail(learner))}`)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => e.key === 'Enter' && router.push(`/journey/profile?email=${encodeURIComponent(getEmail(learner))}`)}
                 >
                   <div className="col-span-3 truncate">
                     <span className="font-medium">{getEmail(learner) || "—"}</span>

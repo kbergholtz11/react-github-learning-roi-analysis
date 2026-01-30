@@ -3,49 +3,60 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { SimpleAreaChart } from "@/components/dashboard";
-import { Mail, Building, Award, Calendar, TrendingUp, BookOpen, Clock, ArrowLeft } from "lucide-react";
+import { SimpleBarChart } from "@/components/dashboard";
+import { Mail, Award, TrendingUp, BookOpen, ArrowLeft, Loader2, User } from "lucide-react";
 import Link from "next/link";
-
-// Sample learner profile data
-const learnerData = {
-  name: "Sarah Chen",
-  email: "sarah.chen@company.com",
-  department: "Engineering",
-  role: "Senior Developer",
-  joinedDate: "November 15, 2025",
-  manager: "Alex Rivera",
-  location: "San Francisco, CA",
-};
-
-const certifications = [
-  { name: "GitHub Actions", date: "Jan 15, 2026", score: 94, status: "certified" },
-  { name: "GitHub Foundations", date: "Dec 5, 2025", score: 91, status: "certified" },
-];
-
-const currentCourses = [
-  { name: "GitHub Copilot Mastery", progress: 85, started: "Jan 10, 2026", estimatedCompletion: "Feb 1, 2026" },
-  { name: "Advanced Security", progress: 32, started: "Jan 20, 2026", estimatedCompletion: "Feb 15, 2026" },
-];
-
-const activityData = [
-  { name: "Week 1", hours: 4.5 },
-  { name: "Week 2", hours: 6.2 },
-  { name: "Week 3", hours: 3.8 },
-  { name: "Week 4", hours: 7.1 },
-  { name: "Week 5", hours: 5.5 },
-  { name: "Week 6", hours: 8.2 },
-];
-
-const recentActivity = [
-  { action: "Completed module", detail: "GitHub Copilot - Chat Features", time: "2 hours ago" },
-  { action: "Passed quiz", detail: "Actions Workflows - 95%", time: "Yesterday" },
-  { action: "Started course", detail: "Advanced Security", time: "3 days ago" },
-  { action: "Earned badge", detail: "Quick Learner", time: "1 week ago" },
-];
+import { useSearchParams } from "next/navigation";
+import { useLearners, useMetrics } from "@/hooks/use-data";
 
 export default function LearnerProfilePage() {
+  const searchParams = useSearchParams();
+  const emailParam = searchParams.get("email") || "";
+  
+  // Search for specific learner if email provided, otherwise get top learners
+  const { data: learnersData, isLoading: learnersLoading } = useLearners({ 
+    search: emailParam || undefined,
+    pageSize: emailParam ? 1 : 10 
+  });
+  const { data: metricsData, isLoading: metricsLoading } = useMetrics();
+  
+  const isLoading = learnersLoading || metricsLoading;
+  
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  // Get learner - first match if searching, or first top learner
+  const topLearners = learnersData?.learners || [];
+  const featuredLearner = topLearners[0];
+  
+  if (!featuredLearner) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">No learner data available</p>
+      </div>
+    );
+  }
+
+  // Extract learner info
+  const email = 'email' in featuredLearner ? featuredLearner.email : '';
+  const handle = 'user_handle' in featuredLearner ? featuredLearner.user_handle : email.split('@')[0];
+  const status = 'learner_status' in featuredLearner ? featuredLearner.learner_status : 'Active';
+  const stage = 'journey_stage' in featuredLearner ? featuredLearner.journey_stage : '';
+  const certs = 'cert_titles' in featuredLearner ? (featuredLearner.cert_titles as string[]) : [];
+  const totalCerts = 'total_certs' in featuredLearner ? (featuredLearner.total_certs as number) : 0;
+  const initials = handle.slice(0, 2).toUpperCase();
+  
+  // Build certification data for chart
+  const certChartData = certs.map((cert: string) => ({
+    name: cert,
+    value: 1,
+  }));
+
   return (
     <div className="space-y-6">
       {/* Back Button */}
@@ -59,30 +70,25 @@ export default function LearnerProfilePage() {
         <CardContent className="pt-6">
           <div className="flex items-start gap-6">
             <Avatar className="h-20 w-20">
-              <AvatarFallback className="text-2xl bg-primary/10">SC</AvatarFallback>
+              <AvatarFallback className="text-2xl bg-primary/10">{initials}</AvatarFallback>
             </Avatar>
             <div className="flex-1">
               <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-bold">{learnerData.name}</h1>
-                <Badge variant="secondary" className="bg-green-100 text-green-700">Active Learner</Badge>
+                <h1 className="text-2xl font-bold">@{handle}</h1>
+                <Badge variant="secondary" className="bg-green-100 text-green-700">{status}</Badge>
               </div>
-              <p className="text-muted-foreground">{learnerData.role} • {learnerData.department}</p>
+              <p className="text-muted-foreground">{stage}</p>
               <div className="flex items-center gap-6 mt-4 text-sm">
                 <div className="flex items-center gap-2">
                   <Mail className="h-4 w-4 text-muted-foreground" />
-                  <span>{learnerData.email}</span>
+                  <span>{email}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Building className="h-4 w-4 text-muted-foreground" />
-                  <span>{learnerData.location}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                  <span>Joined {learnerData.joinedDate}</span>
+                  <Award className="h-4 w-4 text-muted-foreground" />
+                  <span>{totalCerts} certification{totalCerts !== 1 ? 's' : ''}</span>
                 </div>
               </div>
             </div>
-            <Button variant="outline">Edit Profile</Button>
           </div>
         </CardContent>
       </Card>
@@ -96,7 +102,7 @@ export default function LearnerProfilePage() {
                 <Award className="h-6 w-6 text-green-600" />
               </div>
               <div>
-                <div className="text-2xl font-bold">{certifications.length}</div>
+                <div className="text-2xl font-bold">{totalCerts}</div>
                 <p className="text-xs text-muted-foreground">Certifications</p>
               </div>
             </div>
@@ -109,8 +115,8 @@ export default function LearnerProfilePage() {
                 <BookOpen className="h-6 w-6 text-blue-600" />
               </div>
               <div>
-                <div className="text-2xl font-bold">{currentCourses.length}</div>
-                <p className="text-xs text-muted-foreground">Active Courses</p>
+                <div className="text-2xl font-bold">{stage.split(':')[0] || 'Active'}</div>
+                <p className="text-xs text-muted-foreground">Journey Stage</p>
               </div>
             </div>
           </CardContent>
@@ -119,11 +125,11 @@ export default function LearnerProfilePage() {
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-purple-100 rounded-full">
-                <Clock className="h-6 w-6 text-purple-600" />
+                <User className="h-6 w-6 text-purple-600" />
               </div>
               <div>
-                <div className="text-2xl font-bold">35.3</div>
-                <p className="text-xs text-muted-foreground">Hours Learned</p>
+                <div className="text-2xl font-bold">{status}</div>
+                <p className="text-xs text-muted-foreground">Learner Status</p>
               </div>
             </div>
           </CardContent>
@@ -135,8 +141,8 @@ export default function LearnerProfilePage() {
                 <TrendingUp className="h-6 w-6 text-yellow-600" />
               </div>
               <div>
-                <div className="text-2xl font-bold">92%</div>
-                <p className="text-xs text-muted-foreground">Avg. Score</p>
+                <div className="text-2xl font-bold">{metricsData?.metrics.totalLearners.toLocaleString() || 0}</div>
+                <p className="text-xs text-muted-foreground">Total Learners</p>
               </div>
             </div>
           </CardContent>
@@ -144,99 +150,88 @@ export default function LearnerProfilePage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Current Courses */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Current Courses</CardTitle>
-            <CardDescription>In-progress learning</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {currentCourses.map((course) => (
-                <div key={course.name} className="p-4 border rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="font-medium">{course.name}</p>
-                    <Badge variant="outline">{course.progress}%</Badge>
-                  </div>
-                  <div className="h-2 bg-muted rounded-full overflow-hidden mb-2">
-                    <div 
-                      className="h-full bg-primary rounded-full"
-                      style={{ width: `${course.progress}%` }}
-                    />
-                  </div>
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Started: {course.started}</span>
-                    <span>Est. completion: {course.estimatedCompletion}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Certifications */}
         <Card>
           <CardHeader>
-            <CardTitle>Certifications</CardTitle>
-            <CardDescription>Earned credentials</CardDescription>
+            <CardTitle>Certifications Earned</CardTitle>
+            <CardDescription>Credentials achieved by this learner</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {certifications.map((cert) => (
-                <div key={cert.name} className="flex items-center justify-between p-4 border rounded-lg">
+              {certs.length > 0 ? certs.map((cert: string) => (
+                <div key={cert} className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-green-100 rounded-full">
                       <Award className="h-5 w-5 text-green-600" />
                     </div>
                     <div>
-                      <p className="font-medium">{cert.name}</p>
-                      <p className="text-xs text-muted-foreground">{cert.date}</p>
+                      <p className="font-medium">{cert}</p>
+                      <p className="text-xs text-muted-foreground">GitHub Certification</p>
                     </div>
                   </div>
-                  <Badge variant="secondary" className="text-green-600">{cert.score}%</Badge>
+                  <Badge variant="secondary" className="text-green-600">Certified</Badge>
                 </div>
-              ))}
+              )) : (
+                <p className="text-muted-foreground text-center py-4">No certifications yet</p>
+              )}
             </div>
           </CardContent>
         </Card>
 
-        {/* Learning Activity */}
+        {/* Certification Distribution Chart */}
         <Card>
           <CardHeader>
-            <CardTitle>Weekly Learning Activity</CardTitle>
-            <CardDescription>Hours spent learning per week</CardDescription>
+            <CardTitle>Certification Types</CardTitle>
+            <CardDescription>Distribution of certifications</CardDescription>
           </CardHeader>
           <CardContent>
-            <SimpleAreaChart 
-              data={activityData}
-              dataKey="hours"
-              color="#8b5cf6"
-            />
-          </CardContent>
-        </Card>
-
-        {/* Recent Activity */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-            <CardDescription>Latest learning events</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {recentActivity.map((activity, index) => (
-                <div key={index} className="flex items-start gap-3">
-                  <div className="h-2 w-2 mt-2 rounded-full bg-primary" />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">{activity.action}</p>
-                    <p className="text-xs text-muted-foreground">{activity.detail}</p>
-                  </div>
-                  <span className="text-xs text-muted-foreground">{activity.time}</span>
-                </div>
-              ))}
-            </div>
+            {certChartData.length > 0 ? (
+              <SimpleBarChart 
+                data={certChartData}
+                dataKey="value"
+                color="#22c55e"
+              />
+            ) : (
+              <p className="text-muted-foreground text-center py-8">No certification data to display</p>
+            )}
           </CardContent>
         </Card>
       </div>
+
+      {/* Other Top Learners */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Other Top Learners</CardTitle>
+          <CardDescription>Learners with similar achievements</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {topLearners.slice(1, 6).map((learner, index) => {
+              const learnerEmail = 'email' in learner ? learner.email : '';
+              const learnerHandle = 'user_handle' in learner ? learner.user_handle : learnerEmail.split('@')[0];
+              const learnerStatus = 'learner_status' in learner ? learner.learner_status : '';
+              const learnerCerts = 'total_certs' in learner ? (learner.total_certs as number) : 0;
+              return (
+                <div key={index} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-10 w-10">
+                      <AvatarFallback className="text-sm">{learnerHandle.slice(0, 2).toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="font-medium">@{learnerHandle}</p>
+                      <p className="text-xs text-muted-foreground">{learnerEmail}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Badge variant="outline">{learnerStatus}</Badge>
+                    <Badge className="bg-green-600">{learnerCerts} certs</Badge>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

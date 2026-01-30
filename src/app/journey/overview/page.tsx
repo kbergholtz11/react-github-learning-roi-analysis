@@ -3,43 +3,48 @@
 import { MetricCard, DonutChart, SimpleBarChart } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, TrendingUp, Clock, CheckCircle } from "lucide-react";
-
-// Sample journey funnel data
-const funnelData = [
-  { name: "Enrolled", value: 4586, color: "#3b82f6" },
-  { name: "Started Learning", value: 3892, color: "#8b5cf6" },
-  { name: "50% Complete", value: 2847, color: "#a855f7" },
-  { name: "Completed Course", value: 1891, color: "#d946ef" },
-  { name: "Certified", value: 1256, color: "#22c55e" },
-];
-
-const weeklyProgressData = [
-  { name: "Week 1", enrolled: 580, completed: 45 },
-  { name: "Week 2", enrolled: 620, completed: 72 },
-  { name: "Week 3", enrolled: 540, completed: 95 },
-  { name: "Week 4", enrolled: 710, completed: 125 },
-  { name: "Week 5", enrolled: 680, completed: 142 },
-  { name: "Week 6", enrolled: 590, completed: 168 },
-];
-
-const pathCompletionData = [
-  { name: "GitHub Foundations", value: 892, color: "#22c55e" },
-  { name: "GitHub Actions", value: 654, color: "#3b82f6" },
-  { name: "GitHub Advanced Security", value: 423, color: "#8b5cf6" },
-  { name: "GitHub Copilot", value: 387, color: "#f59e0b" },
-  { name: "GitHub Admin", value: 245, color: "#ef4444" },
-];
-
-const recentLearners = [
-  { name: "Sarah Chen", path: "GitHub Actions", progress: 85, status: "active" },
-  { name: "Mike Johnson", path: "GitHub Copilot", progress: 100, status: "completed" },
-  { name: "Emily Davis", path: "GitHub Foundations", progress: 42, status: "active" },
-  { name: "James Wilson", path: "Advanced Security", progress: 67, status: "active" },
-  { name: "Lisa Anderson", path: "GitHub Admin", progress: 100, status: "certified" },
-];
+import { Users, TrendingUp, Clock, CheckCircle, Loader2 } from "lucide-react";
+import { useJourney, useMetrics } from "@/hooks/use-data";
 
 export default function JourneyOverviewPage() {
+  const { data: journeyData, isLoading: journeyLoading } = useJourney();
+  const { data: metricsData, isLoading: metricsLoading } = useMetrics();
+
+  const isLoading = journeyLoading || metricsLoading;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  const funnel = journeyData?.funnel || [];
+  const metrics = metricsData?.metrics;
+  const monthlyProgression = journeyData?.monthlyProgression || [];
+
+  // Build funnel data for display
+  const funnelData = funnel.map((stage) => ({
+    name: stage.stage,
+    value: stage.count,
+    color: stage.color,
+  }));
+
+  // Build path completion data from status breakdown
+  const pathCompletionData = metricsData?.statusBreakdown?.map((s, i) => ({
+    name: s.status,
+    value: s.count,
+    color: ["#3b82f6", "#22c55e", "#8b5cf6", "#f59e0b", "#ef4444"][i] || "#94a3b8",
+  })) || [];
+
+  // Weekly progress from monthly progression (adapt to weekly display)
+  const weeklyProgressData = monthlyProgression.slice(-6).map((m) => ({
+    name: m.name,
+    enrolled: m.learning + m.certified,
+    completed: m.certified,
+  }));
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -51,7 +56,7 @@ export default function JourneyOverviewPage() {
           </p>
         </div>
         <Badge variant="outline" className="text-sm">
-          Last synced: 5 min ago
+          Live data
         </Badge>
       </div>
 
@@ -59,28 +64,28 @@ export default function JourneyOverviewPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           title="Total Enrolled"
-          value="4,586"
+          value={metrics?.totalLearners?.toLocaleString() || "0"}
           description="Across all learning paths"
           trend={{ value: 8.3, isPositive: true }}
           icon={<Users className="h-4 w-4" />}
         />
         <MetricCard
           title="In Progress"
-          value="2,074"
+          value={metrics?.learningUsers?.toLocaleString() || "0"}
           description="Actively learning"
           trend={{ value: 12.1, isPositive: true }}
           icon={<TrendingUp className="h-4 w-4" />}
         />
         <MetricCard
-          title="Completed"
-          value="1,891"
-          description="Finished courses"
+          title="Certified"
+          value={metrics?.certifiedUsers?.toLocaleString() || "0"}
+          description="Finished & certified"
           trend={{ value: 5.7, isPositive: true }}
           icon={<CheckCircle className="h-4 w-4" />}
         />
         <MetricCard
           title="Avg. Completion Time"
-          value="18 days"
+          value={`${journeyData?.avgTimeToCompletion || 45} days`}
           description="From enrollment to completion"
           trend={{ value: 3.2, isPositive: false }}
           icon={<Clock className="h-4 w-4" />}
@@ -97,7 +102,8 @@ export default function JourneyOverviewPage() {
           <CardContent>
             <div className="space-y-4">
               {funnelData.map((stage) => {
-                const percentage = (stage.value / funnelData[0].value) * 100;
+                const maxValue = funnelData[0]?.value || 1;
+                const percentage = (stage.value / maxValue) * 100;
                 return (
                   <div key={stage.name} className="space-y-2">
                     <div className="flex justify-between text-sm">
@@ -119,8 +125,8 @@ export default function JourneyOverviewPage() {
 
         <Card className="col-span-4">
           <CardHeader>
-            <CardTitle>Weekly Enrollment vs Completion</CardTitle>
-            <CardDescription>New enrollments and completions per week</CardDescription>
+            <CardTitle>Monthly Enrollment vs Completion</CardTitle>
+            <CardDescription>New enrollments and completions per month</CardDescription>
           </CardHeader>
           <CardContent>
             <SimpleBarChart 
@@ -134,12 +140,12 @@ export default function JourneyOverviewPage() {
         </Card>
       </div>
 
-      {/* Path Completion and Recent Learners */}
+      {/* Path Completion */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
         <Card className="col-span-3">
           <CardHeader>
-            <CardTitle>Completions by Path</CardTitle>
-            <CardDescription>Distribution across learning paths</CardDescription>
+            <CardTitle>Learners by Status</CardTitle>
+            <CardDescription>Distribution across learning statuses</CardDescription>
           </CardHeader>
           <CardContent>
             <DonutChart data={pathCompletionData} />
@@ -148,41 +154,20 @@ export default function JourneyOverviewPage() {
 
         <Card className="col-span-4">
           <CardHeader>
-            <CardTitle>Recent Learner Activity</CardTitle>
-            <CardDescription>Latest updates from active learners</CardDescription>
+            <CardTitle>Drop-off Analysis</CardTitle>
+            <CardDescription>Conversion rates between stages</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {recentLearners.map((learner) => (
-                <div key={learner.name} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      <span className="text-sm font-medium">{learner.name.split(' ').map(n => n[0]).join('')}</span>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">{learner.name}</p>
-                      <p className="text-xs text-muted-foreground">{learner.path}</p>
-                    </div>
+              {journeyData?.dropOffAnalysis?.filter(d => d.nextStage).map((stage) => (
+                <div key={stage.stage} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  <div>
+                    <p className="font-medium">{stage.stage} → {stage.nextStage}</p>
+                    <p className="text-sm text-muted-foreground">{stage.count.toLocaleString()} learners</p>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-24">
-                      <div className="flex justify-between text-xs mb-1">
-                        <span>{learner.progress}%</span>
-                      </div>
-                      <div className="h-2 bg-muted rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-primary rounded-full"
-                          style={{ width: `${learner.progress}%` }}
-                        />
-                      </div>
-                    </div>
-                    <Badge variant={
-                      learner.status === 'certified' ? 'default' : 
-                      learner.status === 'completed' ? 'secondary' : 'outline'
-                    }>
-                      {learner.status}
-                    </Badge>
-                  </div>
+                  <Badge variant={stage.dropOffRate > 50 ? "destructive" : stage.dropOffRate > 30 ? "secondary" : "default"}>
+                    {stage.dropOffRate}% drop-off
+                  </Badge>
                 </div>
               ))}
             </div>

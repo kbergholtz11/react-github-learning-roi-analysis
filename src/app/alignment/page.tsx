@@ -3,115 +3,77 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Target, TrendingUp, Users, CheckCircle, ArrowRight, Package } from "lucide-react";
+import { Target, TrendingUp, Users, CheckCircle, ArrowRight, Package, Loader2 } from "lucide-react";
 import { SimpleBarChart } from "@/components/dashboard/charts";
-
-// Product alignment data
-const alignmentSummary = [
-  { 
-    product: "GitHub Copilot", 
-    learners: 2100, 
-    adopters: 1638, 
-    adoptionRate: 78,
-    avgDaysToAdoption: 23
-  },
-  { 
-    product: "GitHub Actions", 
-    learners: 1650, 
-    adopters: 1073, 
-    adoptionRate: 65,
-    avgDaysToAdoption: 31
-  },
-  { 
-    product: "Advanced Security", 
-    learners: 875, 
-    adopters: 455, 
-    adoptionRate: 52,
-    avgDaysToAdoption: 45
-  },
-  { 
-    product: "Admin & Platform", 
-    learners: 375, 
-    adopters: 154, 
-    adoptionRate: 41,
-    avgDaysToAdoption: 58
-  },
-];
-
-// Learning to adoption pipeline chart data
-const pipelineData = [
-  { name: "Copilot", learners: 2100, adopters: 1638 },
-  { name: "Actions", learners: 1650, adopters: 1073 },
-  { name: "Security", learners: 875, adopters: 455 },
-  { name: "Admin", learners: 375, adopters: 154 },
-];
-
-// Cross-product usage patterns
-const crossProductData = [
-  { combination: "Copilot + Actions", users: 892, percentage: 17.8 },
-  { combination: "Copilot + Security", users: 423, percentage: 8.5 },
-  { combination: "Actions + Security", users: 312, percentage: 6.2 },
-  { combination: "All Three Products", users: 245, percentage: 4.9 },
-  { combination: "Single Product Only", users: 2128, percentage: 42.6 },
-];
-
-// Adoption journey insights
-const adoptionInsights = [
-  {
-    title: "Learning correlates with adoption",
-    description: "Users who complete 5+ learning sessions are 3.2x more likely to adopt products within 30 days.",
-    metric: "3.2x",
-    trend: "positive"
-  },
-  {
-    title: "Certification accelerates adoption",
-    description: "Certified users show 89% product adoption vs 52% for non-certified learners.",
-    metric: "+37%",
-    trend: "positive"
-  },
-  {
-    title: "Event attendance boosts engagement",
-    description: "Bootcamp attendees have 2.1x higher product usage in the first 60 days.",
-    metric: "2.1x",
-    trend: "positive"
-  },
-  {
-    title: "Multi-product learners retain better",
-    description: "Users learning multiple products have 67% higher 6-month retention.",
-    metric: "+67%",
-    trend: "positive"
-  },
-];
-
-// Recommended actions
-const recommendations = [
-  {
-    priority: "High",
-    action: "Increase Advanced Security learning content",
-    reason: "Lowest adoption rate at 52% - gap between learning and product use",
-    impact: "Could improve adoption by 15-20%"
-  },
-  {
-    priority: "High",
-    action: "Create cross-product learning paths",
-    reason: "Only 4.9% of users use all three products",
-    impact: "Increase multi-product adoption by 2x"
-  },
-  {
-    priority: "Medium",
-    action: "Add hands-on labs for Admin & Platform",
-    reason: "Longest time to adoption (58 days avg)",
-    impact: "Reduce time-to-adoption by 30%"
-  },
-  {
-    priority: "Medium",
-    action: "Expand Copilot certification prep",
-    reason: "Highest adoption product - maximize conversion",
-    impact: "Additional 200+ certifications/quarter"
-  },
-];
+import { useImpact, useMetrics } from "@/hooks/use-data";
 
 export default function ProductAlignmentPage() {
+  const { data: impactData, isLoading: impactLoading } = useImpact();
+  const { data: metricsData, isLoading: metricsLoading } = useMetrics();
+
+  const isLoading = impactLoading || metricsLoading;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  const metrics = metricsData?.metrics;
+  const productAdoption = impactData?.productAdoption || [];
+  const stageImpact = impactData?.stageImpact || [];
+
+  // Calculate adoption rate from certified vs learning users
+  const certifiedUsers = metrics?.certifiedUsers || 0;
+  const totalLearners = metrics?.totalLearners || 1;
+  const adoptionRate = ((certifiedUsers / totalLearners) * 100).toFixed(1);
+
+  // Build alignment summary from product adoption data
+  const alignmentSummary = productAdoption.map((p) => ({
+    product: p.name,
+    learners: metrics?.learningUsers || 0,
+    adopters: Math.round((certifiedUsers * (p.after / 100))),
+    adoptionRate: p.after,
+    avgDaysToAdoption: 34,
+  }));
+
+  // Pipeline data for chart
+  const pipelineData = productAdoption.map((p) => ({
+    name: p.name,
+    before: p.before,
+    after: p.after,
+  }));
+
+  // Adoption insights from real data
+  const adoptionInsights = [
+    {
+      title: "Learning correlates with adoption",
+      description: `Users who complete learning are ${Math.round(certifiedUsers / Math.max(metrics?.learningUsers || 1, 1) * 10) / 10}x more likely to adopt products.`,
+      metric: `${((certifiedUsers / totalLearners) * 100).toFixed(0)}%`,
+      trend: "positive"
+    },
+    {
+      title: "Certification accelerates adoption",
+      description: `${metrics?.certifiedUsers?.toLocaleString()} certified users show higher product adoption.`,
+      metric: `${metrics?.certifiedUsers?.toLocaleString()}`,
+      trend: "positive"
+    },
+    {
+      title: "Multi-certified users adopt more",
+      description: "Users with multiple certifications use more platform features.",
+      metric: `${stageImpact.find(s => s.stage === "Multi-Certified")?.avgUsageIncrease || 67}%`,
+      trend: "positive"
+    },
+    {
+      title: "Champions lead in adoption",
+      description: "Champion users have the highest product engagement across all areas.",
+      metric: `${stageImpact.find(s => s.stage === "Champion")?.avgUsageIncrease || 95}%`,
+      trend: "positive"
+    },
+  ];
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -127,7 +89,7 @@ export default function ProductAlignmentPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Overall Adoption Rate</CardDescription>
-            <CardTitle className="text-2xl">66.4%</CardTitle>
+            <CardTitle className="text-2xl">{adoptionRate}%</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-xs text-muted-foreground">
@@ -137,147 +99,101 @@ export default function ProductAlignmentPage() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>Avg Time to Adoption</CardDescription>
-            <CardTitle className="text-2xl">34 days</CardTitle>
+            <CardDescription>Certified Users</CardDescription>
+            <CardTitle className="text-2xl">{metrics?.certifiedUsers?.toLocaleString()}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-xs text-muted-foreground">
-              From first learning activity
+              Product adopters
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>Multi-Product Users</CardDescription>
-            <CardTitle className="text-2xl">1,872</CardTitle>
+            <CardDescription>Still Learning</CardDescription>
+            <CardTitle className="text-2xl">{metrics?.learningUsers?.toLocaleString()}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-xs text-muted-foreground">
-              Using 2+ products
+              Potential adopters
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>Learning-to-Adoption Lift</CardDescription>
-            <CardTitle className="text-2xl">3.2x</CardTitle>
+            <CardDescription>Impact Score</CardDescription>
+            <CardTitle className="text-2xl">{metrics?.impactScore}/100</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-xs text-muted-foreground">
-              Vs non-learners
+              Learning → Usage correlation
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Alignment Summary Table */}
+      {/* Product Adoption Before/After */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Target className="h-5 w-5" />
-            Product Alignment Summary
+            Product Usage: Before vs After Learning
           </CardTitle>
-          <CardDescription>Learning focus vs actual product adoption by product</CardDescription>
+          <CardDescription>How learning impacts product adoption by category</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="text-left border-b">
-                  <th className="pb-3 font-medium">Product</th>
-                  <th className="pb-3 font-medium text-right">Learners</th>
-                  <th className="pb-3 font-medium text-right">Adopters</th>
-                  <th className="pb-3 font-medium text-right">Adoption Rate</th>
-                  <th className="pb-3 font-medium text-right">Time to Adoption</th>
-                </tr>
-              </thead>
-              <tbody>
-                {alignmentSummary.map((row) => (
-                  <tr key={row.product} className="border-b last:border-0">
-                    <td className="py-4">
-                      <div className="flex items-center gap-2">
-                        <Package className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium">{row.product}</span>
-                      </div>
-                    </td>
-                    <td className="py-4 text-right">{row.learners.toLocaleString()}</td>
-                    <td className="py-4 text-right">{row.adopters.toLocaleString()}</td>
-                    <td className="py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Progress value={row.adoptionRate} className="w-20 h-2" />
-                        <span className="font-medium w-12">{row.adoptionRate}%</span>
-                      </div>
-                    </td>
-                    <td className="py-4 text-right text-muted-foreground">
-                      {row.avgDaysToAdoption} days
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <SimpleBarChart 
+            data={pipelineData} 
+            dataKey="before" 
+            secondaryDataKey="after"
+            color="#94a3b8"
+            secondaryColor="#22c55e"
+          />
+          <div className="mt-4 flex justify-center gap-6 text-sm">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-slate-400" />
+              <span>Before Learning</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-green-500" />
+              <span>After Certification</span>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Charts and Insights */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Learning to Adoption Pipeline */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5" />
-              Learning → Adoption Pipeline
-            </CardTitle>
-            <CardDescription>Comparing learners to product adopters</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <SimpleBarChart 
-              data={pipelineData} 
-              dataKey="learners" 
-              secondaryDataKey="adopters"
-              color="#a78bfa"
-              secondaryColor="#22c55e"
-            />
-            <div className="mt-4 flex justify-center gap-6 text-sm">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-violet-400" />
-                <span>Learners</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-green-500" />
-                <span>Adopters</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Cross-Product Usage */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              Cross-Product Usage Patterns
-            </CardTitle>
-            <CardDescription>How users combine multiple products</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {crossProductData.map((item) => (
-                <div key={item.combination} className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <p className="font-medium text-sm">{item.combination}</p>
-                    <Progress value={item.percentage} max={50} className="h-2 mt-1" />
+      {/* Stage Impact on Adoption */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5" />
+            Adoption by Journey Stage
+          </CardTitle>
+          <CardDescription>How each journey stage impacts product usage</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {stageImpact.map((stage) => (
+              <div key={stage.stage} className="flex items-center justify-between p-4 rounded-lg border">
+                <div className="flex items-center gap-3">
+                  <Badge variant="outline">{stage.stage}</Badge>
+                  <span className="text-sm text-muted-foreground">{stage.learners.toLocaleString()} users</span>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="text-right">
+                    <p className="text-sm font-medium text-green-600">+{stage.avgUsageIncrease}%</p>
+                    <p className="text-xs text-muted-foreground">usage increase</p>
                   </div>
-                  <div className="text-right ml-4">
-                    <p className="font-bold">{item.users.toLocaleString()}</p>
-                    <p className="text-xs text-muted-foreground">{item.percentage}%</p>
+                  <div className="text-right">
+                    <p className="text-sm font-medium">{stage.topProduct}</p>
+                    <p className="text-xs text-muted-foreground">top product</p>
                   </div>
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Adoption Insights */}
       <Card>
@@ -299,41 +215,6 @@ export default function ProductAlignmentPage() {
                   </Badge>
                 </div>
                 <p className="text-sm text-muted-foreground">{insight.description}</p>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Recommendations */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ArrowRight className="h-5 w-5" />
-            Recommended Actions
-          </CardTitle>
-          <CardDescription>Suggested improvements based on alignment analysis</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {recommendations.map((rec, index) => (
-              <div key={index} className="p-4 rounded-lg border">
-                <div className="flex items-start gap-4">
-                  <Badge 
-                    variant={rec.priority === "High" ? "destructive" : "secondary"}
-                    className="mt-0.5"
-                  >
-                    {rec.priority}
-                  </Badge>
-                  <div className="flex-1">
-                    <h4 className="font-semibold">{rec.action}</h4>
-                    <p className="text-sm text-muted-foreground mt-1">{rec.reason}</p>
-                    <p className="text-sm text-green-600 mt-2 flex items-center gap-1">
-                      <TrendingUp className="h-3 w-3" />
-                      Expected Impact: {rec.impact}
-                    </p>
-                  </div>
-                </div>
               </div>
             ))}
           </div>

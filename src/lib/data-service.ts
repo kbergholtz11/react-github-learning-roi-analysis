@@ -279,13 +279,17 @@ export function getDashboardMetrics(): DashboardMetrics {
 
   return {
     totalLearners,
+    activeLearners: learning.length + certified.length,
     certifiedUsers: certified.length,
     learningUsers: learning.length,
+    prospectUsers: totalLearners - learning.length - certified.length,
     avgUsageIncrease: Math.round(usageIncrease),
     avgProductsAdopted: Math.round(avgProductsAdopted * 10) / 10,
     avgLearningHours: Math.round(avgLearningHours * 10) / 10,
     impactScore,
     retentionRate: Math.round(retentionRate * 10) / 10,
+    totalLearningHours: Math.round(avgLearningHours * totalLearners / 100),
+    totalCertsEarned: certified.reduce((sum, u) => sum + (u.total_certs || 1), 0),
   };
 }
 
@@ -435,7 +439,7 @@ export function getLearners(filters: LearnerFilters = {}) {
   results = results.slice(start, start + pageSize);
 
   return {
-    data: results,
+    learners: results,
     total,
     page,
     pageSize,
