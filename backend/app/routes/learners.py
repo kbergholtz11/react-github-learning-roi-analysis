@@ -205,8 +205,10 @@ async def get_learner_exams(email: str):
     Returns all exam attempts with:
     - Exam code and name
     - Date taken
-    - Pass/fail status
+    - Exam status (Passed, Failed, No Show, Scheduled, Canceled)
+    - Score percentage (when available, FY26 Pearson exams)
     - Attempt number (sequential)
+    - Days since previous exam
     
     Data is pulled from both FY22-25 (gh-analytics) and FY26 (Pearson) sources.
     """
@@ -237,34 +239,56 @@ async def get_learner_exams(email: str):
                             except:
                                 pass
                         
+                        exam_status = row.get("exam_status", "")
+                        if not exam_status:
+                            exam_status = "Passed" if row.get("passed", False) else "Failed"
+                        
                         exams.append({
                             "exam_code": row.get("exam_code", ""),
                             "exam_name": normalize_cert_name(row.get("exam_name", "")),
                             "exam_date": str(exam_date) if exam_date else None,
-                            "passed": row.get("passed", False),
+                            "exam_status": exam_status,
+                            "passed": exam_status == "Passed",
+                            "score_percent": row.get("score_percent"),
                             "attempt_number": row.get("attempt_number", 1),
                             "days_since_previous": days_since_prev,
                         })
                         prev_date = exam_date
                     
+                    # Calculate status counts
+                    status_counts = {}
+                    for e in exams:
+                        status = e["exam_status"]
+                        status_counts[status] = status_counts.get(status, 0) + 1
+                    
                     return {
                         "email": email,
                         "exams": exams,
                         "total_exams": len(exams),
-                        "passed_count": sum(1 for e in exams if e["passed"]),
+                        "passed_count": status_counts.get("Passed", 0),
+                        "failed_count": status_counts.get("Failed", 0),
+                        "status_breakdown": status_counts,
                         "source": "kusto",
                     }
             except Exception as kusto_err:
                 logger.warning(f"Kusto exam query failed, falling back to CSV: {kusto_err}")
         
-        # Fall back to CSV data (which has aggregated data only)
+        # Fall back to CSV data
         exams = get_individual_exams(email)
+        
+        # Calculate status counts
+        status_counts = {}
+        for e in exams:
+            status = e.get("exam_status", "Passed" if e.get("passed") else "Failed")
+            status_counts[status] = status_counts.get(status, 0) + 1
         
         return {
             "email": email,
             "exams": exams,
             "total_exams": len(exams),
-            "passed_count": sum(1 for e in exams if e.get("passed", False)),
+            "passed_count": status_counts.get("Passed", 0),
+            "failed_count": status_counts.get("Failed", 0),
+            "status_breakdown": status_counts,
             "source": "csv",
         }
         

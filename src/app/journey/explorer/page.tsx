@@ -98,10 +98,6 @@ export default function LearnerExplorerPage() {
     pageSize,
   });
 
-  // Only show full skeleton on initial load, not during search/filter
-  if (isLoading && !data) return <LoadingSkeleton />;
-  if (error) return <ErrorState error={error as Error} />;
-
   const learners = data?.learners || [];
   const total = data?.total || 0;
   const page = data?.page || currentPage;
@@ -150,7 +146,7 @@ export default function LearnerExplorerPage() {
       : <ArrowDown className="h-4 w-4 ml-1" />;
   };
 
-  // Sort learners
+  // Sort learners - must be called before any returns!
   const sortedLearners = useMemo(() => {
     return [...learners].sort((a, b) => {
       let aVal: string | number;
@@ -186,6 +182,10 @@ export default function LearnerExplorerPage() {
       return 0;
     });
   }, [learners, sortField, sortOrder]);
+
+  // Early returns AFTER all hooks
+  if (isLoading && !data) return <LoadingSkeleton />;
+  if (error) return <ErrorState error={error as Error} />;
 
   return (
     <div className="space-y-6">

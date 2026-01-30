@@ -20,38 +20,234 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "backend"))
 OUTPUT_FILE = "data/individual_exams.csv"
 
 # Query to get all individual exam records with unified schema
+# Includes ALL exam statuses with comprehensive FY22-FY25 data
 INDIVIDUAL_EXAMS_QUERY = """
-// Get email-to-dotcom mapping
+// ============================================================================
+// FY22-FY25: Comprehensive exam records from gh-analytics.ace
+// ============================================================================
+
+// 0. Deduplicate eligibility_sent to the latest record per eligibility_id
+let EligibilityData = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').ace_v0_eligibility_sent
+    | extend eligibility_id      = tostring(existing_eligibility_id)
+    | summarize arg_max(kafka_timestamp, *) by eligibility_id
+    | project
+        eligibility_id,
+        user_handle_meta = coalesce(user.handle, ""),
+        exam_name_meta   = coalesce(exam.name, ""),
+        exam_code_meta   = coalesce(exam.code, ""),
+        RegisteredDate   = todatetime(start_date);
+
+// 1. Build each exam-event stream including event-level handle & exam fields
+let ScheduledExams = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').ace_v0_exam_scheduled
+    | project
+        eligibility_id    = tostring(eligibility_id),
+        ExamDate          = todatetime(scheduled_for),
+        Status            = "Scheduled",
+        exam_timestamp    = timestamp,
+        user_handle_event = coalesce(user.handle, ""),
+        examname_event    = coalesce(exam.name, ""),
+        examcode_event    = coalesce(exam.code, ""),
+        userhandle_ex     = "",
+        examname_ex       = "",
+        examcode_ex       = "",
+        correct           = int(null),
+        incorrect         = int(null),
+        RoundedScore      = real(null),
+        ScorePercentage   = "",
+        region            = "";
+
+let RescheduledExams = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').ace_v0_exam_rescheduled
+    | project
+        eligibility_id    = tostring(eligibility_id),
+        ExamDate          = todatetime(rescheduled_for),
+        Status            = "Rescheduled",
+        exam_timestamp    = timestamp,
+        user_handle_event = coalesce(user.handle, ""),
+        examname_event    = coalesce(exam.name, ""),
+        examcode_event    = coalesce(exam.code, ""),
+        userhandle_ex     = "",
+        examname_ex       = "",
+        examcode_ex       = "",
+        correct           = int(null),
+        incorrect         = int(null),
+        RoundedScore      = real(null),
+        ScorePercentage   = "",
+        region            = "";
+
+let CancelledExams = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').ace_v0_exam_cancelled
+    | project
+        eligibility_id    = tostring(eligibility_id),
+        ExamDate          = todatetime(cancelled_on),
+        Status            = "Cancelled",
+        exam_timestamp    = timestamp,
+        user_handle_event = coalesce(user.handle, ""),
+        examname_event    = coalesce(exam.name, ""),
+        examcode_event    = coalesce(exam.code, ""),
+        userhandle_ex     = "",
+        examname_ex       = "",
+        examcode_ex       = "",
+        correct           = int(null),
+        incorrect         = int(null),
+        RoundedScore      = real(null),
+        ScorePercentage   = "",
+        region            = "";
+
+let AbsentExams = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').ace_v0_exam_absent
+    | project
+        eligibility_id    = tostring(eligibility_id),
+        ExamDate          = todatetime(absent_on),
+        Status            = "Absent",
+        exam_timestamp    = timestamp,
+        user_handle_event = coalesce(user.handle, ""),
+        examname_event    = coalesce(exam.name, ""),
+        examcode_event    = coalesce(exam.code, ""),
+        userhandle_ex     = "",
+        examname_ex       = "",
+        examcode_ex       = "",
+        correct           = int(null),
+        incorrect         = int(null),
+        RoundedScore      = real(null),
+        ScorePercentage   = "",
+        region            = "";
+
+// 2. CompletedExams with result-level fields
+let CompletedExams = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').exam_results
+    | extend RoundedScore    = iif(correct+incorrect > 0,
+                                    round((todouble(correct)/(correct+incorrect))*100,2),
+                                    real(null))
+    | extend ScorePercentage = strcat(RoundedScore, "%")
+    | project
+        eligibility_id    = tostring(eligibilityid),
+        ExamDate          = todatetime(endtime),
+        Status            = iff(passed, "Passed", "Failed"),
+        correct,
+        incorrect,
+        RoundedScore,
+        ScorePercentage,
+        exam_timestamp    = updateddate,
+        region,
+        userhandle_ex     = coalesce(userhandle, ""),
+        examname_ex       = coalesce(examname, ""),
+        examcode_ex       = coalesce(examcode, ""),
+        user_handle_event = "",
+        examname_event    = "",
+        examcode_event    = "";
+
+// 3. RegisteredExams from eligibility_sent
+let RegisteredExams = EligibilityData
+    | project
+        eligibility_id    = eligibility_id,
+        ExamDate          = RegisteredDate,
+        Status            = "Registered",
+        exam_timestamp    = RegisteredDate,
+        user_handle_event = "",
+        examname_event    = "",
+        examcode_event    = "",
+        userhandle_ex     = "",
+        examname_ex       = "",
+        examcode_ex       = "",
+        correct           = int(null),
+        incorrect         = int(null),
+        RoundedScore      = real(null),
+        ScorePercentage   = "",
+        region            = "";
+
+// 4. Union and add formatted date
+let CombinedExams = union
+        ScheduledExams,
+        RescheduledExams,
+        CancelledExams,
+        AbsentExams,
+        CompletedExams,
+        RegisteredExams
+    | extend FormattedDate = format_datetime(ExamDate, "yyyy-MM-dd");
+
+// 5. LEFT OUTER join to EligibilityData and compute unified fields
+let CombinedWithMeta = CombinedExams
+    | join kind=leftouter EligibilityData on eligibility_id
+    | extend
+        handle     = coalesce(user_handle_meta, user_handle_event, userhandle_ex),
+        exam_name  = coalesce(exam_name_meta, examname_event, examname_ex),
+        exam_code  = coalesce(exam_code_meta, examcode_event, examcode_ex),
+        raw_status = Status,
+        exam_status= iif(Status=="Registered" and ExamDate < ago(60d), "Expired Registration", Status);
+
+// 6. Rank and select one record per eligibility_id
+let Ranked = CombinedWithMeta
+    | extend status_rank = case(
+          exam_status=="Passed",              1,
+          exam_status=="Failed",              2,
+          exam_status=="Absent",              3,
+          exam_status=="Rescheduled",         4,
+          exam_status=="Scheduled",           5,
+          exam_status=="Cancelled",           7,
+          exam_status=="Registered",          8,
+          exam_status=="Expired Registration",9,
+          10
+      );
+
+let PassedRecords = Ranked
+    | where exam_status=="Passed"
+    | summarize arg_max(exam_timestamp, *) by eligibility_id;
+
+let NonPassed = Ranked
+    | where eligibility_id !in (PassedRecords | project eligibility_id);
+
+let MinRankByElig = NonPassed | summarize min_rank = min(status_rank) by eligibility_id;
+
+let OtherRecords = NonPassed
+    | join kind=inner MinRankByElig on eligibility_id
+    | where status_rank == min_rank
+    | summarize arg_max(exam_timestamp, *) by eligibility_id;
+
+let FY22_25 = union PassedRecords, OtherRecords
+    | where handle != ""
+        and not (isempty(eligibility_id) and exam_status != "No Exam")
+        and not (exam_status in ("Scheduled","Rescheduled") and ExamDate < now())
+        and exam_name !in ("GHAS 2024 Beta","UGWG")
+    | extend source = "FY22-25"
+    | project
+        handle,
+        exam_code,
+        exam_name,
+        exam_date = ExamDate,
+        exam_status,
+        score_percent = RoundedScore,
+        source;
+
+// ============================================================================
+// FY26: cse-analytics.ACE.pearson_exam_results (ALL statuses with scores)
+// ============================================================================
+let FY26 = cluster('cse-analytics.centralus.kusto.windows.net').database('ACE').pearson_exam_results
+    | extend 
+        handle = tolower(['Candidate Email']),
+        exam_code = ['Exam Series Code'],
+        exam_name = ['Exam Title'],
+        exam_date = Date,
+        exam_status = case(
+            ['Total Passed'] > 0, "Passed",
+            ['Total Failed'] > 0, "Failed",
+            ['Registration Status'] == "No Show", "No Show",
+            ['Registration Status'] == "Scheduled", "Scheduled",
+            ['Registration Status'] == "Canceled", "Canceled",
+            ['Registration Status']
+        ),
+        score_percent = todouble(Score),
+        source = "FY26"
+    | project handle, exam_code, exam_name, exam_date, exam_status, score_percent, source;
+
+// ============================================================================
+// Get email-to-dotcom mapping for joining
+// ============================================================================
 let email_mapping = cluster('gh-analytics.eastus.kusto.windows.net').database('snapshots').github_mysql1_user_emails_current
     | where state == "verified"
     | extend email = tolower(deobfuscated_email), dotcom_id = tolong(user_id)
     | where isnotempty(email) and dotcom_id > 0
     | summarize dotcom_id = max(dotcom_id) by email;
 
-// FY22-25: gh-analytics.ace.exam_results (all attempts)
-let FY22_25 = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').exam_results
-    | extend 
-        email = tolower(email),
-        exam_code = examcode,
-        exam_name = examname,
-        exam_date = endtime,
-        passed = passed,
-        source = "FY22-25"
-    | project email, exam_code, exam_name, exam_date, passed, source;
-
-// FY26: cse-analytics.ACE.pearson_exam_results
-let FY26 = cluster('cse-analytics.centralus.kusto.windows.net').database('ACE').pearson_exam_results
-    | extend 
-        email = tolower(['Candidate Email']),
-        exam_code = ['Exam Series Code'],
-        exam_name = ['Exam Title'],
-        exam_date = Date,
-        passed = iff(['Total Passed'] > 0, true, false),
-        source = "FY26"
-    | project email, exam_code, exam_name, exam_date, passed, source;
-
-// Union all exam records
+// Union all exam records and join with email mapping
 union FY22_25, FY26
+| extend email = handle
 | join kind=leftouter email_mapping on email
 | project
     email,
@@ -59,7 +255,8 @@ union FY22_25, FY26
     exam_code,
     exam_name,
     exam_date,
-    passed,
+    exam_status,
+    score_percent,
     source
 | order by email asc, exam_date asc
 """
@@ -131,7 +328,7 @@ def save_to_csv(records: list, output_file: str):
 
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
-    # Normalize exam names
+    # Normalize exam names and format data
     for record in records:
         record["exam_name"] = normalize_exam_name(record.get("exam_name", ""))
         # Format dates
@@ -144,8 +341,14 @@ def save_to_csv(records: list, output_file: str):
                     record["exam_date"] = str(dt)
             except:
                 pass
+        # Handle score - convert to percentage if valid
+        score = record.get("score_percent")
+        if score is not None and score > 0:
+            record["score_percent"] = round(float(score), 1)
+        else:
+            record["score_percent"] = ""
 
-    fieldnames = ["email", "dotcom_id", "exam_code", "exam_name", "exam_date", "passed", "source"]
+    fieldnames = ["email", "dotcom_id", "exam_code", "exam_name", "exam_date", "exam_status", "score_percent", "source"]
 
     with open(output_file, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -169,16 +372,25 @@ def main():
     if records:
         save_to_csv(records, OUTPUT_FILE)
 
-        # Print summary
-        passed_count = sum(1 for r in records if r.get("passed"))
+        # Print summary by status
+        status_counts = {}
+        for r in records:
+            status = r.get("exam_status", "Unknown")
+            status_counts[status] = status_counts.get(status, 0) + 1
+        
         unique_emails = len(set(r.get("email", "") for r in records))
+        with_scores = sum(1 for r in records if r.get("score_percent") and r.get("score_percent") > 0)
 
         print()
         print("📈 Summary:")
         print(f"   Total exam records: {len(records):,}")
-        print(f"   Passed exams: {passed_count:,}")
         print(f"   Unique learners: {unique_emails:,}")
-        print(f"   Pass rate: {passed_count / len(records) * 100:.1f}%")
+        print(f"   Records with scores: {with_scores:,}")
+        print()
+        print("   By Status:")
+        for status, count in sorted(status_counts.items(), key=lambda x: -x[1]):
+            pct = count / len(records) * 100
+            print(f"      {status}: {count:,} ({pct:.1f}%)")
     else:
         print()
         print("⚠️  Could not fetch data from Kusto.")

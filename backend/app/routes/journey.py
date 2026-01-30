@@ -12,6 +12,11 @@ from app.csv_service import (
 )
 from app.kusto import get_kusto_service, JourneyQueries
 from app.models import JourneyResponse
+from app.skill_service import (
+    get_skill_journey_summary,
+    get_top_skill_learners,
+    get_skill_profile_by_handle,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/journey", tags=["journey"])
@@ -168,4 +173,150 @@ async def get_drop_off():
         }
     except Exception as e:
         logger.error(f"Error fetching drop-off: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# Skill-Based Journey Endpoints (New Model)
+# =============================================================================
+
+
+@router.get("/skills")
+async def get_skill_journey():
+    """
+    Get skill-based journey analytics.
+    
+    This is the new skill-focused model that considers:
+    - Learning engagement (25% weight)
+    - Product usage (35% weight) - Primary focus
+    - Certification (15% weight) - Important but not dominant
+    - Consistency (15% weight)
+    - Growth trajectory (10% weight)
+    
+    Returns:
+    - Skill funnel with counts by level
+    - Average skill scores
+    - Dimension breakdowns
+    - Growth metrics
+    """
+    try:
+        summary = get_skill_journey_summary()
+        return {
+            "funnel": [
+                {
+                    "level": stage.level.value,
+                    "count": stage.count,
+                    "percentage": stage.percentage,
+                    "avgScore": stage.avg_score,
+                    "color": stage.color,
+                    "description": stage.description,
+                }
+                for stage in summary.funnel
+            ],
+            "totalLearners": summary.total_learners,
+            "avgSkillScore": summary.avg_skill_score,
+            "skillDistribution": summary.skill_distribution,
+            "dimensionAverages": summary.dimension_averages,
+            "growthMetrics": summary.growth_metrics,
+            "weights": {
+                "Learning": 0.25,
+                "Product Usage": 0.35,
+                "Certification": 0.15,
+                "Consistency": 0.15,
+                "Growth": 0.10,
+            },
+        }
+    except Exception as e:
+        logger.error(f"Error fetching skill journey: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/skills/top")
+async def get_top_skilled_learners(
+    limit: int = Query(10, ge=1, le=50, description="Number of top learners"),
+):
+    """
+    Get top learners by skill score.
+    
+    Returns learners ranked by their overall skill score,
+    with breakdown by dimension.
+    """
+    try:
+        top_learners = get_top_skill_learners(limit)
+        return {
+            "learners": [
+                {
+                    "handle": p.user_handle,
+                    "dotcomId": p.dotcom_id,
+                    "skillScore": p.skill_score,
+                    "skillLevel": p.skill_level.value,
+                    "dimensions": {
+                        d.dimension.value: {
+                            "raw": round(d.raw_score, 1),
+                            "weighted": round(d.weighted_score, 1),
+                        }
+                        for d in p.dimensions
+                    },
+                    "learningHours": p.learning_hours,
+                    "productUsageHours": p.product_usage_hours,
+                    "totalCerts": p.total_certs,
+                    "isGrowing": p.is_growing,
+                }
+                for p in top_learners
+            ],
+            "total": len(top_learners),
+        }
+    except Exception as e:
+        logger.error(f"Error fetching top skilled learners: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/skills/profile/{handle}")
+async def get_learner_skill_profile(handle: str):
+    """
+    Get detailed skill profile for a specific learner.
+    
+    Shows complete breakdown of skill score calculation
+    with all contributing factors.
+    """
+    try:
+        profile = get_skill_profile_by_handle(handle)
+        
+        if not profile:
+            raise HTTPException(status_code=404, detail=f"Learner {handle} not found")
+        
+        return {
+            "handle": profile.user_handle,
+            "dotcomId": profile.dotcom_id,
+            "skillScore": profile.skill_score,
+            "skillLevel": profile.skill_level.value,
+            "dimensions": [
+                {
+                    "dimension": d.dimension.value,
+                    "rawScore": round(d.raw_score, 1),
+                    "weightedScore": round(d.weighted_score, 1),
+                    "weight": d.weight,
+                    "details": d.details,
+                }
+                for d in profile.dimensions
+            ],
+            "metrics": {
+                "learningHours": profile.learning_hours,
+                "learningDays": profile.learning_days,
+                "productUsageHours": profile.product_usage_hours,
+                "copilotDays": profile.copilot_days,
+                "actionsEvents": profile.actions_events,
+                "securityEvents": profile.security_events,
+                "totalCerts": profile.total_certs,
+                "daysSinceLastActivity": profile.days_since_last_activity,
+            },
+            "growth": {
+                "isGrowing": profile.is_growing,
+                "growthRate": profile.growth_rate,
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching skill profile for {handle}: {e}")
         raise HTTPException(status_code=500, detail=str(e))

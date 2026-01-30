@@ -436,6 +436,247 @@ const topLearners = certifiedUsers
     };
   });
 
+// === 8. Skill Journey (new skill-based progression model) ===
+// Skill levels based on combined learning, usage, and certification
+type SkillLevel = "Exploring" | "Developing" | "Proficient" | "Advanced" | "Expert";
+
+// Scoring weights (total = 100%)
+const WEIGHTS = {
+  learning: 0.25,        // 25% - Learning engagement
+  product_usage: 0.35,   // 35% - Actual product usage (most important)
+  certification: 0.15,   // 15% - Certifications (validates knowledge)
+  consistency: 0.15,     // 15% - Consistent engagement over time
+  growth: 0.10,          // 10% - Growth/improvement trend
+};
+
+// Score thresholds for each level (0-100 scale)
+const LEVEL_THRESHOLDS = {
+  Expert: 80,      // 80-100
+  Advanced: 60,    // 60-79
+  Proficient: 40,  // 40-59
+  Developing: 20,  // 20-39
+  Exploring: 0,    // 0-19
+};
+
+function getSkillLevel(score: number): SkillLevel {
+  if (score >= LEVEL_THRESHOLDS.Expert) return "Expert";
+  if (score >= LEVEL_THRESHOLDS.Advanced) return "Advanced";
+  if (score >= LEVEL_THRESHOLDS.Proficient) return "Proficient";
+  if (score >= LEVEL_THRESHOLDS.Developing) return "Developing";
+  return "Exploring";
+}
+
+// Calculate individual dimension scores (0-100)
+function calculateLearningScore(learningHours: number, pageViews: number): number {
+  // Learning hours: 0-50hrs = 0-60 points, 50+hrs = 60-100 points (diminishing returns)
+  const hoursScore = learningHours <= 50 
+    ? (learningHours / 50) * 60 
+    : 60 + Math.min(40, (learningHours - 50) * 0.4);
+  
+  // Page views: 0-100 views = 0-40 points
+  const viewsScore = Math.min(40, pageViews * 0.4);
+  
+  return Math.min(100, hoursScore + viewsScore);
+}
+
+function calculateProductUsageScore(usageHours: number, activityDays: number): number {
+  // Usage hours: 0-200hrs = 0-70 points
+  const hoursScore = Math.min(70, (usageHours / 200) * 70);
+  
+  // Activity days: 0-90 days = 0-30 points
+  const daysScore = Math.min(30, (activityDays / 90) * 30);
+  
+  return Math.min(100, hoursScore + daysScore);
+}
+
+function calculateCertificationScore(certs: number): number {
+  // 0 certs = 0, 1 cert = 40, 2 certs = 65, 3 certs = 85, 4+ certs = 100
+  const scores = [0, 40, 65, 85, 100];
+  return scores[Math.min(certs, 4)];
+}
+
+function calculateConsistencyScore(activityDays: number, learningDays: number): number {
+  // Combined days of activity (max 180 days of consistent engagement)
+  const totalDays = activityDays + learningDays;
+  return Math.min(100, (totalDays / 180) * 100);
+}
+
+function calculateGrowthScore(recentActivity: boolean, certProgress: boolean): number {
+  // Recent activity in last 30 days = 50 points
+  // Certification progress (passed recently) = 50 points
+  return (recentActivity ? 50 : 0) + (certProgress ? 50 : 0);
+}
+
+// Build lookup maps for joining data
+const productUsageByDotcomId = new Map<number, ProductUsageRaw>();
+productUsage.forEach(p => productUsageByDotcomId.set(p.dotcom_id, p));
+
+const learningByEmail = new Map<string, LearningActivityRaw>();
+learningActivity.forEach(l => learningByEmail.set(l.user_ref?.toLowerCase(), l));
+
+const certsByEmail = new Map<string, CertifiedUserRaw>();
+certifiedUsers.forEach(c => certsByEmail.set(c.email?.toLowerCase(), c));
+
+// Calculate skill profiles for all unified users
+interface SkillProfile {
+  handle: string;
+  email: string;
+  skill_score: number;
+  skill_level: SkillLevel;
+  dimensions: {
+    learning: number;
+    product_usage: number;
+    certification: number;
+    consistency: number;
+    growth: number;
+  };
+  certifications: number;
+  learning_hours: number;
+  product_hours: number;
+  active_months: number;
+}
+
+const skillProfiles: SkillProfile[] = unifiedUsers.map(user => {
+  const email = (user.email || "").toLowerCase();
+  const learning = learningByEmail.get(email);
+  const usage = productUsageByDotcomId.get(user.dotcom_id);
+  const cert = certsByEmail.get(email);
+  
+  const learningHours = learning?.learning_hours || 0;
+  const pageViews = (user.learn_page_views || 0) + (user.skills_page_views || 0);
+  const usageHours = usage?.product_usage_hours || 0;
+  const activityDays = usage?.activity_days || 0;
+  const learningDays = learning?.learning_days || 0;
+  const certCount = cert?.total_certs || 0;
+  
+  // Check for recent activity (within 30 days)
+  const recentActivity = activityDays > 0 || learningDays > 0;
+  const certProgress = cert?.days_since_cert !== undefined && cert.days_since_cert < 90;
+  
+  // Calculate dimension scores
+  const dimensions = {
+    learning: calculateLearningScore(learningHours, pageViews),
+    product_usage: calculateProductUsageScore(usageHours, activityDays),
+    certification: calculateCertificationScore(certCount),
+    consistency: calculateConsistencyScore(activityDays, learningDays),
+    growth: calculateGrowthScore(recentActivity, certProgress),
+  };
+  
+  // Calculate weighted overall score
+  const skillScore = Math.round(
+    dimensions.learning * WEIGHTS.learning +
+    dimensions.product_usage * WEIGHTS.product_usage +
+    dimensions.certification * WEIGHTS.certification +
+    dimensions.consistency * WEIGHTS.consistency +
+    dimensions.growth * WEIGHTS.growth
+  );
+  
+  return {
+    handle: user.user_handle || email.split("@")[0] || "unknown",
+    email: user.email,
+    skill_score: skillScore,
+    skill_level: getSkillLevel(skillScore),
+    dimensions,
+    certifications: certCount,
+    learning_hours: Math.round(learningHours * 10) / 10,
+    product_hours: Math.round(usageHours * 10) / 10,
+    active_months: Math.ceil((activityDays + learningDays) / 30),
+  };
+});
+
+// Calculate skill distribution
+const skillDistribution = Object.entries(
+  skillProfiles.reduce((acc, p) => {
+    acc[p.skill_level] = (acc[p.skill_level] || 0) + 1;
+    return acc;
+  }, {} as Record<SkillLevel, number>)
+).map(([level, count]) => ({
+  level,
+  count,
+  percentage: Math.round((count / skillProfiles.length) * 1000) / 10,
+})).sort((a, b) => {
+  const order = ["Expert", "Advanced", "Proficient", "Developing", "Exploring"];
+  return order.indexOf(a.level) - order.indexOf(b.level);
+});
+
+// Calculate dimension averages
+const dimensionAverages = {
+  learning: Math.round(skillProfiles.reduce((sum, p) => sum + p.dimensions.learning, 0) / skillProfiles.length * 10) / 10,
+  product_usage: Math.round(skillProfiles.reduce((sum, p) => sum + p.dimensions.product_usage, 0) / skillProfiles.length * 10) / 10,
+  certification: Math.round(skillProfiles.reduce((sum, p) => sum + p.dimensions.certification, 0) / skillProfiles.length * 10) / 10,
+  consistency: Math.round(skillProfiles.reduce((sum, p) => sum + p.dimensions.consistency, 0) / skillProfiles.length * 10) / 10,
+  growth: Math.round(skillProfiles.reduce((sum, p) => sum + p.dimensions.growth, 0) / skillProfiles.length * 10) / 10,
+};
+
+// Get top skilled learners
+const topSkilledLearners = [...skillProfiles]
+  .sort((a, b) => b.skill_score - a.skill_score)
+  .slice(0, 100);
+
+// Skill level metadata for enhanced funnel visualization
+const skillLevelMeta: Record<SkillLevel, { color: string; description: string }> = {
+  Expert: { color: "#7c3aed", description: "Deep expertise with certifications and extensive usage" },
+  Advanced: { color: "#2563eb", description: "Strong skills with consistent engagement" },
+  Proficient: { color: "#059669", description: "Solid understanding with regular practice" },
+  Developing: { color: "#d97706", description: "Building skills through learning activities" },
+  Exploring: { color: "#6b7280", description: "Just starting the learning journey" },
+};
+
+// Calculate enhanced funnel with average scores per level
+const skillsByLevel = skillProfiles.reduce((acc, p) => {
+  if (!acc[p.skill_level]) acc[p.skill_level] = [];
+  acc[p.skill_level].push(p);
+  return acc;
+}, {} as Record<SkillLevel, SkillProfile[]>);
+
+const enhancedFunnel = (["Expert", "Advanced", "Proficient", "Developing", "Exploring"] as SkillLevel[]).map(level => {
+  const profiles = skillsByLevel[level] || [];
+  const count = profiles.length;
+  const avgScore = count > 0 
+    ? Math.round(profiles.reduce((sum, p) => sum + p.skill_score, 0) / count * 10) / 10
+    : 0;
+  
+  return {
+    level,
+    count,
+    percentage: Math.round((count / skillProfiles.length) * 1000) / 10,
+    avgScore,
+    color: skillLevelMeta[level].color,
+    description: skillLevelMeta[level].description,
+  };
+});
+
+// Growth metrics
+const withCerts = skillProfiles.filter(p => p.certifications > 0).length;
+const activeUsers = skillProfiles.filter(p => p.active_months > 0).length;
+const growingUsers = skillProfiles.filter(p => p.dimensions.growth >= 50).length;
+
+const growthMetrics = {
+  growing_learners: growingUsers,
+  growing_percentage: Math.round((growingUsers / skillProfiles.length) * 1000) / 10,
+  active_30_days: activeUsers,
+  active_percentage: Math.round((activeUsers / skillProfiles.length) * 1000) / 10,
+  with_certifications: withCerts,
+  cert_percentage: Math.round((withCerts / skillProfiles.length) * 1000) / 10,
+};
+
+// Skill distribution as object for quick lookup
+const skillDistributionObj = enhancedFunnel.reduce((acc, f) => {
+  acc[f.level] = f.count;
+  return acc;
+}, {} as Record<string, number>);
+
+const skillJourneyData = {
+  funnel: enhancedFunnel,
+  totalLearners: skillProfiles.length,
+  avgSkillScore: Math.round(skillProfiles.reduce((sum, p) => sum + p.skill_score, 0) / skillProfiles.length * 10) / 10,
+  skillDistribution: skillDistributionObj,
+  dimensionAverages,
+  growthMetrics,
+  weights: WEIGHTS,
+  topLearners: topSkilledLearners.slice(0, 10),
+};
+
 // === Write all aggregated files ===
 console.log("\n📁 Writing aggregated files...\n");
 
@@ -464,6 +705,36 @@ writeJSON("impact.json", {
 
 writeJSON("journey.json", {
   ...journeyData,
+  generatedAt: new Date().toISOString(),
+});
+
+writeJSON("skill-journey.json", {
+  ...skillJourneyData,
+  generatedAt: new Date().toISOString(),
+});
+
+// Transform top skilled learners to camelCase for frontend
+const topSkilledLearnersCamel = topSkilledLearners.map(p => ({
+  handle: p.handle,
+  email: p.email,
+  skillScore: p.skill_score,
+  skillLevel: p.skill_level,
+  dimensions: {
+    learning: { raw: p.dimensions.learning, weighted: p.dimensions.learning * WEIGHTS.learning },
+    productUsage: { raw: p.dimensions.product_usage, weighted: p.dimensions.product_usage * WEIGHTS.product_usage },
+    certification: { raw: p.dimensions.certification, weighted: p.dimensions.certification * WEIGHTS.certification },
+    consistency: { raw: p.dimensions.consistency, weighted: p.dimensions.consistency * WEIGHTS.consistency },
+    growth: { raw: p.dimensions.growth, weighted: p.dimensions.growth * WEIGHTS.growth },
+  },
+  learningHours: p.learning_hours,
+  productUsageHours: p.product_hours,
+  totalCerts: p.certifications,
+  isGrowing: p.dimensions.growth >= 50,
+}));
+
+writeJSON("top-skilled-learners.json", {
+  learners: topSkilledLearnersCamel,
+  total: skillProfiles.length,
   generatedAt: new Date().toISOString(),
 });
 

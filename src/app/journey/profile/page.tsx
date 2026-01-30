@@ -49,6 +49,19 @@ export default function LearnerProfilePage() {
   });
   const { data: metricsData, isLoading: metricsLoading } = useMetrics();
   
+  // Get the learner first to use their email for exams query
+  const topLearners = learnersData?.learners || [];
+  const featuredLearner = topLearners[0];
+  const learnerEmail = featuredLearner && 'email' in featuredLearner ? featuredLearner.email : '';
+  
+  // Fetch individual exam records when we have a learner email
+  const { data: examsData, isLoading: examsLoading } = useQuery({
+    queryKey: ['learner-exams', learnerEmail],
+    queryFn: () => fetchLearnerExams(learnerEmail),
+    enabled: !!learnerEmail,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+  
   const isLoading = learnersLoading || metricsLoading;
   
   if (isLoading) {
@@ -58,10 +71,6 @@ export default function LearnerProfilePage() {
       </div>
     );
   }
-
-  // Get learner - first match if searching, or first top learner
-  const topLearners = learnersData?.learners || [];
-  const featuredLearner = topLearners[0];
   
   if (!featuredLearner) {
     return (
@@ -72,7 +81,7 @@ export default function LearnerProfilePage() {
   }
 
   // Extract learner info
-  const email = 'email' in featuredLearner ? featuredLearner.email : '';
+  const email = learnerEmail;
   const handle = 'user_handle' in featuredLearner ? featuredLearner.user_handle : email.split('@')[0];
   const status = 'learner_status' in featuredLearner ? featuredLearner.learner_status : 'Active';
   const stage = 'journey_stage' in featuredLearner ? featuredLearner.journey_stage : '';
@@ -246,18 +255,85 @@ export default function LearnerProfilePage() {
       )}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Certifications */}
+        {/* Certifications / Exam History */}
         <Card>
           <CardHeader>
-            <CardTitle>Certifications Earned</CardTitle>
+            <CardTitle>Exam History</CardTitle>
             <CardDescription>
-              {totalCerts} certification{totalCerts !== 1 ? 's' : ''} passed
-              {totalAttempts > totalCerts && ` (${totalAttempts} total attempts)`}
+              {examsData?.passed_count ?? totalCerts} passed
+              {examsData?.failed_count ? `, ${examsData.failed_count} failed` : ''}
+              {examsData ? ` of ${examsData.total_exams} total` : 
+               totalAttempts > totalCerts ? ` (${totalAttempts} total attempts)` : ''}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {certs.length > 0 ? certs.map((cert: string, index: number) => (
+              {examsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : examsData?.exams && examsData.exams.length > 0 ? (
+                // Show individual exam records when available
+                examsData.exams.map((exam: IndividualExam, index: number) => {
+                  // Determine status styling - comprehensive status support
+                  const statusConfig: Record<string, { bg: string; text: string; icon: 'check' | 'x' | 'clock' | 'ban' | 'alert' }> = {
+                    'Passed': { bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-600 dark:text-green-400', icon: 'check' },
+                    'Failed': { bg: 'bg-red-100 dark:bg-red-900/30', text: 'text-red-600 dark:text-red-400', icon: 'x' },
+                    'Absent': { bg: 'bg-yellow-100 dark:bg-yellow-900/30', text: 'text-yellow-600 dark:text-yellow-400', icon: 'ban' },
+                    'No Show': { bg: 'bg-yellow-100 dark:bg-yellow-900/30', text: 'text-yellow-600 dark:text-yellow-400', icon: 'ban' },
+                    'Scheduled': { bg: 'bg-blue-100 dark:bg-blue-900/30', text: 'text-blue-600 dark:text-blue-400', icon: 'clock' },
+                    'Rescheduled': { bg: 'bg-blue-100 dark:bg-blue-900/30', text: 'text-blue-600 dark:text-blue-400', icon: 'clock' },
+                    'Registered': { bg: 'bg-indigo-100 dark:bg-indigo-900/30', text: 'text-indigo-600 dark:text-indigo-400', icon: 'clock' },
+                    'Expired Registration': { bg: 'bg-gray-100 dark:bg-gray-900/30', text: 'text-gray-500 dark:text-gray-500', icon: 'alert' },
+                    'Cancelled': { bg: 'bg-gray-100 dark:bg-gray-900/30', text: 'text-gray-600 dark:text-gray-400', icon: 'ban' },
+                    'Canceled': { bg: 'bg-gray-100 dark:bg-gray-900/30', text: 'text-gray-600 dark:text-gray-400', icon: 'ban' },
+                  };
+                  const config = statusConfig[exam.exam_status] || statusConfig['Failed'];
+                  
+                  return (
+                  <div key={`${exam.exam_code}-${exam.exam_date}-${index}`} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-full ${config.bg}`}>
+                        {config.icon === 'check' ? (
+                          <CheckCircle className={`h-5 w-5 ${config.text}`} />
+                        ) : config.icon === 'clock' ? (
+                          <Clock className={`h-5 w-5 ${config.text}`} />
+                        ) : config.icon === 'alert' ? (
+                          <Clock className={`h-5 w-5 ${config.text} opacity-50`} />
+                        ) : (
+                          <XCircle className={`h-5 w-5 ${config.text}`} />
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-medium">{exam.exam_name}</p>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <span>{formatDate(exam.exam_date)}</span>
+                          {exam.score_percent !== null && exam.score_percent > 0 && (
+                            <span className="font-medium text-purple-600 dark:text-purple-400">
+                              {exam.score_percent}%
+                            </span>
+                          )}
+                          {exam.days_since_previous !== null && exam.days_since_previous > 0 && (
+                            <span className="text-blue-600 dark:text-blue-400">
+                              (+{exam.days_since_previous}d)
+                            </span>
+                          )}
+                          <span className="text-muted-foreground/50">•</span>
+                          <span>{exam.exam_code}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <Badge 
+                      variant="secondary" 
+                      className={`${config.bg} ${config.text.replace('text-', 'text-')}`}
+                    >
+                      {exam.exam_status}
+                    </Badge>
+                  </div>
+                )})
+              ) : certs.length > 0 ? (
+                // Fallback to aggregated cert data
+                certs.map((cert: string, index: number) => (
                 <div key={cert} className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-green-100 rounded-full dark:bg-green-900/30">
@@ -276,7 +352,7 @@ export default function LearnerProfilePage() {
                     Passed
                   </Badge>
                 </div>
-              )) : (
+              ))) : (
                 <p className="text-muted-foreground text-center py-4">No certifications yet</p>
               )}
             </div>

@@ -1,16 +1,27 @@
 "use client";
 
-import { MetricCard, DonutChart, SimpleBarChart } from "@/components/dashboard";
+import { MetricCard } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, TrendingUp, Clock, CheckCircle, Loader2 } from "lucide-react";
-import { useJourney, useMetrics } from "@/hooks/use-data";
+import { Progress } from "@/components/ui/progress";
+import { 
+  Users, 
+  TrendingUp, 
+  Zap, 
+  Award, 
+  Loader2, 
+  BookOpen,
+  Code2,
+  Target,
+  ArrowUpRight,
+} from "lucide-react";
+import { useSkillJourney, useTopSkilledLearners } from "@/hooks/use-data";
 
 export default function JourneyOverviewPage() {
-  const { data: journeyData, isLoading: journeyLoading } = useJourney();
-  const { data: metricsData, isLoading: metricsLoading } = useMetrics();
+  const { data: skillData, isLoading: skillLoading } = useSkillJourney();
+  const { data: topLearners, isLoading: topLoading } = useTopSkilledLearners(5);
 
-  const isLoading = journeyLoading || metricsLoading;
+  const isLoading = skillLoading || topLoading;
 
   if (isLoading) {
     return (
@@ -20,100 +31,105 @@ export default function JourneyOverviewPage() {
     );
   }
 
-  const funnel = journeyData?.funnel || [];
-  const metrics = metricsData?.metrics;
-  const monthlyProgression = journeyData?.monthlyProgression || [];
-
-  // Build funnel data for display
-  const funnelData = funnel.map((stage) => ({
-    name: stage.stage,
-    value: stage.count,
-    color: stage.color,
-  }));
-
-  // Build path completion data from status breakdown
-  const pathCompletionData = metricsData?.statusBreakdown?.map((s, i) => ({
-    name: s.status,
-    value: s.count,
-    color: ["#3b82f6", "#22c55e", "#8b5cf6", "#f59e0b", "#ef4444"][i] || "#94a3b8",
-  })) || [];
-
-  // Weekly progress from monthly progression (adapt to weekly display)
-  const weeklyProgressData = monthlyProgression.slice(-6).map((m) => ({
-    name: m.name,
-    enrolled: m.learning + m.certified,
-    completed: m.certified,
-  }));
+  const growthMetrics = skillData?.growthMetrics;
+  const dimensionAverages = skillData?.dimensionAverages || {};
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Learning Journey Overview</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Skill Development Journey</h1>
           <p className="text-muted-foreground">
-            Track learner progression through certification paths
+            Track learner skill growth through learning, product usage, and certification
           </p>
         </div>
         <Badge variant="outline" className="text-sm">
-          Live data
+          Skill-based model
         </Badge>
       </div>
 
       {/* KPI Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <MetricCard
-          title="Total Enrolled"
-          value={metrics?.totalLearners?.toLocaleString() || "0"}
-          description="Across all learning paths"
+          title="Total Learners"
+          value={skillData?.totalLearners?.toLocaleString() || "0"}
+          description="Across all skill levels"
           trend={{ value: 8.3, isPositive: true }}
           icon={<Users className="h-4 w-4" />}
         />
         <MetricCard
-          title="In Progress"
-          value={metrics?.learningUsers?.toLocaleString() || "0"}
-          description="Actively learning"
+          title="Avg Skill Score"
+          value={skillData?.avgSkillScore?.toFixed(1) || "0"}
+          description="Out of 100 points"
+          trend={{ value: 5.2, isPositive: true }}
+          icon={<Target className="h-4 w-4" />}
+        />
+        <MetricCard
+          title="Active Learners"
+          value={growthMetrics?.active_30_days?.toLocaleString() || "0"}
+          description={`${growthMetrics?.active_percentage?.toFixed(1) || 0}% active in 30 days`}
           trend={{ value: 12.1, isPositive: true }}
           icon={<TrendingUp className="h-4 w-4" />}
         />
         <MetricCard
-          title="Certified"
-          value={metrics?.certifiedUsers?.toLocaleString() || "0"}
-          description="Finished & certified"
-          trend={{ value: 5.7, isPositive: true }}
-          icon={<CheckCircle className="h-4 w-4" />}
-        />
-        <MetricCard
-          title="Avg. Completion Time"
-          value={`${journeyData?.avgTimeToCompletion || 45} days`}
-          description="From enrollment to completion"
-          trend={{ value: 3.2, isPositive: false }}
-          icon={<Clock className="h-4 w-4" />}
+          title="With Certifications"
+          value={growthMetrics?.with_certifications?.toLocaleString() || "0"}
+          description={`${growthMetrics?.cert_percentage?.toFixed(1) || 0}% of learners`}
+          icon={<Award className="h-4 w-4" />}
         />
       </div>
 
-      {/* Funnel and Progress Charts */}
+      {/* Skill Funnel */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        <Card className="col-span-3">
+        <Card className="col-span-4">
           <CardHeader>
-            <CardTitle>Learning Funnel</CardTitle>
-            <CardDescription>Progression through learning stages</CardDescription>
+            <CardTitle className="flex items-center gap-2">
+              <Zap className="h-5 w-5 text-amber-500" />
+              Skill Development Funnel
+            </CardTitle>
+            <CardDescription>
+              Progression based on learning, product usage, and certification (not just certs!)
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {funnelData.map((stage) => {
-                const maxValue = funnelData[0]?.value || 1;
-                const percentage = (stage.value / maxValue) * 100;
+              {skillData?.funnel?.map((stage) => {
+                const maxCount = skillData.funnel[0]?.count || 1;
+                const barPercentage = (stage.count / maxCount) * 100;
+                
                 return (
-                  <div key={stage.name} className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="font-medium">{stage.name}</span>
-                      <span className="text-muted-foreground">{stage.value.toLocaleString()} ({percentage.toFixed(0)}%)</span>
+                  <div key={stage.level} className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-2">
+                        <div 
+                          className="w-3 h-3 rounded-full" 
+                          style={{ backgroundColor: stage.color }}
+                        />
+                        <span className="font-medium">{stage.level}</span>
+                        <span className="text-xs text-muted-foreground hidden sm:inline">
+                          ({stage.description})
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-medium">
+                          {stage.count.toLocaleString()}
+                        </span>
+                        <Badge variant="secondary" className="text-xs">
+                          {stage.percentage}%
+                        </Badge>
+                        <span className="text-xs text-muted-foreground w-16 text-right">
+                          Avg: {stage.avgScore}
+                        </span>
+                      </div>
                     </div>
                     <div className="h-3 bg-muted rounded-full overflow-hidden">
                       <div 
-                        className="h-full rounded-full transition-all"
-                        style={{ width: `${percentage}%`, backgroundColor: stage.color }}
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{ 
+                          width: `${barPercentage}%`, 
+                          backgroundColor: stage.color 
+                        }}
                       />
                     </div>
                   </div>
@@ -123,53 +139,174 @@ export default function JourneyOverviewPage() {
           </CardContent>
         </Card>
 
-        <Card className="col-span-4">
+        {/* Dimension Breakdown */}
+        <Card className="col-span-3">
           <CardHeader>
-            <CardTitle>Monthly Enrollment vs Completion</CardTitle>
-            <CardDescription>New enrollments and completions per month</CardDescription>
+            <CardTitle>Skill Dimensions</CardTitle>
+            <CardDescription>
+              Average scores by skill dimension (higher is better)
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <SimpleBarChart 
-              data={weeklyProgressData} 
-              dataKey="enrolled"
-              secondaryDataKey="completed"
-              color="#3b82f6"
-              secondaryColor="#22c55e"
-            />
+            <div className="space-y-4">
+              {Object.entries(dimensionAverages).map(([dimension, score]) => {
+                const icons: Record<string, React.ReactNode> = {
+                  "learning": <BookOpen className="h-4 w-4" />,
+                  "product_usage": <Code2 className="h-4 w-4" />,
+                  "certification": <Award className="h-4 w-4" />,
+                  "consistency": <TrendingUp className="h-4 w-4" />,
+                  "growth": <ArrowUpRight className="h-4 w-4" />,
+                };
+                const displayNames: Record<string, string> = {
+                  "learning": "Learning",
+                  "product_usage": "Product Usage",
+                  "certification": "Certification",
+                  "consistency": "Consistency",
+                  "growth": "Growth",
+                };
+                const weights = skillData?.weights || {};
+                const weight = weights[dimension] || 0;
+                const displayName = displayNames[dimension] || dimension;
+                const numericScore = typeof score === 'number' ? score : 0;
+                
+                return (
+                  <div key={dimension} className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-2">
+                        {icons[dimension] || <Target className="h-4 w-4" />}
+                        <span className="text-sm font-medium">{displayName}</span>
+                        <span className="text-xs text-muted-foreground">
+                          ({(weight * 100).toFixed(0)}% weight)
+                        </span>
+                      </div>
+                      <span className="text-sm font-bold">{numericScore.toFixed(1)}/100</span>
+                    </div>
+                    <Progress value={numericScore} className="h-2" />
+                  </div>
+                );
+              })}
+            </div>
+            
+            {/* Weight explanation */}
+            <div className="mt-6 p-3 bg-muted/50 rounded-lg">
+              <p className="text-xs text-muted-foreground">
+                <strong>Skill Score = </strong>
+                Learning (25%) + Product Usage (35%) + Certification (15%) + 
+                Consistency (15%) + Growth (10%)
+              </p>
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Path Completion */}
+      {/* Top Skilled Learners & Growth */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        <Card className="col-span-3">
+        <Card className="col-span-4">
           <CardHeader>
-            <CardTitle>Learners by Status</CardTitle>
-            <CardDescription>Distribution across learning statuses</CardDescription>
+            <CardTitle>Top Skilled Learners</CardTitle>
+            <CardDescription>
+              Highest skill scores based on learning + usage + certification
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <DonutChart data={pathCompletionData} />
+            <div className="space-y-3">
+              {topLearners?.learners?.map((learner, index) => (
+                <div 
+                  key={learner.handle} 
+                  className="flex items-center justify-between p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-sm">
+                      {index + 1}
+                    </div>
+                    <div>
+                      <p className="font-medium">{learner.handle}</p>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span>{learner.learningHours.toFixed(0)}h learning</span>
+                        <span>•</span>
+                        <span>{learner.productUsageHours.toFixed(0)}h usage</span>
+                        <span>•</span>
+                        <span>{learner.totalCerts} certs</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge 
+                      variant={learner.skillLevel === "Expert" ? "default" : 
+                               learner.skillLevel === "Advanced" ? "secondary" : "outline"}
+                    >
+                      {learner.skillLevel}
+                    </Badge>
+                    <div className="text-right">
+                      <p className="font-bold text-lg">{learner.skillScore}</p>
+                      <p className="text-xs text-muted-foreground">score</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
 
-        <Card className="col-span-4">
+        <Card className="col-span-3">
           <CardHeader>
-            <CardTitle>Drop-off Analysis</CardTitle>
-            <CardDescription>Conversion rates between stages</CardDescription>
+            <CardTitle>Growth Indicators</CardTitle>
+            <CardDescription>
+              Learner engagement and trajectory metrics
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {journeyData?.dropOffAnalysis?.filter(d => d.nextStage).map((stage) => (
-                <div key={stage.stage} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                  <div>
-                    <p className="font-medium">{stage.stage} → {stage.nextStage}</p>
-                    <p className="text-sm text-muted-foreground">{stage.count.toLocaleString()} learners</p>
-                  </div>
-                  <Badge variant={stage.dropOffRate > 50 ? "destructive" : stage.dropOffRate > 30 ? "secondary" : "default"}>
-                    {stage.dropOffRate}% drop-off
-                  </Badge>
+            <div className="space-y-6">
+              {/* Active in last 30 days */}
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-sm">Active (30 days)</span>
+                  <span className="font-medium">
+                    {growthMetrics?.active_30_days?.toLocaleString()}
+                  </span>
                 </div>
-              ))}
+                <Progress 
+                  value={growthMetrics?.active_percentage || 0} 
+                  className="h-2"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {growthMetrics?.active_percentage?.toFixed(1)}% of all learners
+                </p>
+              </div>
+
+              {/* Growing learners */}
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-sm">Growing Trajectory</span>
+                  <span className="font-medium">
+                    {growthMetrics?.growing_learners?.toLocaleString()}
+                  </span>
+                </div>
+                <Progress 
+                  value={growthMetrics?.growing_percentage || 0} 
+                  className="h-2"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {growthMetrics?.growing_percentage?.toFixed(1)}% showing improvement
+                </p>
+              </div>
+
+              {/* With certifications */}
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-sm">Certified</span>
+                  <span className="font-medium">
+                    {growthMetrics?.with_certifications?.toLocaleString()}
+                  </span>
+                </div>
+                <Progress 
+                  value={growthMetrics?.cert_percentage || 0} 
+                  className="h-2"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {growthMetrics?.cert_percentage?.toFixed(1)}% have certifications
+                </p>
+              </div>
             </div>
           </CardContent>
         </Card>

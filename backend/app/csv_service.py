@@ -161,7 +161,9 @@ def get_individual_exams(email: str) -> List[Dict[str, Any]]:
     
     if individual_exams_file.exists():
         raw = parse_csv("individual_exams.csv")
-        user_exams = [r for r in raw if r.get("email", "").lower() == email.lower()]
+        # Strip whitespace from email column when matching
+        email_lower = email.lower().strip()
+        user_exams = [r for r in raw if r.get("email", "").strip().lower() == email_lower]
         
         if user_exams:
             exams = []
@@ -179,11 +181,28 @@ def get_individual_exams(email: str) -> List[Dict[str, Any]]:
                     except:
                         pass
                 
+                # Get exam status - new field that includes all statuses
+                exam_status = row.get("exam_status", "")
+                # Backwards compatibility: if no exam_status, use passed field
+                if not exam_status:
+                    exam_status = "Passed" if str(row.get("passed", "")).lower() == "true" else "Failed"
+                
+                # Get score if available (FY26 Pearson exams have scores)
+                score_percent = None
+                try:
+                    score_val = row.get("score_percent", "")
+                    if score_val and str(score_val).strip():
+                        score_percent = float(score_val)
+                except (ValueError, TypeError):
+                    pass
+                
                 exams.append({
                     "exam_code": row.get("exam_code", ""),
                     "exam_name": normalize_cert_name(row.get("exam_name", "")),
                     "exam_date": exam_date,
-                    "passed": str(row.get("passed", "")).lower() == "true",
+                    "exam_status": exam_status,
+                    "passed": exam_status == "Passed",
+                    "score_percent": score_percent,
                     "attempt_number": i + 1,
                     "days_since_previous": days_since_prev,
                 })

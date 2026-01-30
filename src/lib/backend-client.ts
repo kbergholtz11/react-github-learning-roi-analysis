@@ -52,6 +52,17 @@ async function fetchApi<T>(
   return response.json();
 }
 
+/**
+ * Public wrapper for making requests to the FastAPI backend
+ * Used by API routes that need to proxy requests
+ */
+export async function fetchFromBackend<T = unknown>(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<T> {
+  return fetchApi<T>(endpoint, options);
+}
+
 // =============================================================================
 // Metrics
 // =============================================================================
@@ -167,7 +178,9 @@ export interface IndividualExam {
   exam_code: string;
   exam_name: string;
   exam_date: string | null;
+  exam_status: string;  // "Passed", "Failed", "No Show", "Scheduled", "Canceled"
   passed: boolean;
+  score_percent: number | null;
   attempt_number: number;
   days_since_previous: number | null;
 }
@@ -177,6 +190,8 @@ export interface LearnerExamsResponse {
   exams: IndividualExam[];
   total_exams: number;
   passed_count: number;
+  failed_count?: number;
+  status_breakdown?: Record<string, number>;
   source: 'kusto' | 'csv';
 }
 
@@ -251,6 +266,61 @@ export async function fetchJourneyProgression(months = 6): Promise<{
   months: number;
 }> {
   return fetchApi(`/api/journey/progression?months=${months}`);
+}
+
+// =============================================================================
+// Skill Journey
+// =============================================================================
+
+export interface SkillProfile {
+  handle: string;
+  email: string;
+  skill_score: number;
+  skill_level: string;
+  dimensions: {
+    learning: number;
+    product_usage: number;
+    certification: number;
+    consistency: number;
+    growth: number;
+  };
+  certifications: number;
+  learning_hours: number;
+  product_hours: number;
+  active_months: number;
+}
+
+export interface SkillJourneySummary {
+  total_learners: number;
+  average_skill_score: number;
+  skill_distribution: Array<{
+    level: string;
+    count: number;
+    percentage: number;
+  }>;
+  dimension_averages: {
+    learning: number;
+    product_usage: number;
+    certification: number;
+    consistency: number;
+    growth: number;
+  };
+  top_learners: SkillProfile[];
+}
+
+export async function fetchSkillJourney(): Promise<SkillJourneySummary> {
+  return fetchApi<SkillJourneySummary>('/api/journey/skills');
+}
+
+export async function fetchTopSkilledLearners(limit = 10): Promise<{
+  learners: SkillProfile[];
+  total: number;
+}> {
+  return fetchApi(`/api/journey/skills/top?limit=${limit}`);
+}
+
+export async function fetchSkillProfile(handle: string): Promise<SkillProfile> {
+  return fetchApi<SkillProfile>(`/api/journey/skills/profile/${encodeURIComponent(handle)}`);
 }
 
 // =============================================================================

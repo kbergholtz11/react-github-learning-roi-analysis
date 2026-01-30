@@ -268,47 +268,106 @@ class LearnerQueries:
     def get_individual_exams_by_email(email: str) -> str:
         """Query individual exam records for a specific learner.
         
-        Returns all exam attempts with dates, scores, and pass status.
-        Unions FY22-25 and FY26 exam data sources.
+        Returns all exam attempts with dates, status, scores.
+        Includes all statuses: Passed, Failed, Absent, Scheduled, Rescheduled, Cancelled, Registered, Expired.
+        Unions FY22-25 (comprehensive eligibility-based) and FY26 (Pearson) data sources.
         """
         return f"""
-        // FY22-25: gh-analytics.ace.exam_results
-        let FY22_25 = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').exam_results
-            | where tolower(email) == '{email.lower()}'
-            | extend 
-                exam_code = examcode,
-                exam_name = examname,
-                exam_date = endtime,
-                passed = passed,
-                attempt_number = 1
-            | project exam_code, exam_name, exam_date, passed, attempt_number;
+        // ============================================================================
+        // FY22-FY25: Comprehensive exam records for specific learner
+        // ============================================================================
+        
+        // Get eligibility data for this user
+        let EligibilityData = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').ace_v0_eligibility_sent
+            | extend eligibility_id = tostring(existing_eligibility_id)
+            | where tolower(coalesce(user.handle, "")) == '{email.lower()}'
+            | summarize arg_max(kafka_timestamp, *) by eligibility_id
+            | project
+                eligibility_id,
+                user_handle_meta = coalesce(user.handle, ""),
+                exam_name_meta   = coalesce(exam.name, ""),
+                exam_code_meta   = coalesce(exam.code, ""),
+                RegisteredDate   = todatetime(start_date);
 
-        // FY26: cse-analytics.ACE.pearson_exam_results
+        let user_eligibilities = EligibilityData | project eligibility_id;
+
+        // Scheduled exams
+        let ScheduledExams = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').ace_v0_exam_scheduled
+            | where tostring(eligibility_id) in (user_eligibilities)
+            | project eligibility_id = tostring(eligibility_id), ExamDate = todatetime(scheduled_for),
+                Status = "Scheduled", exam_timestamp = timestamp, examname_event = coalesce(exam.name, ""),
+                examcode_event = coalesce(exam.code, ""), RoundedScore = real(null);
+
+        // Rescheduled exams
+        let RescheduledExams = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').ace_v0_exam_rescheduled
+            | where tostring(eligibility_id) in (user_eligibilities)
+            | project eligibility_id = tostring(eligibility_id), ExamDate = todatetime(rescheduled_for),
+                Status = "Rescheduled", exam_timestamp = timestamp, examname_event = coalesce(exam.name, ""),
+                examcode_event = coalesce(exam.code, ""), RoundedScore = real(null);
+
+        // Cancelled exams
+        let CancelledExams = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').ace_v0_exam_cancelled
+            | where tostring(eligibility_id) in (user_eligibilities)
+            | project eligibility_id = tostring(eligibility_id), ExamDate = todatetime(cancelled_on),
+                Status = "Cancelled", exam_timestamp = timestamp, examname_event = coalesce(exam.name, ""),
+                examcode_event = coalesce(exam.code, ""), RoundedScore = real(null);
+
+        // Absent exams
+        let AbsentExams = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').ace_v0_exam_absent
+            | where tostring(eligibility_id) in (user_eligibilities)
+            | project eligibility_id = tostring(eligibility_id), ExamDate = todatetime(absent_on),
+                Status = "Absent", exam_timestamp = timestamp, examname_event = coalesce(exam.name, ""),
+                examcode_event = coalesce(exam.code, ""), RoundedScore = real(null);
+
+        // Completed exams with scores
+        let CompletedExams = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').exam_results
+            | where tolower(userhandle) == '{email.lower()}' or tolower(email) == '{email.lower()}'
+            | extend RoundedScore = iif(correct+incorrect > 0, round((todouble(correct)/(correct+incorrect))*100,2), real(null))
+            | project eligibility_id = tostring(eligibilityid), ExamDate = todatetime(endtime),
+                Status = iff(passed, "Passed", "Failed"), exam_timestamp = updateddate,
+                examname_event = coalesce(examname, ""), examcode_event = coalesce(examcode, ""), RoundedScore;
+
+        // Registered exams
+        let RegisteredExams = EligibilityData
+            | project eligibility_id, ExamDate = RegisteredDate, Status = "Registered",
+                exam_timestamp = RegisteredDate, examname_event = exam_name_meta,
+                examcode_event = exam_code_meta, RoundedScore = real(null);
+
+        // Combine all FY22-25 records
+        let FY22_25 = union ScheduledExams, RescheduledExams, CancelledExams, AbsentExams, CompletedExams, RegisteredExams
+            | join kind=leftouter EligibilityData on eligibility_id
+            | extend
+                exam_name = coalesce(exam_name_meta, examname_event),
+                exam_code = coalesce(exam_code_meta, examcode_event),
+                exam_status = iif(Status=="Registered" and ExamDate < ago(60d), "Expired Registration", Status)
+            | where exam_name !in ("GHAS 2024 Beta","UGWG")
+            | project exam_code, exam_name, exam_date = ExamDate, exam_status, score_percent = RoundedScore;
+
+        // ============================================================================
+        // FY26: Pearson exam results
+        // ============================================================================
         let FY26 = cluster('cse-analytics.centralus.kusto.windows.net').database('ACE').pearson_exam_results
             | where tolower(['Candidate Email']) == '{email.lower()}'
             | extend 
                 exam_code = ['Exam Series Code'],
                 exam_name = ['Exam Title'],
                 exam_date = Date,
-                passed = iff(['Total Passed'] > 0, true, false),
-                attempt_number = 1
-            | project exam_code, exam_name, exam_date, passed, attempt_number;
+                exam_status = case(
+                    ['Total Passed'] > 0, "Passed",
+                    ['Total Failed'] > 0, "Failed",
+                    ['Registration Status'] == "No Show", "No Show",
+                    ['Registration Status'] == "Scheduled", "Scheduled",
+                    ['Registration Status'] == "Canceled", "Canceled",
+                    ['Registration Status']
+                ),
+                score_percent = todouble(Score)
+            | project exam_code, exam_name, exam_date, exam_status, score_percent;
 
-        // Union and dedupe by exam_code + exam_date
+        // Union all exam records
         union FY22_25, FY26
-        | summarize 
-            exam_name = take_any(exam_name),
-            passed = max(passed),
-            attempt_number = count()
-          by exam_code, exam_date
         | order by exam_date asc
-        | extend row_num = row_number()
-        | project 
-            exam_code,
-            exam_name,
-            exam_date,
-            passed,
-            attempt_number = row_num
+        | extend attempt_number = row_number()
+        | project exam_code, exam_name, exam_date, exam_status, score_percent, attempt_number
         """
 
 
