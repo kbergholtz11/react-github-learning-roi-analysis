@@ -81,7 +81,7 @@ export default function ExecutiveSummaryPage() {
       value: `${metrics?.impactScore || 0}/100`,
       label: "Impact Score", 
       description: "Overall learning impact score", 
-      type: (metrics?.impactScore || 0) >= 40 ? "success" : "warning" 
+      type: (metrics?.impactScore || 0) > 50 ? "success" : "warning" 
     },
   ];
 
@@ -95,19 +95,23 @@ export default function ExecutiveSummaryPage() {
             Strategic overview of the GitHub Learning program
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="text-sm">
+        <div className="flex items-center gap-4">
+          <Badge variant="outline" className="text-sm bg-blue-500/10 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400 border-blue-500/30">
+            <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse mr-2" />
             Live Data
           </Badge>
-          <Badge variant="secondary" className={metrics?.impactScore && metrics.impactScore >= 40 
-            ? "bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400 border-green-500/30" 
-            : "bg-yellow-500/10 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400 border-yellow-500/30"}>
-            {metrics?.impactScore && metrics.impactScore >= 40 ? (
-              <><CheckCircle className="h-3 w-3 mr-1" /> Program Healthy</>
-            ) : (
-              <><AlertTriangle className="h-3 w-3 mr-1" /> Needs Attention</>
-            )}
-          </Badge>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-muted-foreground">Program Status:</span>
+            <Badge variant="secondary" className={metrics?.impactScore && metrics.impactScore > 50 
+              ? "bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400 border-green-500/30" 
+              : "bg-yellow-500/10 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400 border-yellow-500/30"}>
+              {metrics?.impactScore && metrics.impactScore > 50 ? (
+                <><CheckCircle className="h-3 w-3 mr-1" /> Healthy</>
+              ) : (
+                <><AlertTriangle className="h-3 w-3 mr-1" /> Needs Attention</>
+              )}
+            </Badge>
+          </div>
         </div>
       </div>
 
