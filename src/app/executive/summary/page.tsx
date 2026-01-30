@@ -81,7 +81,7 @@ export default function ExecutiveSummaryPage() {
       value: `${metrics?.impactScore || 0}/100`,
       label: "Impact Score", 
       description: "Overall learning impact score", 
-      type: (metrics?.impactScore || 0) > 50 ? "success" : "warning" 
+      type: (metrics?.impactScore || 0) >= 40 ? "success" : "warning" 
     },
   ];
 
@@ -99,10 +99,10 @@ export default function ExecutiveSummaryPage() {
           <Badge variant="outline" className="text-sm">
             Live Data
           </Badge>
-          <Badge variant="secondary" className={metrics?.impactScore && metrics.impactScore > 50 
+          <Badge variant="secondary" className={metrics?.impactScore && metrics.impactScore >= 40 
             ? "bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400 border-green-500/30" 
             : "bg-yellow-500/10 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400 border-yellow-500/30"}>
-            {metrics?.impactScore && metrics.impactScore > 50 ? (
+            {metrics?.impactScore && metrics.impactScore >= 40 ? (
               <><CheckCircle className="h-3 w-3 mr-1" /> Program Healthy</>
             ) : (
               <><AlertTriangle className="h-3 w-3 mr-1" /> Needs Attention</>
