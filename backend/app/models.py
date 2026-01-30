@@ -58,6 +58,23 @@ class CertifiedUser(LearnerBase):
     days_since_cert: int = 0
 
 
+class IndividualExam(BaseModel):
+    """Individual exam record with date and score."""
+
+    exam_code: str
+    exam_name: str
+    exam_date: str
+    passed: bool
+    score_percent: Optional[float] = None
+    attempt_number: int = 1
+
+
+class LearnerWithExams(CertifiedUser):
+    """Certified user with individual exam records."""
+
+    exams: List[IndividualExam] = Field(default_factory=list)
+
+
 class UnifiedUser(LearnerBase):
     """Unified user with all learning activity."""
 

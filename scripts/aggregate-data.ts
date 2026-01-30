@@ -102,6 +102,21 @@ function parseArrayString(str: string): string[] {
   }
 }
 
+// Parse array strings without normalization (for exam codes)
+function parseArrayStringRaw(str: string): string[] {
+  if (!str || str === "" || str === "[]") return [];
+  try {
+    return str
+      .replace(/'/g, '"')
+      .replace(/\[|\]/g, "")
+      .split(",")
+      .map((s) => s.trim().replace(/"/g, ""))
+      .filter((s) => s);
+  } catch {
+    return [];
+  }
+}
+
 // Types
 interface CertifiedUserRaw {
   email: string;
@@ -400,16 +415,26 @@ const journeyData = {
 const topLearners = certifiedUsers
   .filter((u) => u.total_certs >= 2)
   .slice(0, 100)
-  .map((u) => ({
-    email: u.email,
-    dotcom_id: u.dotcom_id,
-    user_handle: u.user_handle,
-    learner_status: u.learner_status,
-    journey_stage: u.journey_stage,
-    cert_product_focus: normalizeCertName(u.cert_product_focus || ""),
-    total_certs: u.total_certs,
-    cert_titles: parseArrayString(u.cert_titles),
-  }));
+  .map((u) => {
+    const certTitles = parseArrayString(u.cert_titles);
+    const examCodes = parseArrayStringRaw(u.exam_codes);
+    
+    return {
+      email: u.email,
+      dotcom_id: u.dotcom_id,
+      user_handle: u.user_handle,
+      learner_status: u.learner_status,
+      journey_stage: u.journey_stage,
+      cert_product_focus: normalizeCertName(u.cert_product_focus || ""),
+      total_certs: u.total_certs,
+      total_attempts: u.total_attempts,
+      cert_titles: certTitles,
+      exam_codes: examCodes,
+      first_cert_date: u.first_cert_date || null,
+      latest_cert_date: u.latest_cert_date || null,
+      days_since_cert: u.days_since_cert || 0,
+    };
+  });
 
 // === Write all aggregated files ===
 console.log("\n📁 Writing aggregated files...\n");

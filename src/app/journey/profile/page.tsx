@@ -4,10 +4,39 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { SimpleBarChart } from "@/components/dashboard";
-import { Mail, Award, TrendingUp, BookOpen, ArrowLeft, Loader2, User } from "lucide-react";
+import { Mail, Award, TrendingUp, BookOpen, ArrowLeft, Loader2, User, Calendar, Clock, Target, CheckCircle, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useLearners, useMetrics } from "@/hooks/use-data";
+import { useQuery } from "@tanstack/react-query";
+import { fetchLearnerExams, type IndividualExam } from "@/lib/backend-client";
+
+// Format date for display
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return "—";
+  try {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString("en-US", { 
+      year: "numeric", 
+      month: "short", 
+      day: "numeric" 
+    });
+  } catch {
+    return "—";
+  }
+}
+
+// Calculate days between two dates
+function daysBetween(date1: string | null, date2: string | null): number | null {
+  if (!date1 || !date2) return null;
+  try {
+    const d1 = new Date(date1);
+    const d2 = new Date(date2);
+    return Math.round(Math.abs(d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
+  } catch {
+    return null;
+  }
+}
 
 export default function LearnerProfilePage() {
   const searchParams = useSearchParams();
@@ -49,7 +78,14 @@ export default function LearnerProfilePage() {
   const stage = 'journey_stage' in featuredLearner ? featuredLearner.journey_stage : '';
   const certs = 'cert_titles' in featuredLearner ? (featuredLearner.cert_titles as string[]) : [];
   const totalCerts = 'total_certs' in featuredLearner ? (featuredLearner.total_certs as number) : 0;
+  const totalAttempts = 'total_attempts' in featuredLearner ? (featuredLearner.total_attempts as number) : 0;
+  const firstCertDate = 'first_cert_date' in featuredLearner ? (featuredLearner.first_cert_date as string) : null;
+  const latestCertDate = 'latest_cert_date' in featuredLearner ? (featuredLearner.latest_cert_date as string) : null;
+  const daysSinceCert = 'days_since_cert' in featuredLearner ? (featuredLearner.days_since_cert as number) : 0;
   const initials = handle.slice(0, 2).toUpperCase();
+  
+  // Calculate certification journey span
+  const certJourneyDays = daysBetween(firstCertDate, latestCertDate);
   
   // Build certification data for chart
   const certChartData = certs.map((cert: string) => ({
@@ -137,39 +173,108 @@ export default function LearnerProfilePage() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-yellow-100 rounded-full">
-                <TrendingUp className="h-6 w-6 text-yellow-600" />
+              <div className="p-3 bg-yellow-100 rounded-full dark:bg-yellow-900/30">
+                <Target className="h-6 w-6 text-yellow-600 dark:text-yellow-400" />
               </div>
               <div>
-                <div className="text-2xl font-bold">{metricsData?.metrics.totalLearners.toLocaleString() || 0}</div>
-                <p className="text-xs text-muted-foreground">Total Learners</p>
+                <div className="text-2xl font-bold">{totalAttempts}</div>
+                <p className="text-xs text-muted-foreground">Total Attempts</p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
+      {/* Certification Timeline */}
+      {firstCertDate && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              Certification Timeline
+            </CardTitle>
+            <CardDescription>Journey from first to latest certification</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-8 flex-wrap">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 rounded-full dark:bg-blue-900/30">
+                  <Calendar className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">First Certification</p>
+                  <p className="font-semibold">{formatDate(firstCertDate)}</p>
+                </div>
+              </div>
+              {latestCertDate && latestCertDate !== firstCertDate && (
+                <>
+                  <div className="flex-1 h-0.5 bg-gradient-to-r from-blue-500 to-green-500 min-w-[50px] max-w-[200px]" />
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-green-100 rounded-full dark:bg-green-900/30">
+                      <Calendar className="h-5 w-5 text-green-600 dark:text-green-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Latest Certification</p>
+                      <p className="font-semibold">{formatDate(latestCertDate)}</p>
+                    </div>
+                  </div>
+                </>
+              )}
+              {certJourneyDays !== null && certJourneyDays > 0 && (
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-purple-100 rounded-full dark:bg-purple-900/30">
+                    <Clock className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Journey Span</p>
+                    <p className="font-semibold">{certJourneyDays} days</p>
+                  </div>
+                </div>
+              )}
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-orange-100 rounded-full dark:bg-orange-900/30">
+                  <Clock className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Days Since Last Cert</p>
+                  <p className="font-semibold">{daysSinceCert} days</p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Certifications */}
         <Card>
           <CardHeader>
             <CardTitle>Certifications Earned</CardTitle>
-            <CardDescription>Credentials achieved by this learner</CardDescription>
+            <CardDescription>
+              {totalCerts} certification{totalCerts !== 1 ? 's' : ''} passed
+              {totalAttempts > totalCerts && ` (${totalAttempts} total attempts)`}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {certs.length > 0 ? certs.map((cert: string) => (
+              {certs.length > 0 ? certs.map((cert: string, index: number) => (
                 <div key={cert} className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 bg-green-100 rounded-full">
-                      <Award className="h-5 w-5 text-green-600" />
+                    <div className="p-2 bg-green-100 rounded-full dark:bg-green-900/30">
+                      <Award className="h-5 w-5 text-green-600 dark:text-green-400" />
                     </div>
                     <div>
                       <p className="font-medium">{cert}</p>
-                      <p className="text-xs text-muted-foreground">GitHub Certification</p>
+                      <p className="text-xs text-muted-foreground">
+                        {index === 0 && firstCertDate ? `First earned ${formatDate(firstCertDate)}` : 
+                         index === certs.length - 1 && latestCertDate && certs.length > 1 ? `Latest earned ${formatDate(latestCertDate)}` :
+                         "GitHub Certification"}
+                      </p>
                     </div>
                   </div>
-                  <Badge variant="secondary" className="text-green-600">Certified</Badge>
+                  <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                    Passed
+                  </Badge>
                 </div>
               )) : (
                 <p className="text-muted-foreground text-center py-4">No certifications yet</p>

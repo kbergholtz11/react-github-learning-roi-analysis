@@ -162,6 +162,28 @@ export async function fetchLearnerProfile(email: string): Promise<UserProfile> {
   return fetchApi<UserProfile>(`/api/learners/${encodeURIComponent(email)}`);
 }
 
+// Individual exam records for a learner
+export interface IndividualExam {
+  exam_code: string;
+  exam_name: string;
+  exam_date: string | null;
+  passed: boolean;
+  attempt_number: number;
+  days_since_previous: number | null;
+}
+
+export interface LearnerExamsResponse {
+  email: string;
+  exams: IndividualExam[];
+  total_exams: number;
+  passed_count: number;
+  source: 'kusto' | 'csv';
+}
+
+export async function fetchLearnerExams(email: string): Promise<LearnerExamsResponse> {
+  return fetchApi<LearnerExamsResponse>(`/api/learners/${encodeURIComponent(email)}/exams`);
+}
+
 export async function fetchLearnersByStatus(
   status: string,
   limit = 100

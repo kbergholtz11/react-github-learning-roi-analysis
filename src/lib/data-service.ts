@@ -53,8 +53,37 @@ function parseCSV<T>(filename: string): T[] {
   return records as T[];
 }
 
-// Parse array-like strings from CSV (e.g., "['ACTIONS', 'GHAS']")
-function parseArrayString(str: string): string[] {
+// Normalize certification names to consistent format
+const CERT_NAME_MAP: Record<string, string> = {
+  // Short codes → Full names (uppercase)
+  "ACTIONS": "GitHub Actions",
+  "ADMIN": "GitHub Administration",
+  "GHAS": "GitHub Advanced Security",
+  "GHF": "GitHub Foundations",
+  "COPILOT": "GitHub Copilot",
+  // Already full names (normalize casing)
+  "GITHUB FOUNDATIONS": "GitHub Foundations",
+  "GITHUB ACTIONS": "GitHub Actions",
+  "GITHUB ADMINISTRATION": "GitHub Administration",
+  "GITHUB ADVANCED SECURITY": "GitHub Advanced Security",
+  "GITHUB COPILOT": "GitHub Copilot",
+  // Common variations
+  "FOUNDATIONS": "GitHub Foundations",
+  "ADMINISTRATION": "GitHub Administration",
+  "ADVANCED SECURITY": "GitHub Advanced Security",
+};
+
+function normalizeCertName(name: string): string {
+  const trimmed = name.trim();
+  const upper = trimmed.toUpperCase();
+  // Check uppercase mapping
+  if (CERT_NAME_MAP[upper]) return CERT_NAME_MAP[upper];
+  // Return original if no mapping found
+  return trimmed;
+}
+
+// Parse array-like strings from CSV (e.g., "['ACTIONS', 'GHAS']") and normalize names
+function parseArrayString(str: string, normalize = false): string[] {
   if (!str || str === "" || str === "[]") return [];
   try {
     // Handle Python-style arrays
@@ -64,7 +93,7 @@ function parseArrayString(str: string): string[] {
       .split(",")
       .map((s) => s.trim().replace(/"/g, ""))
       .filter((s) => s);
-    return cleaned;
+    return normalize ? cleaned.map(normalizeCertName) : cleaned;
   } catch {
     return [];
   }
@@ -88,7 +117,7 @@ export function getCertifiedUsers(): CertifiedUser[] {
     latest_cert_date: String(row.latest_cert_date || ""),
     total_certs: Number(row.total_certs) || 0,
     total_attempts: Number(row.total_attempts) || 0,
-    cert_titles: parseArrayString(String(row.cert_titles || "[]")),
+    cert_titles: parseArrayString(String(row.cert_titles || "[]"), true), // Normalize cert names
     exam_codes: parseArrayString(String(row.exam_codes || "[]")),
     days_since_cert: Number(row.days_since_cert) || 0,
   }));

@@ -197,6 +197,82 @@ async def get_learner_profile(email: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/{email}/exams")
+async def get_learner_exams(email: str):
+    """
+    Get individual exam records for a specific learner.
+    
+    Returns all exam attempts with:
+    - Exam code and name
+    - Date taken
+    - Pass/fail status
+    - Attempt number (sequential)
+    
+    Data is pulled from both FY22-25 (gh-analytics) and FY26 (Pearson) sources.
+    """
+    from app.csv_service import get_individual_exams, normalize_cert_name
+    
+    try:
+        kusto = get_kusto_service()
+        
+        if kusto.is_available:
+            try:
+                rows = kusto.execute_query(
+                    LearnerQueries.get_individual_exams_by_email(email),
+                    cluster="cse-analytics"  # Primary cluster for cross-cluster query
+                )
+                if rows:
+                    # Normalize exam names and calculate time between exams
+                    exams = []
+                    prev_date = None
+                    for row in rows:
+                        exam_date = row.get("exam_date")
+                        days_since_prev = None
+                        if prev_date and exam_date:
+                            try:
+                                from datetime import datetime
+                                d1 = datetime.fromisoformat(str(prev_date).replace('Z', '+00:00'))
+                                d2 = datetime.fromisoformat(str(exam_date).replace('Z', '+00:00'))
+                                days_since_prev = (d2 - d1).days
+                            except:
+                                pass
+                        
+                        exams.append({
+                            "exam_code": row.get("exam_code", ""),
+                            "exam_name": normalize_cert_name(row.get("exam_name", "")),
+                            "exam_date": str(exam_date) if exam_date else None,
+                            "passed": row.get("passed", False),
+                            "attempt_number": row.get("attempt_number", 1),
+                            "days_since_previous": days_since_prev,
+                        })
+                        prev_date = exam_date
+                    
+                    return {
+                        "email": email,
+                        "exams": exams,
+                        "total_exams": len(exams),
+                        "passed_count": sum(1 for e in exams if e["passed"]),
+                        "source": "kusto",
+                    }
+            except Exception as kusto_err:
+                logger.warning(f"Kusto exam query failed, falling back to CSV: {kusto_err}")
+        
+        # Fall back to CSV data (which has aggregated data only)
+        exams = get_individual_exams(email)
+        
+        return {
+            "email": email,
+            "exams": exams,
+            "total_exams": len(exams),
+            "passed_count": sum(1 for e in exams if e.get("passed", False)),
+            "source": "csv",
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting learner exams: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/status/{status}")
 async def get_learners_by_status(
     status: LearnerStatus,

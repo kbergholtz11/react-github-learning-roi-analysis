@@ -264,6 +264,53 @@ class LearnerQueries:
             certified = countif(learner_status == 'Certified')
         """
 
+    @staticmethod
+    def get_individual_exams_by_email(email: str) -> str:
+        """Query individual exam records for a specific learner.
+        
+        Returns all exam attempts with dates, scores, and pass status.
+        Unions FY22-25 and FY26 exam data sources.
+        """
+        return f"""
+        // FY22-25: gh-analytics.ace.exam_results
+        let FY22_25 = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').exam_results
+            | where tolower(email) == '{email.lower()}'
+            | extend 
+                exam_code = examcode,
+                exam_name = examname,
+                exam_date = endtime,
+                passed = passed,
+                attempt_number = 1
+            | project exam_code, exam_name, exam_date, passed, attempt_number;
+
+        // FY26: cse-analytics.ACE.pearson_exam_results
+        let FY26 = cluster('cse-analytics.centralus.kusto.windows.net').database('ACE').pearson_exam_results
+            | where tolower(['Candidate Email']) == '{email.lower()}'
+            | extend 
+                exam_code = ['Exam Series Code'],
+                exam_name = ['Exam Title'],
+                exam_date = Date,
+                passed = iff(['Total Passed'] > 0, true, false),
+                attempt_number = 1
+            | project exam_code, exam_name, exam_date, passed, attempt_number;
+
+        // Union and dedupe by exam_code + exam_date
+        union FY22_25, FY26
+        | summarize 
+            exam_name = take_any(exam_name),
+            passed = max(passed),
+            attempt_number = count()
+          by exam_code, exam_date
+        | order by exam_date asc
+        | extend row_num = row_number()
+        | project 
+            exam_code,
+            exam_name,
+            exam_date,
+            passed,
+            attempt_number = row_num
+        """
+
 
 class JourneyQueries:
     """Pre-built queries for journey analytics."""

@@ -1,5 +1,15 @@
 // Data types matching the CSV schema from the backend
 
+// Individual exam record with date and score
+export interface IndividualExam {
+  exam_code: string;
+  exam_name: string;
+  exam_date: string;
+  passed: boolean;
+  score_percent: number | null;
+  attempt_number: number;
+}
+
 // Certified Users (from certified_users.csv)
 export interface CertifiedUser {
   email: string;
@@ -15,6 +25,7 @@ export interface CertifiedUser {
   cert_titles: string[];
   exam_codes: string[];
   days_since_cert: number;
+  exams?: IndividualExam[]; // Optional individual exam records
 }
 
 // Unified Users (from unified_users.csv)

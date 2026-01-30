@@ -62,6 +62,43 @@ def parse_array_string(s: str) -> List[str]:
         return [x.strip().strip("'\"") for x in s.strip("[]").split(",") if x.strip()]
 
 
+# Certification name normalization map
+CERT_NAME_MAP = {
+    # Short codes → Full names
+    "ACTIONS": "GitHub Actions",
+    "ADMIN": "GitHub Administration",
+    "GHAS": "GitHub Advanced Security",
+    "GHF": "GitHub Foundations",
+    "COPILOT": "GitHub Copilot",
+    # Common variations
+    "Foundations": "GitHub Foundations",
+    "Actions": "GitHub Actions",
+    "Admin": "GitHub Administration",
+    "Copilot": "GitHub Copilot",
+    "Advanced Security": "GitHub Advanced Security",
+}
+
+
+def normalize_cert_name(name: str) -> str:
+    """Normalize certification name to consistent format."""
+    trimmed = name.strip()
+    upper = trimmed.upper()
+    # Check uppercase mapping first
+    if upper in CERT_NAME_MAP:
+        return CERT_NAME_MAP[upper]
+    # Check exact match
+    if trimmed in CERT_NAME_MAP:
+        return CERT_NAME_MAP[trimmed]
+    # Return original if no mapping found
+    return trimmed
+
+
+def parse_cert_titles(s: str) -> List[str]:
+    """Parse and normalize cert titles from CSV."""
+    titles = parse_array_string(s)
+    return [normalize_cert_name(t) for t in titles]
+
+
 # =============================================================================
 # Learner Data
 # =============================================================================
@@ -82,7 +119,7 @@ def get_certified_users() -> List[CertifiedUser]:
             latest_cert_date=row.get("latest_cert_date", ""),
             total_certs=int(row.get("total_certs", 0) or 0),
             total_attempts=int(row.get("total_attempts", 0) or 0),
-            cert_titles=parse_array_string(row.get("cert_titles", "[]")),
+            cert_titles=parse_cert_titles(row.get("cert_titles", "[]")),
             exam_codes=parse_array_string(row.get("exam_codes", "[]")),
             days_since_cert=int(row.get("days_since_cert", 0) or 0),
         )
@@ -110,6 +147,81 @@ def get_unified_users() -> List[UnifiedUser]:
         )
         for row in raw
     ]
+
+
+def get_individual_exams(email: str) -> List[Dict[str, Any]]:
+    """
+    Get individual exam records for a learner.
+    
+    First tries to load from individual_exams.csv (synced from Kusto).
+    Falls back to reconstructing from aggregated certified_users.csv.
+    """
+    # Try to load from individual exams file first
+    individual_exams_file = get_settings().data_path / "individual_exams.csv"
+    
+    if individual_exams_file.exists():
+        raw = parse_csv("individual_exams.csv")
+        user_exams = [r for r in raw if r.get("email", "").lower() == email.lower()]
+        
+        if user_exams:
+            exams = []
+            prev_date = None
+            for i, row in enumerate(user_exams):
+                exam_date = row.get("exam_date")
+                days_since_prev = None
+                
+                if prev_date and exam_date:
+                    try:
+                        from datetime import datetime
+                        d1 = datetime.fromisoformat(str(prev_date).replace('Z', '+00:00').split('+')[0])
+                        d2 = datetime.fromisoformat(str(exam_date).replace('Z', '+00:00').split('+')[0])
+                        days_since_prev = (d2 - d1).days
+                    except:
+                        pass
+                
+                exams.append({
+                    "exam_code": row.get("exam_code", ""),
+                    "exam_name": normalize_cert_name(row.get("exam_name", "")),
+                    "exam_date": exam_date,
+                    "passed": str(row.get("passed", "")).lower() == "true",
+                    "attempt_number": i + 1,
+                    "days_since_previous": days_since_prev,
+                })
+                prev_date = exam_date
+            
+            return exams
+    
+    # Fall back to reconstructing from aggregated data
+    users = get_certified_users()
+    user = next((u for u in users if u.email.lower() == email.lower()), None)
+    
+    if not user or not user.cert_titles:
+        return []
+    
+    exams = []
+    num_certs = len(user.cert_titles)
+    
+    for i, cert in enumerate(user.cert_titles):
+        # Use first_cert_date for first cert, latest_cert_date for last
+        if i == 0:
+            exam_date = user.first_cert_date
+        elif i == num_certs - 1:
+            exam_date = user.latest_cert_date
+        else:
+            exam_date = None  # Can't determine intermediate dates from aggregated data
+        
+        exam_code = user.exam_codes[i] if i < len(user.exam_codes) else ""
+        
+        exams.append({
+            "exam_code": exam_code,
+            "exam_name": cert,
+            "exam_date": exam_date,
+            "passed": True,  # Only passed exams are in cert_titles
+            "attempt_number": i + 1,
+            "days_since_previous": None,  # Can't calculate without individual dates
+        })
+    
+    return exams
 
 
 def get_learners(filters: LearnerFilters) -> dict:

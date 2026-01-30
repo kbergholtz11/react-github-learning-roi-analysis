@@ -19,6 +19,7 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
+  LabelList,
 } from "recharts";
 import { useTheme } from "next-themes";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -53,6 +54,76 @@ const COLORS = [
   "#84cc16", // lime
 ];
 
+// Helper to format large numbers
+function formatNumber(value: number): string {
+  if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
+  return value.toString();
+}
+
+// Custom tooltip component for drilldown charts
+function DrilldownTooltip({
+  active,
+  payload,
+  total,
+  isDark,
+}: {
+  active?: boolean;
+  payload?: Array<{ name: string; value: number; payload: DrilldownItem }>;
+  total: number;
+  isDark: boolean;
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+
+  const item = payload[0];
+  const percentage = total > 0 ? ((item.value / total) * 100).toFixed(1) : "0";
+  const bgColor = isDark ? "#1f2937" : "#ffffff";
+  const borderColor = isDark ? "#374151" : "#e5e7eb";
+  const textColor = isDark ? "#f3f4f6" : "#111827";
+  const mutedColor = isDark ? "#9ca3af" : "#6b7280";
+
+  return (
+    <div
+      className="rounded-lg shadow-lg border backdrop-blur-sm"
+      style={{
+        backgroundColor: `${bgColor}f5`,
+        borderColor,
+        padding: "12px 16px",
+        minWidth: "160px",
+      }}
+    >
+      <div className="flex items-center gap-2 mb-2 pb-2 border-b" style={{ borderColor }}>
+        <div
+          className="w-3 h-3 rounded-full"
+          style={{ backgroundColor: item.payload.color || COLORS[0] }}
+        />
+        <span className="font-semibold text-sm" style={{ color: textColor }}>
+          {item.name}
+        </span>
+      </div>
+      <div className="space-y-1">
+        <div className="flex justify-between items-center gap-4">
+          <span className="text-xs" style={{ color: mutedColor }}>Value</span>
+          <span className="text-sm font-bold" style={{ color: textColor }}>
+            {item.value.toLocaleString()}
+          </span>
+        </div>
+        <div className="flex justify-between items-center gap-4">
+          <span className="text-xs" style={{ color: mutedColor }}>Share</span>
+          <span className="text-sm font-medium" style={{ color: textColor }}>
+            {percentage}%
+          </span>
+        </div>
+      </div>
+      {item.payload.children && item.payload.children.length > 0 && (
+        <div className="mt-2 pt-2 border-t text-xs" style={{ borderColor, color: mutedColor }}>
+          Click to drill down →
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ============================================
 // Drilldown Pie Chart
 // ============================================
@@ -72,6 +143,8 @@ export function DrilldownPieChart({
   onFilter,
   height = 300,
 }: DrilldownPieChartProps) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
   const [activeIndex, setActiveIndex] = useState<number | undefined>(undefined);
   const [drilldownState, setDrilldownState] = useState<DrilldownState>({
     path: [],
@@ -79,6 +152,7 @@ export function DrilldownPieChart({
   });
 
   const currentData = drilldownState.current || data;
+  const total = currentData.reduce((sum, item) => sum + item.value, 0);
 
   const handleClick = useCallback(
     (item: DrilldownItem, index: number) => {
@@ -161,6 +235,10 @@ export function DrilldownPieChart({
                 onMouseLeave={() => setActiveIndex(undefined)}
                 onClick={(_, index) => handleClick(currentData[index], index)}
                 style={{ cursor: "pointer" }}
+                label={({ name, percent }: { name?: string; percent?: number }) => 
+                  `${name ?? ''} (${((percent ?? 0) * 100).toFixed(0)}%)`
+                }
+                labelLine={{ stroke: isDark ? "#6b7280" : "#9ca3af", strokeWidth: 1 }}
               >
                 {currentData.map((entry, index) => (
                   <Cell
@@ -171,7 +249,7 @@ export function DrilldownPieChart({
                 ))}
               </Pie>
               <Tooltip
-                formatter={(value) => (value as number).toLocaleString()}
+                content={<DrilldownTooltip total={total} isDark={isDark} />}
               />
               <Legend />
             </PieChart>
@@ -211,6 +289,7 @@ export function DrilldownBarChart({
   layout = "vertical",
 }: DrilldownBarChartProps) {
   const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
   const [drilldownState, setDrilldownState] = useState<DrilldownState>({
     path: [],
     current: null,
@@ -218,6 +297,7 @@ export function DrilldownBarChart({
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   const currentData = drilldownState.current || data;
+  const total = currentData.reduce((sum, item) => sum + item.value, 0);
 
   const colors = {
     text: resolvedTheme === "dark" ? "#9ca3af" : "#6b7280",
@@ -333,12 +413,7 @@ export function DrilldownBarChart({
                 </>
               )}
               <Tooltip
-                contentStyle={{
-                  backgroundColor: colors.background,
-                  border: `1px solid ${colors.border}`,
-                  borderRadius: "8px",
-                }}
-                formatter={(value) => (value as number).toLocaleString()}
+                content={<DrilldownTooltip total={total} isDark={isDark} />}
               />
               <Bar
                 dataKey="value"
@@ -355,6 +430,14 @@ export function DrilldownBarChart({
                     opacity={hoveredIndex === null || hoveredIndex === index ? 1 : 0.5}
                   />
                 ))}
+                <LabelList
+                  dataKey="value"
+                  position={layout === "vertical" ? "top" : "right"}
+                  formatter={(value) => formatNumber(Number(value ?? 0))}
+                  fill={colors.text}
+                  fontSize={11}
+                  fontWeight={500}
+                />
               </Bar>
             </BarChart>
           </ResponsiveContainer>

@@ -20,6 +20,7 @@ import {
   Legend,
   ReferenceLine,
   Cell,
+  LabelList,
 } from "recharts";
 
 // Helper to format large numbers
@@ -27,6 +28,94 @@ function formatNumber(value: number): string {
   if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
   if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
   return value.toString();
+}
+
+// Helper to format percentage
+function formatPercent(value: number, total: number): string {
+  if (total === 0) return "0%";
+  return `${((value / total) * 100).toFixed(1)}%`;
+}
+
+// Custom styled tooltip component
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: Array<{
+    value?: number | string;
+    name?: string;
+    dataKey?: string | number;
+    color?: string;
+  }>;
+  label?: string | number;
+  colors: ReturnType<typeof useChartColors>;
+  showPercentage?: boolean;
+  totalValue?: number;
+  labelFormatter?: (label: string) => string;
+}
+
+function CustomTooltip({
+  active,
+  payload,
+  label,
+  colors,
+  showPercentage = false,
+  totalValue = 0,
+  labelFormatter,
+}: CustomTooltipProps) {
+  if (!active || !payload || payload.length === 0) return null;
+
+  const displayLabel = labelFormatter ? labelFormatter(String(label)) : label;
+
+  return (
+    <div
+      className="rounded-lg shadow-lg border backdrop-blur-sm"
+      style={{
+        backgroundColor: `${colors.background}f5`,
+        borderColor: colors.border,
+        padding: "12px 16px",
+        minWidth: "140px",
+      }}
+    >
+      {displayLabel && (
+        <p
+          className="font-semibold text-sm mb-2 pb-2 border-b"
+          style={{ color: colors.text, borderColor: colors.border }}
+        >
+          {displayLabel}
+        </p>
+      )}
+      <div className="space-y-1.5">
+        {payload.map((entry, index) => {
+          const value = Number(entry.value);
+          const color = entry.color || "#8b5cf6";
+          const name = entry.name || entry.dataKey;
+          
+          return (
+            <div key={index} className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <div
+                  className="w-3 h-3 rounded-full"
+                  style={{ backgroundColor: color }}
+                />
+                <span className="text-xs" style={{ color: colors.text }}>
+                  {name}
+                </span>
+              </div>
+              <div className="text-right">
+                <span className="text-sm font-semibold" style={{ color: colors.text }}>
+                  {formatNumber(value)}
+                </span>
+                {showPercentage && totalValue > 0 && (
+                  <span className="text-xs ml-1" style={{ color: colors.text, opacity: 0.7 }}>
+                    ({formatPercent(value, totalValue)})
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 // Hook to get theme-aware colors
@@ -127,6 +216,7 @@ interface BarChartProps {
   secondaryDataKey?: string;
   color?: string;
   secondaryColor?: string;
+  showLabels?: boolean;
 }
 
 export function SimpleBarChart({
@@ -135,13 +225,17 @@ export function SimpleBarChart({
   secondaryDataKey,
   color = "#3b82f6",
   secondaryColor = "#22c55e",
+  showLabels = true,
 }: BarChartProps) {
   const colors = useChartColors();
+  
+  // Calculate total for percentage display in tooltip
+  const total = data.reduce((sum, item) => sum + (Number(item[dataKey]) || 0), 0);
   
   return (
     <div className="h-[280px] w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+        <BarChart data={data} margin={{ top: 25, right: 10, left: -10, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
           <XAxis
             dataKey="name"
@@ -156,17 +250,39 @@ export function SimpleBarChart({
             tickFormatter={formatNumber}
           />
           <Tooltip
-            contentStyle={{
-              backgroundColor: colors.background,
-              border: `1px solid ${colors.border}`,
-              borderRadius: "8px",
-              color: colors.text,
-            }}
-            formatter={(value) => formatNumber(Number(value))}
+            content={
+              <CustomTooltip
+                colors={colors}
+                showPercentage
+                totalValue={total}
+              />
+            }
           />
-          <Bar dataKey={dataKey} fill={color} radius={[4, 4, 0, 0]} />
+          <Bar dataKey={dataKey} fill={color} radius={[4, 4, 0, 0]}>
+            {showLabels && (
+              <LabelList
+                dataKey={dataKey}
+                position="top"
+                fill={colors.text}
+                fontSize={11}
+                fontWeight={500}
+                formatter={(value) => formatNumber(Number(value ?? 0))}
+              />
+            )}
+          </Bar>
           {secondaryDataKey && (
-            <Bar dataKey={secondaryDataKey} fill={secondaryColor} radius={[4, 4, 0, 0]} />
+            <Bar dataKey={secondaryDataKey} fill={secondaryColor} radius={[4, 4, 0, 0]}>
+              {showLabels && (
+                <LabelList
+                  dataKey={secondaryDataKey}
+                  position="top"
+                  fill={colors.text}
+                  fontSize={11}
+                  fontWeight={500}
+                  formatter={(value) => formatNumber(Number(value ?? 0))}
+                />
+              )}
+            </Bar>
           )}
         </BarChart>
       </ResponsiveContainer>
@@ -209,13 +325,7 @@ export function SimpleAreaChart({
             tickFormatter={formatNumber}
           />
           <Tooltip
-            contentStyle={{
-              backgroundColor: colors.background,
-              border: `1px solid ${colors.border}`,
-              borderRadius: "8px",
-              color: colors.text,
-            }}
-            formatter={(value) => formatNumber(Number(value))}
+            content={<CustomTooltip colors={colors} />}
           />
           <defs>
             <linearGradient id={`gradient-${dataKey}`} x1="0" y1="0" x2="0" y2="1">
@@ -327,13 +437,12 @@ export function ScatterPlot({
           />
           <ZAxis type="number" dataKey="z" range={[50, 400]} />
           <Tooltip
-            contentStyle={{
-              backgroundColor: colors.background,
-              border: `1px solid ${colors.border}`,
-              borderRadius: "8px",
-              color: colors.text,
-            }}
-            formatter={(value, name) => [formatNumber(Number(value)), name]}
+            content={
+              <CustomTooltip
+                colors={colors}
+                labelFormatter={(label) => label || "Data Point"}
+              />
+            }
           />
           <Scatter name="Data" data={data} fill={color}>
             {data.map((entry, index) => (
@@ -398,15 +507,7 @@ export function TrendLineChart({
             tickLine={{ stroke: colors.grid }}
             tickFormatter={formatNumber}
           />
-          <Tooltip
-            contentStyle={{
-              backgroundColor: colors.background,
-              border: `1px solid ${colors.border}`,
-              borderRadius: "8px",
-              color: colors.text,
-            }}
-            formatter={(value) => formatNumber(Number(value))}
-          />
+          <Tooltip content={<CustomTooltip colors={colors} />} />
           <Legend />
           {lines.map((line) => (
             <Line
