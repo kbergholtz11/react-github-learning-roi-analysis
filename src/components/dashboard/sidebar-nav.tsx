@@ -24,6 +24,7 @@ import {
   Package,
   Download,
   Gauge,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -48,6 +49,7 @@ const navItems = [
     items: [
       { title: "Home", href: "/", icon: Home },
       { title: "Executive Summary", href: "/executive/summary", icon: FileText },
+      { title: "Learning Insights", href: "/insights", icon: Sparkles },
     ],
   },
   {
