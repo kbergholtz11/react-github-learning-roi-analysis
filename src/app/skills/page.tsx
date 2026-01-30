@@ -15,10 +15,10 @@ function getCompetencyLevel(score: number): string {
 
 function getCompetencyColor(level: string): string {
   switch (level) {
-    case "Expert": return "text-purple-600 bg-purple-100";
-    case "Advanced": return "text-blue-600 bg-blue-100";
-    case "Intermediate": return "text-green-600 bg-green-100";
-    default: return "text-gray-600 bg-gray-100";
+    case "Expert": return "text-purple-600 bg-purple-500/10 dark:text-purple-400 dark:bg-purple-500/20";
+    case "Advanced": return "text-blue-600 bg-blue-500/10 dark:text-blue-400 dark:bg-blue-500/20";
+    case "Intermediate": return "text-green-600 bg-green-500/10 dark:text-green-400 dark:bg-green-500/20";
+    default: return "text-muted-foreground bg-muted";
   }
 }
 

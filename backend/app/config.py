@@ -2,8 +2,14 @@
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Dict, List, Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+# Cluster aliases for easier access
+CLUSTER_CSE = "cse"
+CLUSTER_GH = "gh"
 
 
 class Settings(BaseSettings):
@@ -15,14 +21,24 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
-    # Kusto Configuration
+    # Kusto Configuration - Multiple Clusters
+    # CSE Analytics cluster (default)
+    kusto_cse_cluster_url: str = "https://cse-analytics.centralus.kusto.windows.net"
+    kusto_cse_database: str = "ACE"
+    
+    # GH Analytics cluster - supports multiple databases
+    kusto_gh_cluster_url: str = "https://gh-analytics.eastus.kusto.windows.net"
+    kusto_gh_database: str = "ace"  # Default database
+    kusto_gh_databases: str = "ace,copilot,hydro,snapshots"  # All available databases
+    
+    # Legacy single-cluster config (for backwards compatibility)
     kusto_cluster_url: str = ""
     kusto_database: str = ""
 
     # Azure Authentication (optional - uses DefaultAzureCredential)
-    azure_tenant_id: str | None = None
-    azure_client_id: str | None = None
-    azure_client_secret: str | None = None
+    azure_tenant_id: Optional[str] = None
+    azure_client_id: Optional[str] = None
+    azure_client_secret: Optional[str] = None
 
     # API Configuration
     api_host: str = "0.0.0.0"
@@ -39,7 +55,7 @@ class Settings(BaseSettings):
     data_dir: str = "../data"
 
     @property
-    def cors_origins_list(self) -> list[str]:
+    def cors_origins_list(self) -> List[str]:
         """Parse CORS origins string into list."""
         return [origin.strip() for origin in self.cors_origins.split(",")]
 
@@ -50,8 +66,58 @@ class Settings(BaseSettings):
 
     @property
     def kusto_enabled(self) -> bool:
-        """Check if Kusto is configured."""
-        return bool(self.kusto_cluster_url and self.kusto_database)
+        """Check if any Kusto cluster is configured."""
+        return bool(
+            (self.kusto_cluster_url and self.kusto_database) or
+            (self.kusto_cse_cluster_url and self.kusto_cse_database) or
+            (self.kusto_gh_cluster_url and self.kusto_gh_database)
+        )
+
+    @property
+    def clusters(self) -> Dict[str, Dict[str, str]]:
+        """Get all configured clusters as a dict."""
+        clusters = {}
+        
+        # CSE cluster
+        if self.kusto_cse_cluster_url and self.kusto_cse_database:
+            clusters[CLUSTER_CSE] = {
+                "url": self.kusto_cse_cluster_url,
+                "database": self.kusto_cse_database,
+            }
+        
+        # GH cluster
+        if self.kusto_gh_cluster_url and self.kusto_gh_database:
+            clusters[CLUSTER_GH] = {
+                "url": self.kusto_gh_cluster_url,
+                "database": self.kusto_gh_database,
+            }
+        
+        # Legacy single cluster (use as 'default')
+        if self.kusto_cluster_url and self.kusto_database:
+            clusters["default"] = {
+                "url": self.kusto_cluster_url,
+                "database": self.kusto_database,
+            }
+        
+        return clusters
+
+    @property
+    def default_cluster(self) -> Optional[str]:
+        """Get the default cluster name."""
+        if CLUSTER_CSE in self.clusters:
+            return CLUSTER_CSE
+        if "default" in self.clusters:
+            return "default"
+        if self.clusters:
+            return next(iter(self.clusters.keys()))
+        return None
+
+    @property
+    def gh_databases_list(self) -> List[str]:
+        """Get list of available GH databases."""
+        if self.kusto_gh_databases:
+            return [db.strip() for db in self.kusto_gh_databases.split(",")]
+        return [self.kusto_gh_database] if self.kusto_gh_database else []
 
 
 @lru_cache

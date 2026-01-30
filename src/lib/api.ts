@@ -212,6 +212,64 @@ export const reportsApi = {
 };
 
 // ============================================
+// Copilot Analytics API (from GH Kusto cluster)
+// ============================================
+
+export interface CopilotStats {
+  total_users: number;
+  active_users: number;
+  total_suggestions: number;
+  total_completions: number;
+  avg_acceptance_rate: number;
+}
+
+export interface CopilotLanguageUsage {
+  language: string;
+  users: number;
+  suggestions: number;
+  completions: number;
+  avg_acceptance: number;
+}
+
+export interface CopilotDailyTrend {
+  date: string;
+  active_users: number;
+  completions: number;
+  acceptance_rate: number;
+}
+
+export interface CopilotLearnerImpact {
+  learner_status: string;
+  users: number;
+  avg_completions: number;
+  avg_acceptance: number;
+}
+
+export interface CopilotAnalytics {
+  stats: CopilotStats;
+  by_language: CopilotLanguageUsage[];
+  trend: CopilotDailyTrend[];
+  by_learner_status: CopilotLearnerImpact[];
+}
+
+export const copilotApi = {
+  getStats: (): Promise<CopilotStats> =>
+    fetchApi("/copilot/stats"),
+
+  getByLanguage: (): Promise<CopilotLanguageUsage[]> =>
+    fetchApi("/copilot/by-language"),
+
+  getTrend: (days = 30): Promise<CopilotDailyTrend[]> =>
+    fetchApi(`/copilot/trend?days=${days}`),
+
+  getByLearnerStatus: (): Promise<CopilotLearnerImpact[]> =>
+    fetchApi("/copilot/by-learner-status"),
+
+  getAll: (): Promise<CopilotAnalytics> =>
+    fetchApi("/copilot"),
+};
+
+// ============================================
 // Health API
 // ============================================
 

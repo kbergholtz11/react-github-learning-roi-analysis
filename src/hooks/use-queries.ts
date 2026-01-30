@@ -12,6 +12,7 @@ import {
   alertsApi,
   reportsApi,
   healthApi,
+  copilotApi,
 } from "@/lib/api";
 import type { LearnerFilters } from "@/types";
 
@@ -34,6 +35,13 @@ export const queryKeys = {
     certifications: ["analytics", "certifications"] as const,
     skills: ["analytics", "skills"] as const,
     alignment: ["analytics", "alignment"] as const,
+  },
+  copilot: {
+    all: ["copilot"] as const,
+    stats: ["copilot", "stats"] as const,
+    byLanguage: ["copilot", "by-language"] as const,
+    trend: (days?: number) => ["copilot", "trend", days] as const,
+    byLearnerStatus: ["copilot", "by-learner-status"] as const,
   },
   events: {
     all: ["events"] as const,
@@ -139,6 +147,45 @@ export function useProductAlignment() {
   return useQuery({
     queryKey: queryKeys.analytics.alignment,
     queryFn: analyticsApi.getProductAlignment,
+  });
+}
+
+// ============================================
+// Copilot Analytics Hooks (GH Kusto cluster)
+// ============================================
+
+export function useCopilotStats() {
+  return useQuery({
+    queryKey: queryKeys.copilot.stats,
+    queryFn: copilotApi.getStats,
+  });
+}
+
+export function useCopilotByLanguage() {
+  return useQuery({
+    queryKey: queryKeys.copilot.byLanguage,
+    queryFn: copilotApi.getByLanguage,
+  });
+}
+
+export function useCopilotTrend(days = 30) {
+  return useQuery({
+    queryKey: queryKeys.copilot.trend(days),
+    queryFn: () => copilotApi.getTrend(days),
+  });
+}
+
+export function useCopilotByLearnerStatus() {
+  return useQuery({
+    queryKey: queryKeys.copilot.byLearnerStatus,
+    queryFn: copilotApi.getByLearnerStatus,
+  });
+}
+
+export function useCopilotAnalytics() {
+  return useQuery({
+    queryKey: queryKeys.copilot.all,
+    queryFn: copilotApi.getAll,
   });
 }
 

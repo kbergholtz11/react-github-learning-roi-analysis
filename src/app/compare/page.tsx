@@ -154,7 +154,11 @@ export default function ComparisonPage() {
                     <div className="text-right">
                       <Badge 
                         variant="secondary" 
-                        className={stage.conversionRate >= 50 ? "bg-green-100 text-green-700" : stage.conversionRate >= 30 ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700"}
+                        className={stage.conversionRate >= 50 
+                          ? "bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400" 
+                          : stage.conversionRate >= 30 
+                          ? "bg-yellow-500/10 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400" 
+                          : "bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400"}
                       >
                         {stage.conversionRate}%
                       </Badge>

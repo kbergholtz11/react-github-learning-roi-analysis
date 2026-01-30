@@ -10,6 +10,7 @@ import { Breadcrumbs } from "@/components/breadcrumbs";
 import { QueryProvider } from "@/components/query-provider";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { SkipToContent } from "@/lib/accessibility";
+import { SessionProvider } from "@/components/auth";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -42,7 +43,8 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <QueryProvider>
+          <SessionProvider>
+            <QueryProvider>
             <SkipToContent />
             <SidebarProvider>
               <DashboardSidebar />
@@ -62,6 +64,7 @@ export default function RootLayout({
             <GlobalSearch />
             <Toaster richColors position="bottom-right" />
           </QueryProvider>
+          </SessionProvider>
         </ThemeProvider>
       </body>
     </html>

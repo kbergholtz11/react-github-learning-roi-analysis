@@ -12,6 +12,14 @@ import {
   AreaChart,
   Area,
   CartesianGrid,
+  ScatterChart,
+  Scatter,
+  ZAxis,
+  LineChart,
+  Line,
+  Legend,
+  ReferenceLine,
+  Cell,
 } from "recharts";
 
 // Helper to format large numbers
@@ -240,5 +248,349 @@ export function SimpleAreaChart({
         </AreaChart>
       </ResponsiveContainer>
     </div>
+  );
+}
+
+// =============================================================================
+// Scatter Plot Chart
+// =============================================================================
+
+interface ScatterDataItem {
+  x: number;
+  y: number;
+  z?: number; // Optional size dimension
+  name?: string;
+  color?: string;
+}
+
+interface ScatterPlotProps {
+  data: ScatterDataItem[];
+  xLabel?: string;
+  yLabel?: string;
+  color?: string;
+  showTrendLine?: boolean;
+}
+
+export function ScatterPlot({
+  data,
+  xLabel = "X",
+  yLabel = "Y",
+  color = "#8b5cf6",
+  showTrendLine = false,
+}: ScatterPlotProps) {
+  const colors = useChartColors();
+
+  // Calculate linear regression for trend line
+  const trendLine = useMemo(() => {
+    if (!showTrendLine || data.length < 2) return null;
+
+    const n = data.length;
+    const sumX = data.reduce((sum, d) => sum + d.x, 0);
+    const sumY = data.reduce((sum, d) => sum + d.y, 0);
+    const sumXY = data.reduce((sum, d) => sum + d.x * d.y, 0);
+    const sumXX = data.reduce((sum, d) => sum + d.x * d.x, 0);
+
+    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+    const intercept = (sumY - slope * sumX) / n;
+
+    const minX = Math.min(...data.map((d) => d.x));
+    const maxX = Math.max(...data.map((d) => d.x));
+
+    return [
+      { x: minX, y: slope * minX + intercept },
+      { x: maxX, y: slope * maxX + intercept },
+    ];
+  }, [data, showTrendLine]);
+
+  return (
+    <div className="h-[300px] w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
+          <XAxis
+            type="number"
+            dataKey="x"
+            name={xLabel}
+            tick={{ fill: colors.text, fontSize: 12 }}
+            axisLine={{ stroke: colors.grid }}
+            tickLine={{ stroke: colors.grid }}
+            label={{ value: xLabel, position: "bottom", fill: colors.text }}
+          />
+          <YAxis
+            type="number"
+            dataKey="y"
+            name={yLabel}
+            tick={{ fill: colors.text, fontSize: 12 }}
+            axisLine={{ stroke: colors.grid }}
+            tickLine={{ stroke: colors.grid }}
+            label={{ value: yLabel, angle: -90, position: "left", fill: colors.text }}
+          />
+          <ZAxis type="number" dataKey="z" range={[50, 400]} />
+          <Tooltip
+            contentStyle={{
+              backgroundColor: colors.background,
+              border: `1px solid ${colors.border}`,
+              borderRadius: "8px",
+              color: colors.text,
+            }}
+            formatter={(value, name) => [formatNumber(Number(value)), name]}
+          />
+          <Scatter name="Data" data={data} fill={color}>
+            {data.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={entry.color || color} />
+            ))}
+          </Scatter>
+          {showTrendLine && trendLine && (
+            <Scatter
+              name="Trend"
+              data={trendLine}
+              fill="none"
+              line={{ stroke: "#ef4444", strokeWidth: 2, strokeDasharray: "5 5" }}
+              shape={() => null}
+            />
+          )}
+        </ScatterChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// =============================================================================
+// Line Chart with Trend Lines
+// =============================================================================
+
+interface TrendLineChartProps {
+  data: ChartDataItem[];
+  lines: {
+    dataKey: string;
+    color: string;
+    name?: string;
+    showTrend?: boolean;
+  }[];
+  showReferenceLine?: boolean;
+  referenceValue?: number;
+  referenceLabel?: string;
+}
+
+export function TrendLineChart({
+  data,
+  lines,
+  showReferenceLine = false,
+  referenceValue,
+  referenceLabel = "Target",
+}: TrendLineChartProps) {
+  const colors = useChartColors();
+
+  return (
+    <div className="h-[300px] w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
+          <XAxis
+            dataKey="name"
+            tick={{ fill: colors.text, fontSize: 12 }}
+            axisLine={{ stroke: colors.grid }}
+            tickLine={{ stroke: colors.grid }}
+          />
+          <YAxis
+            tick={{ fill: colors.text, fontSize: 12 }}
+            axisLine={{ stroke: colors.grid }}
+            tickLine={{ stroke: colors.grid }}
+            tickFormatter={formatNumber}
+          />
+          <Tooltip
+            contentStyle={{
+              backgroundColor: colors.background,
+              border: `1px solid ${colors.border}`,
+              borderRadius: "8px",
+              color: colors.text,
+            }}
+            formatter={(value) => formatNumber(Number(value))}
+          />
+          <Legend />
+          {lines.map((line) => (
+            <Line
+              key={line.dataKey}
+              type="monotone"
+              dataKey={line.dataKey}
+              stroke={line.color}
+              strokeWidth={2}
+              dot={{ fill: line.color, strokeWidth: 2 }}
+              name={line.name || line.dataKey}
+            />
+          ))}
+          {showReferenceLine && referenceValue !== undefined && (
+            <ReferenceLine
+              y={referenceValue}
+              stroke="#ef4444"
+              strokeDasharray="5 5"
+              label={{
+                value: referenceLabel,
+                position: "right",
+                fill: "#ef4444",
+                fontSize: 12,
+              }}
+            />
+          )}
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// =============================================================================
+// Heatmap Chart
+// =============================================================================
+
+interface HeatmapDataItem {
+  x: string;
+  y: string;
+  value: number;
+}
+
+interface HeatmapProps {
+  data: HeatmapDataItem[];
+  xLabels: string[];
+  yLabels: string[];
+  colorScale?: { min: string; mid: string; max: string };
+  showValues?: boolean;
+}
+
+function interpolateColor(
+  value: number,
+  min: number,
+  max: number,
+  colors: { min: string; mid: string; max: string }
+): string {
+  const ratio = max === min ? 0.5 : (value - min) / (max - min);
+
+  // Parse hex colors
+  const parseHex = (hex: string) => {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result
+      ? {
+          r: parseInt(result[1], 16),
+          g: parseInt(result[2], 16),
+          b: parseInt(result[3], 16),
+        }
+      : { r: 0, g: 0, b: 0 };
+  };
+
+  const minColor = parseHex(colors.min);
+  const midColor = parseHex(colors.mid);
+  const maxColor = parseHex(colors.max);
+
+  let r, g, b;
+  if (ratio < 0.5) {
+    const t = ratio * 2;
+    r = Math.round(minColor.r + (midColor.r - minColor.r) * t);
+    g = Math.round(minColor.g + (midColor.g - minColor.g) * t);
+    b = Math.round(minColor.b + (midColor.b - minColor.b) * t);
+  } else {
+    const t = (ratio - 0.5) * 2;
+    r = Math.round(midColor.r + (maxColor.r - midColor.r) * t);
+    g = Math.round(midColor.g + (maxColor.g - midColor.g) * t);
+    b = Math.round(midColor.b + (maxColor.b - midColor.b) * t);
+  }
+
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+export function Heatmap({
+  data,
+  xLabels,
+  yLabels,
+  colorScale = { min: "#dbeafe", mid: "#3b82f6", max: "#1e3a8a" },
+  showValues = true,
+}: HeatmapProps) {
+  const values = data.map((d) => d.value);
+  const minValue = Math.min(...values);
+  const maxValue = Math.max(...values);
+
+  // Create a lookup map for quick access
+  const dataMap = useMemo(() => {
+    const map = new Map<string, number>();
+    data.forEach((d) => map.set(`${d.x}-${d.y}`, d.value));
+    return map;
+  }, [data]);
+
+  return (
+    <div className="w-full overflow-x-auto">
+      <div className="min-w-fit">
+        {/* Column headers */}
+        <div className="flex">
+          <div className="w-24 shrink-0" /> {/* Empty corner */}
+          {xLabels.map((label) => (
+            <div
+              key={label}
+              className="flex-1 min-w-[60px] text-center text-xs font-medium text-muted-foreground p-2 truncate"
+              title={label}
+            >
+              {label}
+            </div>
+          ))}
+        </div>
+
+        {/* Rows */}
+        {yLabels.map((yLabel) => (
+          <div key={yLabel} className="flex">
+            {/* Row header */}
+            <div className="w-24 shrink-0 text-xs font-medium text-muted-foreground p-2 flex items-center truncate">
+              {yLabel}
+            </div>
+            {/* Cells */}
+            {xLabels.map((xLabel) => {
+              const value = dataMap.get(`${xLabel}-${yLabel}`) ?? 0;
+              const bgColor = interpolateColor(value, minValue, maxValue, colorScale);
+              const textColor = value > (maxValue - minValue) / 2 + minValue ? "#fff" : "#000";
+
+              return (
+                <div
+                  key={`${xLabel}-${yLabel}`}
+                  className="flex-1 min-w-[60px] aspect-square flex items-center justify-center text-xs font-medium border border-background/20 transition-all hover:ring-2 hover:ring-primary/50 cursor-default"
+                  style={{ backgroundColor: bgColor, color: textColor }}
+                  title={`${xLabel}, ${yLabel}: ${value}`}
+                >
+                  {showValues && formatNumber(value)}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+
+        {/* Legend */}
+        <div className="flex items-center gap-2 mt-4 justify-center">
+          <span className="text-xs text-muted-foreground">{formatNumber(minValue)}</span>
+          <div
+            className="h-3 w-32 rounded"
+            style={{
+              background: `linear-gradient(to right, ${colorScale.min}, ${colorScale.mid}, ${colorScale.max})`,
+            }}
+          />
+          <span className="text-xs text-muted-foreground">{formatNumber(maxValue)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
+// Correlation Matrix (specialized heatmap)
+// =============================================================================
+
+interface CorrelationMatrixProps {
+  data: { x: string; y: string; value: number }[];
+  labels: string[];
+}
+
+export function CorrelationMatrix({ data, labels }: CorrelationMatrixProps) {
+  return (
+    <Heatmap
+      data={data}
+      xLabels={labels}
+      yLabels={labels}
+      colorScale={{ min: "#ef4444", mid: "#fbbf24", max: "#22c55e" }}
+      showValues={true}
+    />
   );
 }

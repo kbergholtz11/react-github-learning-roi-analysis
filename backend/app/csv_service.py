@@ -5,7 +5,7 @@ import logging
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 from cachetools import TTLCache
 
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 _cache = TTLCache(maxsize=50, ttl=get_settings().cache_ttl)
 
 
-def parse_csv(filename: str) -> list[dict[str, Any]]:
+def parse_csv(filename: str) -> List[Dict[str, Any]]:
     """Parse a CSV file and return list of dicts."""
     filepath = get_settings().data_path / filename
 
@@ -51,7 +51,7 @@ def parse_csv(filename: str) -> list[dict[str, Any]]:
     return rows
 
 
-def parse_array_string(s: str) -> list[str]:
+def parse_array_string(s: str) -> List[str]:
     """Parse array-like strings from CSV (e.g., "['ACTIONS', 'GHAS']")."""
     if not s or s == "" or s == "[]":
         return []
@@ -67,7 +67,7 @@ def parse_array_string(s: str) -> list[str]:
 # =============================================================================
 
 
-def get_certified_users() -> list[CertifiedUser]:
+def get_certified_users() -> List[CertifiedUser]:
     """Load certified users from CSV."""
     raw = parse_csv("certified_users.csv")
     return [
@@ -90,7 +90,7 @@ def get_certified_users() -> list[CertifiedUser]:
     ]
 
 
-def get_unified_users() -> list[UnifiedUser]:
+def get_unified_users() -> List[UnifiedUser]:
     """Load unified users from CSV."""
     raw = parse_csv("unified_users.csv")
     return [
@@ -119,7 +119,7 @@ def get_learners(filters: LearnerFilters) -> dict:
 
     # Combine: certified users + non-certified unified users
     certified_emails = {u.email for u in certified}
-    all_learners: list[CertifiedUser | UnifiedUser] = list(certified)
+    all_learners: List[CertifiedUser | UnifiedUser] = list(certified)
     all_learners.extend(u for u in unified if u.email not in certified_emails)
 
     # Apply filters
@@ -207,7 +207,7 @@ def get_dashboard_metrics() -> DashboardMetrics:
     )
 
 
-def get_status_breakdown() -> list[StatusBreakdown]:
+def get_status_breakdown() -> List[StatusBreakdown]:
     """Get learner status breakdown."""
     unified = get_unified_users()
     certified = get_certified_users()
@@ -232,7 +232,7 @@ def get_status_breakdown() -> list[StatusBreakdown]:
     ]
 
 
-def get_journey_funnel() -> list[JourneyFunnelStage]:
+def get_journey_funnel() -> List[JourneyFunnelStage]:
     """Get journey funnel data."""
     breakdown = get_status_breakdown()
     colors = {
@@ -259,7 +259,7 @@ def get_journey_funnel() -> list[JourneyFunnelStage]:
 # =============================================================================
 
 
-def get_drop_off_analysis() -> list[DropOffAnalysis]:
+def get_drop_off_analysis() -> List[DropOffAnalysis]:
     """Analyze drop-off between journey stages."""
     funnel = get_journey_funnel()
     result = []
@@ -286,7 +286,7 @@ def get_drop_off_analysis() -> list[DropOffAnalysis]:
     return result
 
 
-def get_monthly_progression() -> list[MonthlyProgression]:
+def get_monthly_progression() -> List[MonthlyProgression]:
     """Get monthly progression data."""
     certified = get_certified_users()
 
@@ -324,7 +324,7 @@ def get_monthly_progression() -> list[MonthlyProgression]:
 # =============================================================================
 
 
-def get_stage_impact() -> list[StageImpact]:
+def get_stage_impact() -> List[StageImpact]:
     """Get impact metrics by journey stage."""
     breakdown = get_status_breakdown()
 
@@ -349,7 +349,7 @@ def get_stage_impact() -> list[StageImpact]:
     ]
 
 
-def get_product_adoption() -> list[ProductAdoption]:
+def get_product_adoption() -> List[ProductAdoption]:
     """Get product adoption before/after learning."""
     return [
         ProductAdoption(name="GitHub Copilot", before=25, after=72),

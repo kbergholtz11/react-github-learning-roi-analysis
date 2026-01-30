@@ -1,3 +1,4 @@
+from typing import Any, Dict, List, Optional
 """Pydantic models for API request/response schemas."""
 
 from datetime import datetime
@@ -14,6 +15,7 @@ class LearnerStatus(str, Enum):
     MULTI_CERTIFIED = "Multi-Certified"
     CERTIFIED = "Certified"
     LEARNING = "Learning"
+    PROSPECT = "Prospect"
 
 
 class JourneyStage(str, Enum):
@@ -39,20 +41,20 @@ class LearnerBase(BaseModel):
     email: str
     user_handle: str
     learner_status: LearnerStatus
-    journey_stage: str | None = None
+    journey_stage: Optional[str] = None
 
 
 class CertifiedUser(LearnerBase):
     """Certified user with certification details."""
 
     dotcom_id: int
-    cert_product_focus: str | None = None
-    first_cert_date: str | None = None
-    latest_cert_date: str | None = None
+    cert_product_focus: Optional[str] = None
+    first_cert_date: Optional[str] = None
+    latest_cert_date: Optional[str] = None
     total_certs: int = 0
     total_attempts: int = 0
-    cert_titles: list[str] = Field(default_factory=list)
-    exam_codes: list[str] = Field(default_factory=list)
+    cert_titles: List[str] = Field(default_factory=list)
+    exam_codes: List[str] = Field(default_factory=list)
     days_since_cert: int = 0
 
 
@@ -72,14 +74,14 @@ class UnifiedUser(LearnerBase):
 class LearnerFilters(BaseModel):
     """Filters for learner queries."""
 
-    search: str | None = None
-    learner_status: LearnerStatus | None = None
-    is_certified: bool | None = None
-    product_focus: str | None = None
-    min_certs: int | None = None
-    max_certs: int | None = None
-    certified_after: datetime | None = None
-    certified_before: datetime | None = None
+    search: Optional[str] = None
+    learner_status: Optional[LearnerStatus] = None
+    is_certified: Optional[bool] = None
+    product_focus: Optional[str] = None
+    min_certs: Optional[int] = None
+    max_certs: Optional[int] = None
+    certified_after: Optional[datetime] = None
+    certified_before: Optional[datetime] = None
     page: int = Field(default=1, ge=1)
     page_size: int = Field(default=25, ge=1, le=100)
 
@@ -87,7 +89,7 @@ class LearnerFilters(BaseModel):
 class LearnersResponse(BaseModel):
     """Paginated learners response."""
 
-    learners: list[CertifiedUser | UnifiedUser]
+    learners: List[Any]
     total: int
     page: int
     page_size: int
@@ -138,8 +140,8 @@ class MetricsResponse(BaseModel):
     """Full metrics response."""
 
     metrics: DashboardMetrics
-    status_breakdown: list[StatusBreakdown]
-    funnel: list[JourneyFunnelStage]
+    status_breakdown: List[StatusBreakdown]
+    funnel: List[JourneyFunnelStage]
 
 
 # =============================================================================
@@ -153,7 +155,7 @@ class DropOffAnalysis(BaseModel):
     stage: str
     count: int
     drop_off_rate: float
-    next_stage: str | None
+    next_stage: Optional[str]
 
 
 class MonthlyProgression(BaseModel):
@@ -168,11 +170,11 @@ class MonthlyProgression(BaseModel):
 class JourneyResponse(BaseModel):
     """Journey analytics response."""
 
-    funnel: list[JourneyFunnelStage]
+    funnel: List[JourneyFunnelStage]
     avg_time_to_completion: int
-    stage_velocity: dict[str, int]
-    drop_off_analysis: list[DropOffAnalysis]
-    monthly_progression: list[MonthlyProgression]
+    stage_velocity: Dict[str, int]
+    drop_off_analysis: List[DropOffAnalysis]
+    monthly_progression: List[MonthlyProgression]
     total_journey_users: int
 
 
@@ -211,10 +213,10 @@ class CorrelationData(BaseModel):
 class ImpactResponse(BaseModel):
     """Impact analytics response."""
 
-    stage_impact: list[StageImpact]
-    product_adoption: list[ProductAdoption]
-    correlation_data: list[CorrelationData]
-    roi_breakdown: list[dict]
+    stage_impact: List[StageImpact]
+    product_adoption: List[ProductAdoption]
+    correlation_data: List[CorrelationData]
+    roi_breakdown: List[dict]
 
 
 # =============================================================================
@@ -226,14 +228,14 @@ class KustoQueryRequest(BaseModel):
     """Request for custom Kusto query."""
 
     query: str
-    parameters: dict | None = None
+    parameters: Optional[dict] = None
 
 
 class KustoQueryResponse(BaseModel):
     """Response from Kusto query."""
 
-    columns: list[str]
-    rows: list[dict]
+    columns: List[str]
+    rows: List[dict]
     row_count: int
     execution_time_ms: float
 
@@ -249,23 +251,23 @@ class UserProfile(BaseModel):
     email: str
     user_handle: str
     learner_status: LearnerStatus
-    journey_stage: str | None
-    certifications: list[str]
+    journey_stage: Optional[str]
+    certifications: List[str]
     total_certs: int
-    first_cert_date: str | None
-    latest_cert_date: str | None
+    first_cert_date: Optional[str]
+    latest_cert_date: Optional[str]
     learning_hours: float
     product_usage_hours: float
     events_attended: int
-    top_products: list[str]
-    activity_trend: list[dict]
+    top_products: List[str]
+    activity_trend: List[dict]
 
 
 class UserActivityRequest(BaseModel):
     """Request for user activity data."""
 
-    email: str | None = None
-    user_handle: str | None = None
+    email: Optional[str] = None
+    user_handle: Optional[str] = None
     include_activity: bool = True
     include_certifications: bool = True
     include_product_usage: bool = True

@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import get_settings
-from app.routes import metrics, learners, journey, impact, query
+from app.routes import metrics, learners, journey, impact, query, copilot
 
 # Configure logging
 logging.basicConfig(
@@ -130,6 +130,7 @@ app.include_router(learners.router, prefix="/api")
 app.include_router(journey.router, prefix="/api")
 app.include_router(impact.router, prefix="/api")
 app.include_router(query.router, prefix="/api")
+app.include_router(copilot.router, prefix="/api")
 
 
 if __name__ == "__main__":

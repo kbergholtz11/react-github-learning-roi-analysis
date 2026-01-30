@@ -54,7 +54,7 @@ export default function CertificationROIPage() {
             Track certification progress and ROI metrics
           </p>
         </div>
-        <Badge variant="outline" className="text-sm bg-green-50 text-green-700 border-green-200">
+        <Badge variant="outline" className="text-sm bg-green-500/10 text-green-700 border-green-500/30 dark:bg-green-500/20 dark:text-green-400">
           <Award className="h-3 w-3 mr-1" />
           {certifiedUsers.toLocaleString()} Certified
         </Badge>
@@ -140,15 +140,15 @@ export default function CertificationROIPage() {
               .map((status) => (
               <div key={status.status} className="grid grid-cols-4 gap-4 p-4 border-t items-center">
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
-                    <Award className="h-5 w-5 text-green-600" />
+                  <div className="h-10 w-10 rounded-full bg-green-500/10 dark:bg-green-500/20 flex items-center justify-center">
+                    <Award className="h-5 w-5 text-green-600 dark:text-green-400" />
                   </div>
                   <span className="font-medium">{status.status}</span>
                 </div>
                 <div className="text-right text-sm">{status.count.toLocaleString()}</div>
                 <div className="text-right text-sm text-muted-foreground">{status.percentage}%</div>
                 <div className="text-right">
-                  <Badge variant="secondary" className="text-green-600">+{Math.floor(Math.random() * 15) + 5}%</Badge>
+                  <Badge variant="secondary" className="text-green-600 dark:text-green-400">+{Math.floor(Math.random() * 15) + 5}%</Badge>
                 </div>
               </div>
             ))}

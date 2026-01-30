@@ -28,8 +28,8 @@ test.describe('Navigation', () => {
     // Check page heading
     await expect(page.getByRole('heading', { name: /Learner Explorer/i })).toBeVisible()
     
-    // Check search input is present
-    await expect(page.getByPlaceholder(/Search by name/i)).toBeVisible()
+    // Check search input is present - actual placeholder is "Search by email or username..."
+    await expect(page.getByPlaceholder(/Search by email/i)).toBeVisible()
   })
 })
 
@@ -37,14 +37,17 @@ test.describe('Dark Mode', () => {
   test('should toggle dark mode', async ({ page }) => {
     await page.goto('/')
     
-    // Find and click theme toggle
+    // Find and click theme toggle (opens dropdown menu)
     const themeToggle = page.getByRole('button', { name: /toggle theme/i })
     await expect(themeToggle).toBeVisible()
     
-    // Toggle theme
+    // Click to open dropdown
     await themeToggle.click()
     
-    // Check that html has dark class (or system preference applied)
+    // Select Dark option from dropdown
+    await page.getByRole('menuitem', { name: /Dark/i }).click()
+    
+    // Check that html has dark class
     const html = page.locator('html')
     await expect(html).toHaveClass(/dark/)
   })
@@ -82,38 +85,50 @@ test.describe('Learner Explorer', () => {
   test('should filter learners by search', async ({ page }) => {
     await page.goto('/journey/explorer')
     
-    // Search for a learner
-    await page.getByPlaceholder(/Search by name/i).fill('Sarah')
+    // Wait for page to load
+    await expect(page.getByRole('heading', { name: /Learner Explorer/i })).toBeVisible()
     
-    // Check filtered results
-    await expect(page.getByText('Sarah Chen')).toBeVisible()
+    // Search for a learner using actual placeholder
+    const searchInput = page.getByPlaceholder(/Search by email/i)
+    await expect(searchInput).toBeVisible()
+    await searchInput.fill('deepak')
+    
+    // Wait for search results - grid rows have role="button"
+    await expect(page.locator('[role="button"]').getByText(/deepak/i).first()).toBeVisible({ timeout: 10000 })
   })
 
   test('should persist filters in URL', async ({ page }) => {
     await page.goto('/journey/explorer')
     
-    // Search for something
-    await page.getByPlaceholder(/Search by name/i).fill('Engineering')
+    // Wait for page to load
+    await expect(page.getByRole('heading', { name: /Learner Explorer/i })).toBeVisible()
     
-    // Wait for URL to update
-    await page.waitForURL(/search=Engineering/)
+    // Search for something using correct placeholder
+    const searchInput = page.getByPlaceholder(/Search by email/i)
+    await searchInput.fill('test')
+    
+    // Wait for URL to update (debounced)
+    await page.waitForURL(/search=test/, { timeout: 5000 })
     
     // Reload page
     await page.reload()
     
     // Check search is still there
-    await expect(page.getByPlaceholder(/Search by name/i)).toHaveValue('Engineering')
+    await expect(page.getByPlaceholder(/Search by email/i)).toHaveValue('test')
   })
 
   test('should paginate learners', async ({ page }) => {
     await page.goto('/journey/explorer')
     
-    // Check pagination controls
-    await expect(page.getByText(/Page 1 of/)).toBeVisible()
+    // Wait for page to load
+    await expect(page.getByRole('heading', { name: /Learner Explorer/i })).toBeVisible()
     
-    // Click next page if available
-    const nextButton = page.getByRole('button', { name: /Next page/i })
-    if (await nextButton.isEnabled()) {
+    // Wait for data to load - check for pagination text
+    await expect(page.getByText(/Page \d+ of/)).toBeVisible({ timeout: 10000 })
+    
+    // Click next page button - use exact match to avoid Next.js Dev Tools button
+    const nextButton = page.getByRole('button', { name: 'Next', exact: true })
+    if (await nextButton.isVisible() && await nextButton.isEnabled()) {
       await nextButton.click()
       await expect(page).toHaveURL(/page=2/)
     }

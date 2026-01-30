@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SearchTrigger } from "@/components/global-search";
+import { UserMenu } from "@/components/auth";
 
 const navItems = [
   {
@@ -133,8 +134,11 @@ export function DashboardSidebar() {
       </SidebarContent>
       <SidebarFooter className="border-t border-border/40 p-4">
         <div className="flex items-center justify-between">
-          <span className="text-xs text-muted-foreground">Theme</span>
-          <ThemeToggle />
+          <UserMenu />
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Theme</span>
+            <ThemeToggle />
+          </div>
         </div>
       </SidebarFooter>
     </Sidebar>

@@ -1,6 +1,7 @@
 """Learners API routes with advanced filtering."""
 
 import logging
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -21,11 +22,11 @@ router = APIRouter(prefix="/learners", tags=["learners"])
 
 @router.get("", response_model=LearnersResponse)
 async def list_learners(
-    search: str | None = Query(None, description="Search by email or username"),
-    status: LearnerStatus | None = Query(None, description="Filter by learner status"),
-    certified: bool | None = Query(None, description="Filter by certification status"),
-    min_certs: int | None = Query(None, ge=0, description="Minimum certifications"),
-    max_certs: int | None = Query(None, ge=0, description="Maximum certifications"),
+    search: Optional[str] = Query(None, description="Search by email or username"),
+    status: Optional[LearnerStatus] = Query(None, description="Filter by learner status"),
+    certified: Optional[bool] = Query(None, description="Filter by certification status"),
+    min_certs: Optional[int] = Query(None, ge=0, description="Minimum certifications"),
+    max_certs: Optional[int] = Query(None, ge=0, description="Maximum certifications"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(25, ge=1, le=100, description="Results per page"),
 ):
@@ -52,13 +53,16 @@ async def list_learners(
         kusto = get_kusto_service()
         
         if kusto.is_available and search:
-            # Use Kusto for search (faster on large datasets)
-            logger.info(f"Searching learners via Kusto: {search}")
-            rows = kusto.execute_query(LearnerQueries.search_learners(search, limit=page_size))
-            # Transform Kusto results to model
-            # This would need mapping to actual schema
+            # Try Kusto for search (faster on large datasets)
+            try:
+                logger.info(f"Searching learners via Kusto: {search}")
+                rows = kusto.execute_query(LearnerQueries.search_learners(search, limit=page_size))
+                # Transform Kusto results to model
+                # This would need mapping to actual schema
+            except Exception as kusto_err:
+                logger.warning(f"Kusto search failed, falling back to CSV: {kusto_err}")
         
-        # Use CSV data
+        # Use CSV data (or fallback)
         result = get_learners(filters)
         
         return LearnersResponse(**result)
@@ -83,14 +87,17 @@ async def search_learners(
         kusto = get_kusto_service()
         
         if kusto.is_available:
-            rows = kusto.execute_query(
-                LearnerQueries.search_learners(q, limit=limit)
-            )
-            return {
-                "results": rows,
-                "count": len(rows),
-                "source": "kusto",
-            }
+            try:
+                rows = kusto.execute_query(
+                    LearnerQueries.search_learners(q, limit=limit)
+                )
+                return {
+                    "results": rows,
+                    "count": len(rows),
+                    "source": "kusto",
+                }
+            except Exception as kusto_err:
+                logger.warning(f"Kusto quick search failed, falling back to CSV: {kusto_err}")
         
         # Fall back to CSV
         filters = LearnerFilters(search=q, page_size=limit)
@@ -129,13 +136,16 @@ async def get_learner_profile(email: str):
         kusto = get_kusto_service()
         
         if kusto.is_available:
-            rows = kusto.execute_query(
-                LearnerQueries.get_learner_by_email(email)
-            )
-            if rows:
-                row = rows[0]
-                # Map Kusto response to UserProfile
-                # This would need actual schema mapping
+            try:
+                rows = kusto.execute_query(
+                    LearnerQueries.get_learner_by_email(email)
+                )
+                if rows:
+                    row = rows[0]
+                    # Map Kusto response to UserProfile
+                    # This would need actual schema mapping
+            except Exception as kusto_err:
+                logger.warning(f"Kusto profile query failed, falling back to CSV: {kusto_err}")
         
         # Find in CSV data
         certified = get_certified_users()

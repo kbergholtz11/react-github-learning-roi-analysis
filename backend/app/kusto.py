@@ -2,73 +2,108 @@
 
 import logging
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 from azure.identity import DefaultAzureCredential
 from azure.kusto.data import KustoClient, KustoConnectionStringBuilder
 from azure.kusto.data.exceptions import KustoServiceError
 from cachetools import TTLCache
 
-from app.config import get_settings
+from app.config import get_settings, CLUSTER_CSE, CLUSTER_GH
 
 logger = logging.getLogger(__name__)
 
 
 class KustoService:
-    """Service for executing Kusto queries against Azure Data Explorer."""
+    """Service for executing Kusto queries against multiple Azure Data Explorer clusters."""
 
     def __init__(self):
         self.settings = get_settings()
-        self._client: KustoClient | None = None
+        self._clients: Dict[str, KustoClient] = {}
         self._cache = TTLCache(maxsize=100, ttl=self.settings.cache_ttl)
+        self._credential: Optional[DefaultAzureCredential] = None
 
-    @property
-    def client(self) -> KustoClient | None:
-        """Lazy-initialize Kusto client."""
-        if not self.settings.kusto_enabled:
+    def _get_credential(self) -> DefaultAzureCredential:
+        """Get or create shared credential."""
+        if self._credential is None:
+            self._credential = DefaultAzureCredential()
+        return self._credential
+
+    def _get_client(self, cluster_name: str) -> Optional[KustoClient]:
+        """Get or create a Kusto client for a specific cluster."""
+        if cluster_name in self._clients:
+            return self._clients[cluster_name]
+
+        clusters = self.settings.clusters
+        if cluster_name not in clusters:
+            logger.error(f"Unknown cluster: {cluster_name}. Available: {list(clusters.keys())}")
             return None
 
-        if self._client is None:
-            try:
-                # Use service principal if credentials provided
-                if (
-                    self.settings.azure_tenant_id
-                    and self.settings.azure_client_id
-                    and self.settings.azure_client_secret
-                ):
-                    kcsb = KustoConnectionStringBuilder.with_aad_application_key_authentication(
-                        self.settings.kusto_cluster_url,
-                        self.settings.azure_client_id,
-                        self.settings.azure_client_secret,
-                        self.settings.azure_tenant_id,
-                    )
-                else:
-                    # Use DefaultAzureCredential (works with managed identity, CLI, etc.)
-                    credential = DefaultAzureCredential()
-                    kcsb = KustoConnectionStringBuilder.with_azure_token_credential(
-                        self.settings.kusto_cluster_url,
-                        credential,
-                    )
+        cluster_config = clusters[cluster_name]
+        cluster_url = cluster_config["url"]
 
-                self._client = KustoClient(kcsb)
-                logger.info(f"Connected to Kusto cluster: {self.settings.kusto_cluster_url}")
-            except Exception as e:
-                logger.error(f"Failed to connect to Kusto: {e}")
-                raise
+        try:
+            # Use service principal if credentials provided
+            if (
+                self.settings.azure_tenant_id
+                and self.settings.azure_client_id
+                and self.settings.azure_client_secret
+            ):
+                kcsb = KustoConnectionStringBuilder.with_aad_application_key_authentication(
+                    cluster_url,
+                    self.settings.azure_client_id,
+                    self.settings.azure_client_secret,
+                    self.settings.azure_tenant_id,
+                )
+            else:
+                # Use DefaultAzureCredential (works with managed identity, CLI, etc.)
+                kcsb = KustoConnectionStringBuilder.with_azure_token_credential(
+                    cluster_url,
+                    self._get_credential(),
+                )
 
-        return self._client
+            client = KustoClient(kcsb)
+            self._clients[cluster_name] = client
+            logger.info(f"Connected to Kusto cluster '{cluster_name}': {cluster_url}")
+            return client
+
+        except Exception as e:
+            logger.error(f"Failed to connect to Kusto cluster '{cluster_name}': {e}")
+            raise
+
+    @property
+    def client(self) -> Optional[KustoClient]:
+        """Get the default Kusto client (backwards compatible)."""
+        default = self.settings.default_cluster
+        if default:
+            return self._get_client(default)
+        return None
 
     @property
     def is_available(self) -> bool:
-        """Check if Kusto client is available."""
-        return self.client is not None
+        """Check if any Kusto client is available."""
+        return self.settings.kusto_enabled and self.settings.default_cluster is not None
+
+    @property
+    def available_clusters(self) -> List[str]:
+        """Get list of available cluster names."""
+        return list(self.settings.clusters.keys())
+
+    def get_database(self, cluster_name: Optional[str] = None) -> str:
+        """Get database name for a cluster."""
+        cluster = cluster_name or self.settings.default_cluster
+        if cluster and cluster in self.settings.clusters:
+            return self.settings.clusters[cluster]["database"]
+        return self.settings.kusto_database
 
     def execute_query(
         self,
         query: str,
-        parameters: dict[str, Any] | None = None,
+        parameters: Optional[Dict[str, Any]] = None,
         use_cache: bool = True,
-    ) -> list[dict]:
+        cluster: Optional[str] = None,
+        database: Optional[str] = None,
+    ) -> List[dict]:
         """
         Execute a Kusto query and return results as list of dicts.
 
@@ -76,24 +111,35 @@ class KustoService:
             query: KQL query string
             parameters: Optional query parameters
             use_cache: Whether to use cached results
+            cluster: Cluster name ('cse', 'gh', or 'default'). Uses default if not specified.
+            database: Database name. Uses cluster's default database if not specified.
 
         Returns:
             List of row dictionaries
         """
-        if not self.client:
-            raise RuntimeError("Kusto client not available")
+        # Determine cluster and database
+        cluster_name = cluster or self.settings.default_cluster
+        if not cluster_name:
+            raise RuntimeError("No Kusto cluster configured")
 
-        # Create cache key
-        cache_key = f"{query}:{parameters}"
+        client = self._get_client(cluster_name)
+        if not client:
+            raise RuntimeError(f"Kusto client not available for cluster: {cluster_name}")
+
+        # Get database (override or cluster default)
+        db = database or self.get_database(cluster_name)
+
+        # Create cache key including cluster and database
+        cache_key = f"{cluster_name}:{db}:{query}:{parameters}"
         if use_cache and cache_key in self._cache:
-            logger.debug(f"Cache hit for query: {query[:50]}...")
+            logger.debug(f"Cache hit for query on {cluster_name}/{db}: {query[:50]}...")
             return self._cache[cache_key]
 
         try:
             start_time = datetime.now()
 
             # Execute query
-            response = self.client.execute(self.settings.kusto_database, query)
+            response = client.execute(db, query)
 
             # Convert to list of dicts
             rows = []
@@ -103,7 +149,7 @@ class KustoService:
                     rows.append(dict(zip(columns, row)))
 
             elapsed = (datetime.now() - start_time).total_seconds() * 1000
-            logger.info(f"Query executed in {elapsed:.2f}ms, returned {len(rows)} rows")
+            logger.info(f"Query on {cluster_name}/{db} executed in {elapsed:.2f}ms, returned {len(rows)} rows")
 
             # Cache results
             if use_cache:
@@ -112,8 +158,48 @@ class KustoService:
             return rows
 
         except KustoServiceError as e:
-            logger.error(f"Kusto query failed: {e}")
+            logger.error(f"Kusto query failed on {cluster_name}/{db}: {e}")
             raise
+
+    def execute_on_cse(
+        self,
+        query: str,
+        database: Optional[str] = None,
+        use_cache: bool = True,
+    ) -> List[dict]:
+        """Execute query on CSE Analytics cluster."""
+        return self.execute_query(query, cluster=CLUSTER_CSE, database=database, use_cache=use_cache)
+
+    def execute_on_gh(
+        self,
+        query: str,
+        database: Optional[str] = None,
+        use_cache: bool = True,
+    ) -> List[dict]:
+        """Execute query on GH Analytics cluster (default database: ace)."""
+        return self.execute_query(query, cluster=CLUSTER_GH, database=database, use_cache=use_cache)
+
+    # GH Analytics cluster - specific database helpers
+    def execute_on_gh_ace(self, query: str, use_cache: bool = True) -> List[dict]:
+        """Execute query on GH Analytics cluster - ACE database."""
+        return self.execute_query(query, cluster=CLUSTER_GH, database="ace", use_cache=use_cache)
+
+    def execute_on_gh_copilot(self, query: str, use_cache: bool = True) -> List[dict]:
+        """Execute query on GH Analytics cluster - Copilot database."""
+        return self.execute_query(query, cluster=CLUSTER_GH, database="copilot", use_cache=use_cache)
+
+    def execute_on_gh_hydro(self, query: str, use_cache: bool = True) -> List[dict]:
+        """Execute query on GH Analytics cluster - Hydro database."""
+        return self.execute_query(query, cluster=CLUSTER_GH, database="hydro", use_cache=use_cache)
+
+    def execute_on_gh_snapshots(self, query: str, use_cache: bool = True) -> List[dict]:
+        """Execute query on GH Analytics cluster - Snapshots database."""
+        return self.execute_query(query, cluster=CLUSTER_GH, database="snapshots", use_cache=use_cache)
+
+    @property
+    def gh_databases(self) -> List[str]:
+        """Get list of available GH databases."""
+        return self.settings.gh_databases_list
 
     def clear_cache(self):
         """Clear the query cache."""
@@ -130,7 +216,7 @@ class LearnerQueries:
     """Pre-built queries for learner data."""
 
     @staticmethod
-    def get_learners_by_status(status: str | None = None, limit: int = 100) -> str:
+    def get_learners_by_status(status: Optional[str] = None, limit: int = 100) -> str:
         """Query learners optionally filtered by status."""
         base = """
         CertifiedUsers
@@ -260,8 +346,95 @@ class ImpactQueries:
         """
 
 
+class CopilotQueries:
+    """Pre-built queries for Copilot analytics (GH copilot database)."""
+
+    @staticmethod
+    def get_copilot_adoption_stats() -> str:
+        """Get Copilot adoption statistics."""
+        return """
+        CopilotUsage
+        | summarize 
+            total_users = dcount(user_id),
+            active_users = dcountif(user_id, last_active > ago(30d)),
+            total_suggestions = sum(suggestions_accepted),
+            total_completions = sum(completions),
+            avg_acceptance_rate = avg(acceptance_rate)
+        """
+
+    @staticmethod
+    def get_copilot_usage_by_language() -> str:
+        """Get Copilot usage broken down by programming language."""
+        return """
+        CopilotUsage
+        | where language != ''
+        | summarize 
+            users = dcount(user_id),
+            suggestions = sum(suggestions_accepted),
+            completions = sum(completions),
+            avg_acceptance = avg(acceptance_rate)
+          by language
+        | top 10 by completions desc
+        """
+
+    @staticmethod
+    def get_copilot_trend(days: int = 30) -> str:
+        """Get Copilot usage trend over time."""
+        return f"""
+        CopilotUsage
+        | where timestamp > ago({days}d)
+        | summarize 
+            active_users = dcount(user_id),
+            completions = sum(completions),
+            acceptance_rate = avg(acceptance_rate)
+          by bin(timestamp, 1d)
+        | order by timestamp asc
+        """
+
+    @staticmethod
+    def get_copilot_impact_by_learner_status() -> str:
+        """Get Copilot usage correlated with learning status."""
+        return """
+        CopilotUsage
+        | join kind=leftouter (
+            UnifiedUsers
+            | project user_id, learner_status, journey_stage
+        ) on user_id
+        | summarize 
+            users = dcount(user_id),
+            avg_completions = avg(completions),
+            avg_acceptance = avg(acceptance_rate)
+          by learner_status
+        | order by avg_completions desc
+        """
+
+
+class HydroQueries:
+    """Pre-built queries for Hydro analytics (telemetry/events)."""
+
+    @staticmethod
+    def get_event_counts_by_type(days: int = 7) -> str:
+        """Get event counts by type."""
+        return f"""
+        Events
+        | where timestamp > ago({days}d)
+        | summarize count = count() by event_type
+        | top 20 by count desc
+        """
+
+    @staticmethod
+    def get_daily_active_users(days: int = 30) -> str:
+        """Get daily active user counts."""
+        return f"""
+        Events
+        | where timestamp > ago({days}d)
+        | summarize dau = dcount(user_id) by bin(timestamp, 1d)
+        | order by timestamp asc
+        """
+
+
 # Singleton instance
-_kusto_service: KustoService | None = None
+_kusto_service: Optional[KustoService] = None
 
 
 def get_kusto_service() -> KustoService:

@@ -60,22 +60,26 @@ export default function ExecutiveSummaryPage() {
   // Dynamic highlights from real data
   const highlights = [
     { 
-      title: `${metrics?.certifiedUsers?.toLocaleString()} Certified`, 
+      value: metrics?.certifiedUsers?.toLocaleString() || "0",
+      label: "Certified", 
       description: `${certificationRate}% certification rate achieved`, 
       type: "success" 
     },
     { 
-      title: `${metrics?.totalCertsEarned?.toLocaleString()} Certifications`, 
+      value: metrics?.totalCertsEarned?.toLocaleString() || "0",
+      label: "Certifications", 
       description: "Total certifications earned", 
       type: "success" 
     },
     { 
-      title: `${avgUsageIncrease}% Usage Change`, 
+      value: `${avgUsageIncrease}%`,
+      label: "Usage Change", 
       description: "Post-learning platform engagement", 
       type: avgUsageIncrease > 0 ? "success" : "warning" 
     },
     { 
-      title: `${metrics?.impactScore}/100 Impact`, 
+      value: `${metrics?.impactScore || 0}/100`,
+      label: "Impact Score", 
       description: "Overall learning impact score", 
       type: (metrics?.impactScore || 0) > 50 ? "success" : "warning" 
     },
@@ -95,7 +99,9 @@ export default function ExecutiveSummaryPage() {
           <Badge variant="outline" className="text-sm">
             Live Data
           </Badge>
-          <Badge variant="secondary" className={metrics?.impactScore && metrics.impactScore > 50 ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}>
+          <Badge variant="secondary" className={metrics?.impactScore && metrics.impactScore > 50 
+            ? "bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400 border-green-500/30" 
+            : "bg-yellow-500/10 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400 border-yellow-500/30"}>
             {metrics?.impactScore && metrics.impactScore > 50 ? (
               <><CheckCircle className="h-3 w-3 mr-1" /> Program Healthy</>
             ) : (
@@ -161,19 +167,20 @@ export default function ExecutiveSummaryPage() {
       {/* Highlights */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {highlights.map((highlight) => (
-          <Card key={highlight.title} className={highlight.type === 'warning' ? 'border-yellow-200 bg-yellow-50/50' : 'border-green-200 bg-green-50/50'}>
-            <CardContent className="pt-6">
-              <div className="flex items-start gap-3">
+          <Card key={highlight.label} className={highlight.type === 'warning' 
+            ? 'border-yellow-500/30 bg-yellow-500/5 dark:border-yellow-500/20 dark:bg-yellow-500/10' 
+            : 'border-green-500/30 bg-green-500/5 dark:border-green-500/20 dark:bg-green-500/10'}>
+            <CardContent className="pt-6 pb-6 text-center">
+              <div className="flex justify-center mb-3">
                 {highlight.type === 'success' ? (
-                  <ArrowUpRight className="h-5 w-5 text-green-600 mt-0.5" />
+                  <ArrowUpRight className="h-8 w-8 text-green-600 dark:text-green-400" />
                 ) : (
-                  <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
+                  <AlertTriangle className="h-8 w-8 text-yellow-600 dark:text-yellow-400" />
                 )}
-                <div>
-                  <p className="font-medium text-sm">{highlight.title}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{highlight.description}</p>
-                </div>
               </div>
+              <p className="text-sm font-semibold text-foreground mb-1">{highlight.label}</p>
+              <p className="text-3xl font-bold tracking-tight mb-2">{highlight.value}</p>
+              <p className="text-sm text-muted-foreground">{highlight.description}</p>
             </CardContent>
           </Card>
         ))}

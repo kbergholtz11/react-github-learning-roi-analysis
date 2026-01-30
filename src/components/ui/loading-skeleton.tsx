@@ -127,3 +127,35 @@ export function ListSkeleton({ items = 5 }: { items?: number }) {
     </div>
   );
 }
+
+// Loading spinner
+export function LoadingSpinner({ size = "md", className }: { size?: "sm" | "md" | "lg"; className?: string }) {
+  const sizes = {
+    sm: "h-4 w-4 border-2",
+    md: "h-6 w-6 border-2",
+    lg: "h-10 w-10 border-3",
+  };
+  
+  return (
+    <div 
+      className={`animate-spin rounded-full border-muted border-t-primary ${sizes[size]} ${className || ""}`} 
+    />
+  );
+}
+
+// Page loading state
+export function PageLoading({ message = "Loading..." }: { message?: string }) {
+  return (
+    <div className="flex h-[50vh] items-center justify-center">
+      <div className="flex flex-col items-center gap-4">
+        <LoadingSpinner size="lg" />
+        <p className="text-sm text-muted-foreground animate-pulse">{message}</p>
+      </div>
+    </div>
+  );
+}
+
+// Inline loading for buttons
+export function ButtonLoading() {
+  return <LoadingSpinner size="sm" className="mr-2" />;
+}
