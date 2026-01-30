@@ -32,16 +32,17 @@ export async function GET(request: NextRequest) {
     // For initial load without search, use pre-aggregated top learners (instant)
     if (!filters.search && filters.learnerStatus === "all" && filters.isCertified === "all" && filters.page === 1) {
       const topLearnersData = getAggregatedData("top-learners.json");
+      const pageSize = filters.pageSize ?? 20;
       if (topLearnersData) {
         return NextResponse.json({
-          learners: topLearnersData.learners.slice(0, filters.pageSize).map((l: Record<string, unknown>) => ({
+          learners: topLearnersData.learners.slice(0, pageSize).map((l: Record<string, unknown>) => ({
             ...l,
             certs: l.total_certs || 0,
           })),
           total: topLearnersData.total,
           page: 1,
-          pageSize: filters.pageSize,
-          totalPages: Math.ceil(topLearnersData.total / filters.pageSize),
+          pageSize: pageSize,
+          totalPages: Math.ceil(topLearnersData.total / pageSize),
           generatedAt: topLearnersData.generatedAt,
         });
       }

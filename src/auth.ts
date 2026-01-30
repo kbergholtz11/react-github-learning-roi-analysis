@@ -18,8 +18,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (profile) {
         token.name = profile.name;
         token.email = profile.email;
-        // @ts-expect-error - GitHub profile has login
-        token.login = profile.login;
+        token.login = (profile as { login?: string }).login;
       }
       return token;
     },

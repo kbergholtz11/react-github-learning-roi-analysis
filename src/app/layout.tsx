@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { NuqsAdapter } from "nuqs/adapters/next/app";
 import "./globals.css";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/dashboard";
@@ -43,6 +44,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <NuqsAdapter>
           <SessionProvider>
             <QueryProvider>
             <SkipToContent />
@@ -65,6 +67,7 @@ export default function RootLayout({
             <Toaster richColors position="bottom-right" />
           </QueryProvider>
           </SessionProvider>
+          </NuqsAdapter>
         </ThemeProvider>
       </body>
     </html>
