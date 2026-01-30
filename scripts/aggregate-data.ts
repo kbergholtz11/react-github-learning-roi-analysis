@@ -54,7 +54,39 @@ function writeJSON(filename: string, data: unknown): void {
   console.log(`✅ Written ${filename}`);
 }
 
-// Parse array strings from CSV (e.g., "['ACTIONS', 'GHAS']")
+// Normalize certification names to consistent format
+const CERT_NAME_MAP: Record<string, string> = {
+  // Short codes → Full names
+  "ACTIONS": "GitHub Actions",
+  "ADMIN": "GitHub Administration", 
+  "GHAS": "GitHub Advanced Security",
+  "GHF": "GitHub Foundations",
+  "COPILOT": "GitHub Copilot",
+  // Already full names (normalize casing)
+  "GitHub Foundations": "GitHub Foundations",
+  "GitHub Actions": "GitHub Actions",
+  "GitHub Administration": "GitHub Administration",
+  "GitHub Advanced Security": "GitHub Advanced Security",
+  "GitHub Copilot": "GitHub Copilot",
+  "Copilot": "GitHub Copilot",
+  "Foundations": "GitHub Foundations",
+  "Actions": "GitHub Actions",
+  "Admin": "GitHub Administration",
+  "Advanced Security": "GitHub Advanced Security",
+};
+
+function normalizeCertName(name: string): string {
+  const trimmed = name.trim();
+  const upper = trimmed.toUpperCase();
+  // Check uppercase mapping first (for codes)
+  if (CERT_NAME_MAP[upper]) return CERT_NAME_MAP[upper];
+  // Check exact match
+  if (CERT_NAME_MAP[trimmed]) return CERT_NAME_MAP[trimmed];
+  // Return original if no mapping found
+  return trimmed;
+}
+
+// Parse array strings from CSV (e.g., "['ACTIONS', 'GHAS']") and normalize names
 function parseArrayString(str: string): string[] {
   if (!str || str === "" || str === "[]") return [];
   try {
@@ -63,7 +95,8 @@ function parseArrayString(str: string): string[] {
       .replace(/\[|\]/g, "")
       .split(",")
       .map((s) => s.trim().replace(/"/g, ""))
-      .filter((s) => s);
+      .filter((s) => s)
+      .map(normalizeCertName);
   } catch {
     return [];
   }
@@ -373,7 +406,7 @@ const topLearners = certifiedUsers
     user_handle: u.user_handle,
     learner_status: u.learner_status,
     journey_stage: u.journey_stage,
-    cert_product_focus: u.cert_product_focus,
+    cert_product_focus: normalizeCertName(u.cert_product_focus || ""),
     total_certs: u.total_certs,
     cert_titles: parseArrayString(u.cert_titles),
   }));
