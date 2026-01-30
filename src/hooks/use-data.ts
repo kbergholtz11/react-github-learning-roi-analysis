@@ -217,3 +217,156 @@ export function useTopSkilledLearners(limit = 10) {
     staleTime: 1000 * 60 * 5,
   });
 }
+
+// =============================================================================
+// Enrichment Data Hooks (Copilot, GitHub Activity, Skills Courses)
+// =============================================================================
+
+// Copilot metrics
+interface CopilotLanguage {
+  language: string;
+  users: number;
+  suggestions: number;
+  acceptances: number;
+  acceptanceRate: number;
+  linesAccepted: number;
+}
+
+interface CopilotInsights {
+  languages: CopilotLanguage[];
+  totals: {
+    totalLanguages: number;
+    totalSuggestions: number;
+    totalAcceptances: number;
+    avgAcceptanceRate: number;
+  };
+  topLanguages: string[];
+  generatedAt: string;
+}
+
+export function useCopilotInsights() {
+  return useQuery<CopilotInsights>({
+    queryKey: ["copilotInsights"],
+    queryFn: async () => {
+      const res = await fetch("/api/copilot");
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Failed to fetch Copilot insights");
+      }
+      return res.json();
+    },
+    staleTime: 1000 * 60 * 10,
+    retry: false, // Don't retry if data not available
+  });
+}
+
+// GitHub activity
+interface GitHubActivityData {
+  totalUsersWithActivity: number;
+  totals: {
+    commits: number;
+    prsOpened: number;
+    prsMerged: number;
+    issuesOpened: number;
+    codeReviews: number;
+  };
+  averages: {
+    commitsPerUser: number;
+    prsPerUser: number;
+    activityDays: number;
+  };
+  topContributors: Array<{
+    handle: string;
+    commits: number;
+    prsOpened: number;
+    codeReviews: number;
+  }>;
+  generatedAt: string;
+}
+
+export function useGitHubActivity() {
+  return useQuery<GitHubActivityData>({
+    queryKey: ["githubActivity"],
+    queryFn: async () => {
+      const res = await fetch("/api/activity");
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Failed to fetch GitHub activity");
+      }
+      return res.json();
+    },
+    staleTime: 1000 * 60 * 10,
+    retry: false,
+  });
+}
+
+// Skills courses
+interface SkillsCourseData {
+  totalCourses: number;
+  totalEnrollments: number;
+  uniqueLearners: number;
+  completedCourses: number;
+  completionRate: number;
+  byCategory: Array<{
+    category: string;
+    courses: number;
+    totalForks: number;
+    knownLearners: number;
+  }>;
+  popularCourses: Array<{
+    name: string;
+    category: string;
+    difficulty: string;
+    totalForks: number;
+    knownLearners: number;
+  }>;
+  topSkillLearners: Array<{
+    handle: string;
+    coursesStarted: number;
+    coursesCompleted: number;
+    categories: string[];
+  }>;
+  generatedAt: string;
+}
+
+export function useSkillsCourses() {
+  return useQuery<SkillsCourseData>({
+    queryKey: ["skillsCourses"],
+    queryFn: async () => {
+      const res = await fetch("/api/skills");
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Failed to fetch Skills courses");
+      }
+      return res.json();
+    },
+    staleTime: 1000 * 60 * 10,
+    retry: false,
+  });
+}
+
+// Combined enrichment data check
+interface EnrichmentStatus {
+  copilot: CopilotInsights | null;
+  githubActivity: GitHubActivityData | null;
+  skillsCourses: SkillsCourseData | null;
+  availableData: {
+    copilot: boolean;
+    githubActivity: boolean;
+    skillsCourses: boolean;
+  };
+  message: string;
+}
+
+export function useEnrichmentData() {
+  return useQuery<EnrichmentStatus>({
+    queryKey: ["enrichmentData"],
+    queryFn: async () => {
+      const res = await fetch("/api/enrichment");
+      if (!res.ok) throw new Error("Failed to fetch enrichment data");
+      return res.json();
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+}
+

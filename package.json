@@ -18,7 +18,11 @@
     "e2e:report": "playwright show-report",
     "aggregate-data": "npx tsx scripts/aggregate-data.ts",
     "sync-data": "npm run aggregate-data",
-    "predev": "npm run aggregate-data"
+    "predev": "npm run aggregate-data",
+    "fetch:copilot": "python3 scripts/fetch-copilot-metrics.py",
+    "fetch:activity": "python3 scripts/fetch-github-activity.py",
+    "fetch:skills": "python3 scripts/fetch-skills-progress.py",
+    "fetch:all": "npm run fetch:copilot && npm run fetch:activity && npm run fetch:skills && npm run aggregate-data"
   },
   "dependencies": {
     "@auth/core": "^0.41.0",

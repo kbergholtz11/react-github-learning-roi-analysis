@@ -167,11 +167,69 @@ interface LearningActivityRaw {
   learning_hours: number;
 }
 
-// Load data
+// New enrichment data types
+interface CopilotLanguageRaw {
+  language: string;
+  users: number;
+  suggestions: number;
+  acceptances: number;
+  acceptance_rate: number;
+  lines_suggested: number;
+  lines_accepted: number;
+}
+
+interface GitHubActivityRaw {
+  handle: string;
+  total_events: number;
+  commits: number;
+  commit_days: number;
+  prs_opened: number;
+  prs_merged: number;
+  issues_opened: number;
+  issues_closed: number;
+  code_reviews: number;
+  repos_contributed: number;
+  activity_days: number;
+}
+
+interface SkillsEnrollmentRaw {
+  handle: string;
+  course: string;
+  category: string;
+  difficulty: string;
+  fork_created: string;
+  has_activity: boolean;
+  likely_completed: boolean;
+  commit_count: number;
+}
+
+interface SkillsCourseRaw {
+  course: string;
+  repo: string;
+  category: string;
+  difficulty: string;
+  total_forks: number;
+  known_learners: number;
+  completed: number;
+}
+
+// Load core data
 const certifiedUsers = parseCSV<CertifiedUserRaw>("certified_users.csv");
 const unifiedUsers = parseCSV<UnifiedUserRaw>("unified_users.csv");
 const productUsage = parseCSV<ProductUsageRaw>("product_usage.csv");
 const learningActivity = parseCSV<LearningActivityRaw>("learning_activity.csv");
+
+// Load enrichment data (optional - may not exist yet)
+const copilotLanguages = parseCSV<CopilotLanguageRaw>("copilot_languages.csv");
+const githubActivity = parseCSV<GitHubActivityRaw>("github_activity.csv");
+const skillsEnrollments = parseCSV<SkillsEnrollmentRaw>("skills_enrollments.csv");
+const skillsCourses = parseCSV<SkillsCourseRaw>("skills_courses.csv");
+
+// Log enrichment data status
+if (copilotLanguages.length > 0) console.log(`🤖 Copilot language data: ${copilotLanguages.length} languages`);
+if (githubActivity.length > 0) console.log(`📊 GitHub activity data: ${githubActivity.length} users`);
+if (skillsEnrollments.length > 0) console.log(`🎓 Skills enrollments: ${skillsEnrollments.length} enrollments`);
+if (skillsCourses.length > 0) console.log(`📚 Skills courses: ${skillsCourses.length} courses`);
 
 console.log("\n📊 Aggregating metrics...\n");
 
@@ -763,6 +821,123 @@ writeJSON("summary.json", {
   generatedAt: new Date().toISOString(),
 });
 
+// === 9. Enrichment Data Aggregation (if available) ===
+
+// Copilot metrics aggregation
+if (copilotLanguages.length > 0) {
+  const copilotData = {
+    languages: copilotLanguages.map(l => ({
+      language: l.language,
+      users: l.users,
+      suggestions: l.suggestions,
+      acceptances: l.acceptances,
+      acceptanceRate: l.acceptance_rate,
+      linesAccepted: l.lines_accepted,
+    })),
+    totals: {
+      totalLanguages: copilotLanguages.length,
+      totalSuggestions: copilotLanguages.reduce((sum, l) => sum + (l.suggestions || 0), 0),
+      totalAcceptances: copilotLanguages.reduce((sum, l) => sum + (l.acceptances || 0), 0),
+      avgAcceptanceRate: copilotLanguages.length > 0
+        ? Math.round(copilotLanguages.reduce((sum, l) => sum + (l.acceptance_rate || 0), 0) / copilotLanguages.length * 10) / 10
+        : 0,
+    },
+    topLanguages: [...copilotLanguages]
+      .sort((a, b) => (b.acceptances || 0) - (a.acceptances || 0))
+      .slice(0, 10)
+      .map(l => l.language),
+  };
+  writeJSON("copilot-insights.json", { ...copilotData, generatedAt: new Date().toISOString() });
+  console.log("✅ Written copilot-insights.json");
+}
+
+// GitHub activity aggregation
+if (githubActivity.length > 0) {
+  const activityByHandle = new Map<string, GitHubActivityRaw>();
+  githubActivity.forEach(a => activityByHandle.set(a.handle?.toLowerCase(), a));
+  
+  const activityData = {
+    totalUsersWithActivity: githubActivity.length,
+    totals: {
+      commits: githubActivity.reduce((sum, a) => sum + (a.commits || 0), 0),
+      prsOpened: githubActivity.reduce((sum, a) => sum + (a.prs_opened || 0), 0),
+      prsMerged: githubActivity.reduce((sum, a) => sum + (a.prs_merged || 0), 0),
+      issuesOpened: githubActivity.reduce((sum, a) => sum + (a.issues_opened || 0), 0),
+      codeReviews: githubActivity.reduce((sum, a) => sum + (a.code_reviews || 0), 0),
+    },
+    averages: {
+      commitsPerUser: Math.round(githubActivity.reduce((sum, a) => sum + (a.commits || 0), 0) / githubActivity.length),
+      prsPerUser: Math.round(githubActivity.reduce((sum, a) => sum + (a.prs_opened || 0), 0) / githubActivity.length * 10) / 10,
+      activityDays: Math.round(githubActivity.reduce((sum, a) => sum + (a.activity_days || 0), 0) / githubActivity.length),
+    },
+    topContributors: [...githubActivity]
+      .sort((a, b) => (b.commits || 0) - (a.commits || 0))
+      .slice(0, 20)
+      .map(a => ({
+        handle: a.handle,
+        commits: a.commits,
+        prsOpened: a.prs_opened,
+        codeReviews: a.code_reviews,
+      })),
+  };
+  writeJSON("github-activity.json", { ...activityData, generatedAt: new Date().toISOString() });
+  console.log("✅ Written github-activity.json");
+}
+
+// Skills courses aggregation
+if (skillsCourses.length > 0 || skillsEnrollments.length > 0) {
+  // Group courses by category
+  const coursesByCategory = skillsCourses.reduce((acc, c) => {
+    if (!acc[c.category]) acc[c.category] = [];
+    acc[c.category].push(c);
+    return acc;
+  }, {} as Record<string, SkillsCourseRaw[]>);
+  
+  // Group enrollments by user
+  const enrollmentsByUser = skillsEnrollments.reduce((acc, e) => {
+    if (!acc[e.handle]) acc[e.handle] = [];
+    acc[e.handle].push(e);
+    return acc;
+  }, {} as Record<string, SkillsEnrollmentRaw[]>);
+  
+  const skillsData = {
+    totalCourses: skillsCourses.length,
+    totalEnrollments: skillsEnrollments.length,
+    uniqueLearners: Object.keys(enrollmentsByUser).length,
+    completedCourses: skillsEnrollments.filter(e => e.likely_completed).length,
+    completionRate: skillsEnrollments.length > 0
+      ? Math.round(skillsEnrollments.filter(e => e.likely_completed).length / skillsEnrollments.length * 1000) / 10
+      : 0,
+    byCategory: Object.entries(coursesByCategory).map(([category, courses]) => ({
+      category,
+      courses: courses.length,
+      totalForks: courses.reduce((sum, c) => sum + (c.total_forks || 0), 0),
+      knownLearners: courses.reduce((sum, c) => sum + (c.known_learners || 0), 0),
+    })),
+    popularCourses: [...skillsCourses]
+      .sort((a, b) => (b.total_forks || 0) - (a.total_forks || 0))
+      .slice(0, 10)
+      .map(c => ({
+        name: c.course,
+        category: c.category,
+        difficulty: c.difficulty,
+        totalForks: c.total_forks,
+        knownLearners: c.known_learners,
+      })),
+    topSkillLearners: Object.entries(enrollmentsByUser)
+      .map(([handle, enrollments]) => ({
+        handle,
+        coursesStarted: enrollments.length,
+        coursesCompleted: enrollments.filter(e => e.likely_completed).length,
+        categories: [...new Set(enrollments.map(e => e.category))],
+      }))
+      .sort((a, b) => b.coursesCompleted - a.coursesCompleted)
+      .slice(0, 20),
+  };
+  writeJSON("skills-learning.json", { ...skillsData, generatedAt: new Date().toISOString() });
+  console.log("✅ Written skills-learning.json");
+}
+
 console.log("\n✨ Data aggregation complete!\n");
 console.log("Summary:");
 console.log(`  📊 Total Learners: ${totalLearners.toLocaleString()}`);
@@ -772,4 +947,15 @@ console.log(`  📚 Learning: ${learningCount.toLocaleString()}`);
 console.log(`  👀 Prospects: ${statusCounts["Prospect"].toLocaleString()}`);
 console.log(`  ⏱️  Usage Increase: ${usageIncrease}%`);
 console.log(`  🎯 Impact Score: ${impactScore}/100`);
+
+// Log enrichment stats
+if (copilotLanguages.length > 0) {
+  console.log(`  🤖 Copilot Languages: ${copilotLanguages.length}`);
+}
+if (githubActivity.length > 0) {
+  console.log(`  📊 GitHub Activity Users: ${githubActivity.length}`);
+}
+if (skillsEnrollments.length > 0) {
+  console.log(`  🎓 Skills Enrollments: ${skillsEnrollments.length}`);
+}
 console.log("");
