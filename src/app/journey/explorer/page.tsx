@@ -1,16 +1,19 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Download, ChevronLeft, ChevronRight, X, AlertCircle, Users, Loader2 } from "lucide-react";
+import { Search, Download, ChevronLeft, ChevronRight, X, AlertCircle, Users, Loader2, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { useUrlParams } from "@/hooks/use-url-params";
 import { useLearners } from "@/hooks/use-data";
 import type { LearnerStatus, CertifiedUser, UnifiedUser } from "@/types/data";
+
+type SortField = "handle" | "status" | "certs" | "focus" | "id";
+type SortOrder = "asc" | "desc";
 
 const statusColors: Record<string, string> = {
   Champion: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
@@ -60,6 +63,10 @@ export default function LearnerExplorerPage() {
     page: 1,
     status: "" as LearnerStatus | "",
   });
+
+  // Sorting state
+  const [sortField, setSortField] = useState<SortField>("handle");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
 
   // Local state for immediate input feedback
   const [localSearch, setLocalSearch] = useState(params.search);
@@ -118,6 +125,67 @@ export default function LearnerExplorerPage() {
     if ("total_passed" in user) return user.total_passed;
     return 0;
   };
+
+  const getProductFocus = (user: CertifiedUser | UnifiedUser): string => {
+    return "cert_product_focus" in user ? user.cert_product_focus || "" : "";
+  };
+
+  // Toggle sort
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortOrder("asc");
+    }
+  };
+
+  // Sort icon component
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) {
+      return <ArrowUpDown className="h-4 w-4 ml-1 opacity-50" />;
+    }
+    return sortOrder === "asc" 
+      ? <ArrowUp className="h-4 w-4 ml-1" />
+      : <ArrowDown className="h-4 w-4 ml-1" />;
+  };
+
+  // Sort learners
+  const sortedLearners = useMemo(() => {
+    return [...learners].sort((a, b) => {
+      let aVal: string | number;
+      let bVal: string | number;
+      
+      switch (sortField) {
+        case "handle":
+          aVal = getHandle(a).toLowerCase();
+          bVal = getHandle(b).toLowerCase();
+          break;
+        case "status":
+          aVal = a.learner_status || "";
+          bVal = b.learner_status || "";
+          break;
+        case "certs":
+          aVal = getCerts(a);
+          bVal = getCerts(b);
+          break;
+        case "focus":
+          aVal = getProductFocus(a).toLowerCase();
+          bVal = getProductFocus(b).toLowerCase();
+          break;
+        case "id":
+          aVal = a.dotcom_id || 0;
+          bVal = b.dotcom_id || 0;
+          break;
+        default:
+          return 0;
+      }
+      
+      if (aVal < bVal) return sortOrder === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortOrder === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [learners, sortField, sortOrder]);
 
   return (
     <div className="space-y-6">
@@ -198,16 +266,40 @@ export default function LearnerExplorerPage() {
           ) : (
             <div className="rounded-md border">
               <div className="grid grid-cols-12 gap-4 p-4 bg-muted/50 text-sm font-medium border-b">
-                <div className="col-span-3">Email</div>
-                <div className="col-span-2">Username</div>
-                <div className="col-span-2">Status</div>
-                <div className="col-span-2">Certifications</div>
-                <div className="col-span-2">Product Focus</div>
-                <div className="col-span-1">ID</div>
+                <button 
+                  className="col-span-3 flex items-center hover:text-foreground transition-colors text-left"
+                  onClick={() => handleSort("handle")}
+                >
+                  Handle <SortIcon field="handle" />
+                </button>
+                <button 
+                  className="col-span-2 flex items-center hover:text-foreground transition-colors text-left"
+                  onClick={() => handleSort("status")}
+                >
+                  Status <SortIcon field="status" />
+                </button>
+                <button 
+                  className="col-span-2 flex items-center hover:text-foreground transition-colors text-left"
+                  onClick={() => handleSort("certs")}
+                >
+                  Certifications <SortIcon field="certs" />
+                </button>
+                <button 
+                  className="col-span-3 flex items-center hover:text-foreground transition-colors text-left"
+                  onClick={() => handleSort("focus")}
+                >
+                  Product Focus <SortIcon field="focus" />
+                </button>
+                <button 
+                  className="col-span-2 flex items-center hover:text-foreground transition-colors text-left"
+                  onClick={() => handleSort("id")}
+                >
+                  ID <SortIcon field="id" />
+                </button>
               </div>
-              {learners.map((learner, idx) => (
+              {sortedLearners.map((learner, idx) => (
                 <div
-                  key={`${getEmail(learner)}-${idx}`}
+                  key={`${getHandle(learner) || getEmail(learner)}-${idx}`}
                   className="grid grid-cols-12 gap-4 p-4 items-center border-b last:border-0 hover:bg-muted/30 transition-colors cursor-pointer"
                   onClick={() => router.push(`/journey/profile?email=${encodeURIComponent(getEmail(learner))}`)}
                   role="button"
@@ -215,10 +307,7 @@ export default function LearnerExplorerPage() {
                   onKeyDown={(e) => e.key === 'Enter' && router.push(`/journey/profile?email=${encodeURIComponent(getEmail(learner))}`)}
                 >
                   <div className="col-span-3 truncate">
-                    <span className="font-medium">{getEmail(learner) || "—"}</span>
-                  </div>
-                  <div className="col-span-2 truncate text-muted-foreground">
-                    {getHandle(learner) ? `@${getHandle(learner)}` : "—"}
+                    <span className="font-medium">{getHandle(learner) || "—"}</span>
                   </div>
                   <div className="col-span-2">
                     <Badge className={getStatusColor(learner.learner_status)}>
@@ -229,10 +318,10 @@ export default function LearnerExplorerPage() {
                     <span className="font-semibold">{getCerts(learner)}</span>
                     <span className="text-muted-foreground text-sm ml-1">passed</span>
                   </div>
-                  <div className="col-span-2 truncate text-sm text-muted-foreground">
-                    {"cert_product_focus" in learner ? learner.cert_product_focus : "—"}
+                  <div className="col-span-3 truncate text-sm text-muted-foreground">
+                    {getProductFocus(learner) || "—"}
                   </div>
-                  <div className="col-span-1 text-sm text-muted-foreground">
+                  <div className="col-span-2 text-sm text-muted-foreground">
                     {learner.dotcom_id > 0 ? learner.dotcom_id : "—"}
                   </div>
                 </div>
