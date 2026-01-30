@@ -6,20 +6,24 @@ Run with: uvicorn app.main:app --reload
 """
 
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from app.config import get_settings
 from app.routes import metrics, learners, journey, impact, query, copilot
+from app.middleware.rate_limit import limiter, RateLimitMiddleware
+from app.middleware.logging import LoggingMiddleware, setup_logging, ErrorTracker
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
+# Configure structured logging
+# Use JSON format in production (when not in DEBUG mode)
+is_production = os.environ.get("ENV", "development") == "production"
+setup_logging(json_format=is_production, level="INFO")
 logger = logging.getLogger(__name__)
 
 
@@ -78,15 +82,37 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add logging middleware (must be before rate limiting)
+app.add_middleware(LoggingMiddleware, exclude_paths=["/health", "/favicon.ico"])
+
+# Add rate limiting middleware
+app.add_middleware(RateLimitMiddleware)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 
 # Global exception handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    """Handle unexpected exceptions."""
-    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    """Handle unexpected exceptions with error tracking."""
+    # Track error for monitoring
+    error_tracker = ErrorTracker.get_instance()
+    error_id = error_tracker.track(
+        exc,
+        context={
+            "path": str(request.url.path),
+            "method": request.method,
+            "query_params": str(request.query_params),
+        }
+    )
+    
+    logger.error(f"Unhandled exception [{error_id}]: {exc}", exc_info=True)
     return JSONResponse(
         status_code=500,
-        content={"detail": "An unexpected error occurred"},
+        content={
+            "detail": "An unexpected error occurred",
+            "error_id": error_id,
+        },
     )
 
 
@@ -121,6 +147,29 @@ async def root():
         "version": "1.0.0",
         "docs": "/docs",
         "health": "/health",
+    }
+
+
+# Monitoring endpoints
+@app.get("/api/monitoring/errors")
+async def get_error_stats():
+    """
+    Get error statistics for monitoring.
+    
+    Returns aggregated error information.
+    """
+    error_tracker = ErrorTracker.get_instance()
+    return {
+        "stats": error_tracker.get_error_stats(),
+        "recent_errors": [
+            {
+                "id": e["id"],
+                "type": e["type"],
+                "message": e["message"],
+                "timestamp": e["timestamp"],
+            }
+            for e in error_tracker.get_recent_errors(5)
+        ],
     }
 
 
