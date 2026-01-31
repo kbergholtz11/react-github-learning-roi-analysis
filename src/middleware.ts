@@ -8,9 +8,8 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - public folder
-     * - api/auth (auth API routes)
-     * - api/learners (learner API routes for internal use)
+     * - api routes (all API routes for data access)
      */
-    "/((?!_next/static|_next/image|favicon.ico|public|api/auth|api/learners).*)",
+    "/((?!_next/static|_next/image|favicon.ico|public|api).*)",
   ],
 };
