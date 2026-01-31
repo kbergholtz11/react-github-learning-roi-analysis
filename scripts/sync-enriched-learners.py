@@ -395,12 +395,14 @@ by email
 """
 
 # Query 4: User Demographics from accounts_all
-# NOTE: This query is now parameterized with dotcom_ids from the combined learner set (Query 1)
-# instead of re-filtering to ace.users, which lost ~30% of learners.
-QUERY_4_USER_DEMOGRAPHICS_TEMPLATE = """
-// Get user demographics for learners
-// Uses dotcom_ids from the combined enriched set (not re-filtered to ace.users)
-let learner_ids = datatable(dotcom_id: long) [{dotcom_ids}];
+# Uses cross-cluster join to ace.users to get learner dotcom_ids
+QUERY_4_USER_DEMOGRAPHICS = """
+// Get user demographics for ACE learners via cross-cluster join
+let learner_ids = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').users
+    | where isnotempty(dotcomid) and dotcomid != ""
+    | extend dotcom_id = tolong(dotcomid)
+    | where dotcom_id > 0
+    | distinct dotcom_id;
 
 accounts_all
 | where account_type == "User"
@@ -428,11 +430,14 @@ accounts_all
 """
 
 # Query 5: Org Enrichment from relationships + account_hierarchy_dotcom + enterprise
-# NOTE: Now parameterized with dotcom_ids from the combined learner set
-QUERY_5_ORG_ENRICHMENT_TEMPLATE = """
+# Uses cross-cluster join to ace.users
+QUERY_5_ORG_ENRICHMENT = """
 // Get org enrichment for learners via relationships
-// Uses dotcom_ids from the combined enriched set (not re-filtered to ace.users)
-let learner_ids = datatable(dotcom_id: long) [{dotcom_ids}];
+let learner_ids = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').users
+    | where isnotempty(dotcomid) and dotcomid != ""
+    | extend dotcom_id = tolong(dotcomid)
+    | where dotcom_id > 0
+    | distinct dotcom_id;
 
 // Get user-to-org relationships
 let user_orgs = relationships_all
@@ -481,11 +486,14 @@ by child_dotcom_id
 # Query 6 removed - enterprise_customer_name now obtained in Query 5 via org's enterprise_account_id
 
 # Query 7: Product Usage from user_daily_activity_per_product (90-day window)
-# NOTE: Now parameterized with dotcom_ids from the combined learner set
-QUERY_7_PRODUCT_USAGE_TEMPLATE = """
+# Uses cross-cluster join to ace.users
+QUERY_7_PRODUCT_USAGE = """
 // Get product usage for learners (last 90 days to avoid timeout)
-// Uses dotcom_ids from the combined enriched set (not re-filtered to ace.users)
-let learner_ids = datatable(dotcom_id: long) [{dotcom_ids}];
+let learner_ids = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').users
+    | where isnotempty(dotcomid) and dotcomid != ""
+    | extend dotcom_id = tolong(dotcomid)
+    | where dotcom_id > 0
+    | distinct dotcom_id;
 
 user_daily_activity_per_product
 | where day >= ago(90d)
@@ -632,12 +640,12 @@ def main():
         log("DRY RUN MODE - Showing queries only", "warning")
         print("\n=== Query 1: ACE Learners ===")
         print(QUERY_1_ACE_LEARNERS[:500] + "...")
-        print("\n=== Query 4: User Demographics (template) ===")
-        print(QUERY_4_USER_DEMOGRAPHICS_TEMPLATE[:500] + "...")
-        print("\n=== Query 5: Org Enrichment (template) ===")
-        print(QUERY_5_ORG_ENRICHMENT_TEMPLATE[:500] + "...")
-        print("\n=== Query 7: Product Usage (template) ===")
-        print(QUERY_7_PRODUCT_USAGE_TEMPLATE[:500] + "...")
+        print("\n=== Query 4: User Demographics ===")
+        print(QUERY_4_USER_DEMOGRAPHICS[:500] + "...")
+        print("\n=== Query 5: Org Enrichment ===")
+        print(QUERY_5_ORG_ENRICHMENT[:500] + "...")
+        print("\n=== Query 7: Product Usage ===")
+        print(QUERY_7_PRODUCT_USAGE[:500] + "...")
         return
 
     # Initialize clients
@@ -664,14 +672,9 @@ def main():
         sys.exit(1)
     update_sync_status("ace_learners", "success", len(df_ace))
 
-    # Get learner dotcom_ids for filtering other queries
-    learner_ids = df_ace[df_ace["dotcom_id"] > 0]["dotcom_id"].unique().tolist()
-    log(f"Found {len(learner_ids):,} learners with dotcom_id", "info")
-
-    # Build dotcom_ids string for parameterized query templates
-    # Kusto datatable format: each row is just the value
-    dotcom_ids_str = ",\n".join(str(int(did)) for did in learner_ids)
-    log(f"Built dotcom_ids parameter ({len(dotcom_ids_str):,} chars)", "info")
+    # Get count of learners with dotcom_id for info
+    learners_with_id = len(df_ace[df_ace["dotcom_id"] > 0])
+    log(f"Found {learners_with_id:,} learners with dotcom_id", "info")
 
     # Query 2: Skills/Learn Activity
     log("Query 2: Skills/Learn Activity...", "start")
@@ -695,20 +698,18 @@ def main():
         log("CSE client not available, skipping partner credentials", "warning")
         df_partner = pd.DataFrame()
 
-    # Query 4: User Demographics (parameterized with learner dotcom_ids)
+    # Query 4: User Demographics (uses cross-cluster join to ace.users)
     log("Query 4: User Demographics...", "start")
-    query_4 = QUERY_4_USER_DEMOGRAPHICS_TEMPLATE.format(dotcom_ids=dotcom_ids_str)
-    df_demographics = execute_query(gh_client, "canonical", query_4, "Demographics")
+    df_demographics = execute_query(gh_client, "canonical", QUERY_4_USER_DEMOGRAPHICS, "Demographics")
     if df_demographics is not None:
         update_sync_status("demographics", "success", len(df_demographics))
     else:
         df_demographics = pd.DataFrame()
         update_sync_status("demographics", "failed", 0, "Query failed")
 
-    # Query 5: Org Enrichment (parameterized with learner dotcom_ids)
+    # Query 5: Org Enrichment (uses cross-cluster join to ace.users)
     log("Query 5: Org Enrichment...", "start")
-    query_5 = QUERY_5_ORG_ENRICHMENT_TEMPLATE.format(dotcom_ids=dotcom_ids_str)
-    df_org = execute_query(gh_client, "canonical", query_5, "Org Enrichment")
+    df_org = execute_query(gh_client, "canonical", QUERY_5_ORG_ENRICHMENT, "Org Enrichment")
     if df_org is not None:
         update_sync_status("org_enrichment", "success", len(df_org))
     else:
@@ -717,10 +718,9 @@ def main():
 
     # Query 6: Removed - enterprise_customer_name now in Query 5
 
-    # Query 7: Product Usage (parameterized with learner dotcom_ids)
+    # Query 7: Product Usage (uses cross-cluster join to ace.users)
     log("Query 7: Product Usage (90-day window)...", "start")
-    query_7 = QUERY_7_PRODUCT_USAGE_TEMPLATE.format(dotcom_ids=dotcom_ids_str)
-    df_usage = execute_query(gh_client, "canonical", query_7, "Product Usage")
+    df_usage = execute_query(gh_client, "canonical", QUERY_7_PRODUCT_USAGE, "Product Usage")
     if df_usage is not None:
         update_sync_status("product_usage", "success", len(df_usage))
     else:
@@ -777,6 +777,101 @@ def main():
     # Derive region from country
     df["region"] = df["country"].apply(derive_region)
 
+    # ==========================================================================
+    # Data Quality Scoring
+    # ==========================================================================
+    log("Calculating data quality scores...", "start")
+    
+    def calculate_quality_score(row: pd.Series) -> dict:
+        """
+        Calculate data quality score (0-100) based on completeness.
+        Returns dict with score and breakdown.
+        """
+        weights = {
+            # Core identity (40 points)
+            "email": 10,
+            "userhandle": 10,
+            "dotcom_id": 10,
+            "country": 10,
+            # Company attribution (25 points)
+            "company_name": 15,
+            "company_source_verified": 10,  # enterprise_billing or org_billing
+            # Learning activity (20 points)
+            "exams_passed": 5,
+            "skills_page_views": 5,
+            "learn_page_views": 5,
+            "partner_certs": 5,
+            # Product usage (15 points)
+            "copilot_days": 5,
+            "actions_days": 5,
+            "total_active_days": 5,
+        }
+        
+        score = 0
+        breakdown = {}
+        
+        # Core identity
+        if pd.notna(row.get("email")) and row.get("email"):
+            score += weights["email"]
+            breakdown["email"] = True
+        if pd.notna(row.get("userhandle")) and row.get("userhandle"):
+            score += weights["userhandle"]
+            breakdown["userhandle"] = True
+        if pd.notna(row.get("dotcom_id")) and row.get("dotcom_id", 0) > 0:
+            score += weights["dotcom_id"]
+            breakdown["dotcom_id"] = True
+        if pd.notna(row.get("country")) and row.get("country"):
+            score += weights["country"]
+            breakdown["country"] = True
+            
+        # Company attribution
+        if pd.notna(row.get("company_name")) and row.get("company_name"):
+            score += weights["company_name"]
+            breakdown["company_name"] = True
+        if row.get("company_source") in ("enterprise_billing", "org_billing"):
+            score += weights["company_source_verified"]
+            breakdown["company_verified"] = True
+            
+        # Learning activity
+        if row.get("exams_passed", 0) > 0:
+            score += weights["exams_passed"]
+            breakdown["certified"] = True
+        if row.get("skills_page_views", 0) > 0:
+            score += weights["skills_page_views"]
+            breakdown["skills_activity"] = True
+        if row.get("learn_page_views", 0) > 0:
+            score += weights["learn_page_views"]
+            breakdown["learn_activity"] = True
+        if row.get("partner_certs", 0) > 0:
+            score += weights["partner_certs"]
+            breakdown["partner_certs"] = True
+            
+        # Product usage
+        if row.get("copilot_days", 0) > 0:
+            score += weights["copilot_days"]
+            breakdown["copilot_usage"] = True
+        if row.get("actions_days", 0) > 0:
+            score += weights["actions_days"]
+            breakdown["actions_usage"] = True
+        if row.get("total_active_days", 0) > 0:
+            score += weights["total_active_days"]
+            breakdown["product_usage"] = True
+            
+        return {"score": score, "breakdown": breakdown}
+    
+    # Calculate quality scores
+    quality_results = df.apply(calculate_quality_score, axis=1)
+    df["data_quality_score"] = quality_results.apply(lambda x: x["score"])
+    
+    # Categorize quality level
+    df["data_quality_level"] = df["data_quality_score"].apply(
+        lambda x: "high" if x >= 70 else "medium" if x >= 40 else "low"
+    )
+    
+    quality_dist = df["data_quality_level"].value_counts()
+    avg_score = df["data_quality_score"].mean()
+    log(f"Data quality - Avg: {avg_score:.1f}, High: {quality_dist.get('high', 0):,}, Med: {quality_dist.get('medium', 0):,}, Low: {quality_dist.get('low', 0):,}", "info")
+
     # Fill NaN for boolean fields
     bool_cols = [
         "is_staff", "is_spammy", "is_suspended", "is_disabled",
@@ -807,7 +902,10 @@ def main():
     # Filter out excluded users
     # ==========================================================================
     original_count = len(df)
-    df = df[~(df.get("is_staff", False) | df.get("is_spammy", False))]
+    # Safely check for is_staff and is_spammy columns
+    is_staff = df["is_staff"] if "is_staff" in df.columns else pd.Series([False] * len(df))
+    is_spammy = df["is_spammy"] if "is_spammy" in df.columns else pd.Series([False] * len(df))
+    df = df[~(is_staff.fillna(False) | is_spammy.fillna(False))]
     excluded_count = original_count - len(df)
     if excluded_count > 0:
         log(f"Excluded {excluded_count:,} staff/spammy users", "info")
@@ -849,6 +947,28 @@ def main():
     log("Company source breakdown:", "info")
     for source, count in df["company_source"].value_counts().items():
         log(f"  {source}: {count:,} ({100*count/len(df):.1f}%)", "info")
+
+    # Data quality breakdown
+    if "data_quality_level" in df.columns:
+        log("Data quality breakdown:", "info")
+        for level, count in df["data_quality_level"].value_counts().items():
+            log(f"  {level}: {count:,} ({100*count/len(df):.1f}%)", "info")
+        avg_score = df["data_quality_score"].mean()
+        log(f"Average data quality score: {avg_score:.1f}", "info")
+
+    # Final sync status update with overall timing
+    sync_end_time = datetime.now()
+    status_data = {}
+    if SYNC_STATUS_FILE.exists():
+        with open(SYNC_STATUS_FILE) as f:
+            status_data = json.load(f)
+    
+    status_data["last_sync"] = sync_end_time.isoformat()
+    status_data["records_synced"] = len(df)
+    status_data["sync_status"] = "success"
+    
+    with open(SYNC_STATUS_FILE, "w") as f:
+        json.dump(status_data, f, indent=2)
 
     log("Enrichment sync complete!", "success")
 

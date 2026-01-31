@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
+import { proxyToBackend, backendEndpoints } from "@/lib/backend-proxy";
 
 // Read pre-aggregated JSON (instant load, ~<10ms)
 function getAggregatedData(filename: string) {
@@ -13,7 +14,16 @@ function getAggregatedData(filename: string) {
 
 export async function GET() {
   try {
-    // Read from pre-aggregated JSON files (instant response)
+    // Try FastAPI backend first (real Kusto data with product usage)
+    const backendData = await proxyToBackend(backendEndpoints.impact);
+    if (backendData) {
+      return NextResponse.json({
+        ...backendData,
+        source: "kusto",
+      });
+    }
+
+    // Fall back to pre-aggregated JSON files
     const impactData = getAggregatedData("impact.json");
     
     if (!impactData) {
@@ -31,6 +41,7 @@ export async function GET() {
       roiBreakdown: impactData.roiBreakdown,
       metrics: impactData.metrics,
       generatedAt: impactData.generatedAt,
+      source: "aggregated",
     });
   } catch (error) {
     console.error("Error fetching impact data:", error);

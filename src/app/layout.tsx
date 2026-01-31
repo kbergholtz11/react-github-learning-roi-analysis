@@ -12,6 +12,7 @@ import { QueryProvider } from "@/components/query-provider";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { SkipToContent } from "@/lib/accessibility";
 import { SessionProvider } from "@/components/auth";
+import { GlobalStatusBar } from "@/components/global-status-bar";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -53,7 +54,8 @@ export default function RootLayout({
               <SidebarInset>
                 <header className="flex h-14 items-center gap-4 border-b bg-background px-6 lg:hidden">
                   <SidebarTrigger aria-label="Toggle navigation sidebar" />
-                  <span className="font-semibold">Learning Journey Analytics</span>
+                  <span className="font-semibold flex-1">Learning Journey Analytics</span>
+                  <GlobalStatusBar />
                 </header>
                 <main id="main-content" className="flex-1 p-6 bg-muted/40" role="main" tabIndex={-1}>
                   <Breadcrumbs />

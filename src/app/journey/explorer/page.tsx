@@ -7,12 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Download, ChevronLeft, ChevronRight, X, AlertCircle, Users, Loader2, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Search, Download, ChevronLeft, ChevronRight, X, AlertCircle, Users, Loader2, ArrowUpDown, ArrowUp, ArrowDown, Sparkles, Shield } from "lucide-react";
 import { useUrlParams } from "@/hooks/use-url-params";
 import { useLearners } from "@/hooks/use-data";
-import type { LearnerStatus, CertifiedUser, UnifiedUser } from "@/types/data";
+import { DataQualityBadge, DataQualityDot } from "@/components/ui/data-quality-badge";
+import type { LearnerStatus, CertifiedUser, UnifiedUser, DataQualityLevel } from "@/types/data";
 
-type SortField = "handle" | "status" | "certs" | "focus" | "id";
+type SortField = "handle" | "status" | "certs" | "focus" | "id" | "quality";
 type SortOrder = "asc" | "desc";
 
 const statusColors: Record<string, string> = {
@@ -126,6 +127,29 @@ export default function LearnerExplorerPage() {
     return "cert_product_focus" in user ? user.cert_product_focus || "" : "";
   };
 
+  // Get data quality from enriched learner (if available)
+  const getDataQuality = (user: CertifiedUser | UnifiedUser): { score: number; level: DataQualityLevel } => {
+    // Check if user has enriched data quality fields
+    if ("data_quality_score" in user && "data_quality_level" in user) {
+      return {
+        score: (user as unknown as { data_quality_score: number }).data_quality_score,
+        level: (user as unknown as { data_quality_level: DataQualityLevel }).data_quality_level,
+      };
+    }
+    // Default for non-enriched users
+    return { score: 0, level: "low" };
+  };
+
+  // Check if user uses Copilot
+  const usesCopilot = (user: CertifiedUser | UnifiedUser): boolean => {
+    return "uses_copilot" in user && (user as unknown as { uses_copilot: boolean }).uses_copilot;
+  };
+
+  // Check if user uses Actions
+  const usesActions = (user: CertifiedUser | UnifiedUser): boolean => {
+    return "uses_actions" in user && (user as unknown as { uses_actions: boolean }).uses_actions;
+  };
+
   // Toggle sort
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -172,6 +196,10 @@ export default function LearnerExplorerPage() {
         case "id":
           aVal = a.dotcom_id || 0;
           bVal = b.dotcom_id || 0;
+          break;
+        case "quality":
+          aVal = getDataQuality(a).score;
+          bVal = getDataQuality(b).score;
           break;
         default:
           return 0;
@@ -269,7 +297,7 @@ export default function LearnerExplorerPage() {
             <div className="rounded-md border">
               <div className="grid grid-cols-12 gap-4 p-4 bg-muted/50 text-sm font-medium border-b">
                 <button 
-                  className="col-span-3 flex items-center hover:text-foreground transition-colors text-left"
+                  className="col-span-2 flex items-center hover:text-foreground transition-colors text-left"
                   onClick={() => handleSort("handle")}
                 >
                   Handle <SortIcon field="handle" />
@@ -281,23 +309,33 @@ export default function LearnerExplorerPage() {
                   Status <SortIcon field="status" />
                 </button>
                 <button 
-                  className="col-span-2 flex items-center hover:text-foreground transition-colors text-left"
+                  className="col-span-1 flex items-center hover:text-foreground transition-colors text-left"
                   onClick={() => handleSort("certs")}
                 >
-                  Certifications <SortIcon field="certs" />
+                  Certs <SortIcon field="certs" />
                 </button>
+                <div className="col-span-2 flex items-center text-left">
+                  Products
+                </div>
                 <button 
-                  className="col-span-3 flex items-center hover:text-foreground transition-colors text-left"
+                  className="col-span-2 flex items-center hover:text-foreground transition-colors text-left"
                   onClick={() => handleSort("focus")}
                 >
-                  Product Focus <SortIcon field="focus" />
+                  Focus <SortIcon field="focus" />
                 </button>
                 <button 
                   className="col-span-2 flex items-center hover:text-foreground transition-colors text-left"
+                  onClick={() => handleSort("quality")}
+                >
+                  Quality <SortIcon field="quality" />
+                </button>
+                <button 
+                  className="col-span-1 flex items-center hover:text-foreground transition-colors text-left"
                   onClick={() => handleSort("id")}
                 >
                   ID <SortIcon field="id" />
                 </button>
+              </div>
               </div>
               {sortedLearners.map((learner, idx) => (
                 <div
@@ -308,7 +346,7 @@ export default function LearnerExplorerPage() {
                   tabIndex={0}
                   onKeyDown={(e) => e.key === 'Enter' && router.push(`/journey/profile?email=${encodeURIComponent(getEmail(learner))}`)}
                 >
-                  <div className="col-span-3 truncate">
+                  <div className="col-span-2 truncate">
                     <span className="font-medium">{getHandle(learner) || "—"}</span>
                   </div>
                   <div className="col-span-2">
@@ -316,14 +354,33 @@ export default function LearnerExplorerPage() {
                       {learner.learner_status}
                     </Badge>
                   </div>
-                  <div className="col-span-2">
+                  <div className="col-span-1">
                     <span className="font-semibold">{getCerts(learner)}</span>
-                    <span className="text-muted-foreground text-sm ml-1">passed</span>
                   </div>
-                  <div className="col-span-3 truncate text-sm text-muted-foreground">
+                  <div className="col-span-2 flex gap-1">
+                    {usesCopilot(learner) && (
+                      <Badge variant="outline" className="text-xs gap-1 bg-violet-50 dark:bg-violet-950 text-violet-700 dark:text-violet-300 border-violet-200">
+                        <Sparkles className="h-3 w-3" />
+                        Copilot
+                      </Badge>
+                    )}
+                    {usesActions(learner) && (
+                      <Badge variant="outline" className="text-xs gap-1 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-200">
+                        <Shield className="h-3 w-3" />
+                        Actions
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="col-span-2 truncate text-sm text-muted-foreground">
                     {getProductFocus(learner) || "—"}
                   </div>
-                  <div className="col-span-2 text-sm text-muted-foreground">
+                  <div className="col-span-2">
+                    <DataQualityBadge 
+                      score={getDataQuality(learner).score} 
+                      level={getDataQuality(learner).level} 
+                    />
+                  </div>
+                  <div className="col-span-1 text-sm text-muted-foreground">
                     {learner.dotcom_id > 0 ? learner.dotcom_id : "—"}
                   </div>
                 </div>

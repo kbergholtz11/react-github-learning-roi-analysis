@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import { getLearners } from "@/lib/data-service";
+import { proxyToBackend, backendEndpoints } from "@/lib/backend-proxy";
 import type { LearnerFilters, LearnerStatus } from "@/types/data";
 
 // Read pre-aggregated JSON (instant load, ~<10ms)
@@ -28,6 +29,33 @@ export async function GET(request: NextRequest) {
       page: parseInt(searchParams.get("page") || "1"),
       pageSize: parseInt(searchParams.get("pageSize") || "50"),
     };
+
+    // Try FastAPI backend first (enriched data with Kusto)
+    const backendParams = new URLSearchParams();
+    if (filters.search) backendParams.set("search", filters.search);
+    if (filters.learnerStatus && filters.learnerStatus !== "all") {
+      backendParams.set("status", filters.learnerStatus);
+    }
+    if (filters.isCertified !== "all") {
+      backendParams.set("is_certified", String(filters.isCertified));
+    }
+    backendParams.set("limit", String(filters.pageSize || 50));
+    backendParams.set("offset", String(((filters.page || 1) - 1) * (filters.pageSize || 50)));
+
+    const backendData = await proxyToBackend<{ learners: unknown[]; total: number }>(
+      `${backendEndpoints.learners}?${backendParams.toString()}`
+    );
+    
+    if (backendData && backendData.learners) {
+      return NextResponse.json({
+        learners: backendData.learners,
+        total: backendData.total,
+        page: filters.page || 1,
+        pageSize: filters.pageSize || 50,
+        totalPages: Math.ceil(backendData.total / (filters.pageSize || 50)),
+        source: "kusto",
+      });
+    }
 
     // For initial load without search, use pre-aggregated top learners (instant)
     if (!filters.search && filters.learnerStatus === "all" && filters.isCertified === "all" && filters.page === 1) {

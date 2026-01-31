@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
+import { proxyToBackend, backendEndpoints } from "@/lib/backend-proxy";
 
 function getAggregatedData(filename: string) {
   const filepath = join(process.cwd(), "data", "aggregated", filename);
@@ -12,25 +13,36 @@ function getAggregatedData(filename: string) {
 
 export async function GET() {
   try {
+    // Try FastAPI backend first (real Kusto data from copilot_unified_engagement)
+    const backendData = await proxyToBackend(backendEndpoints.copilotStats);
+    if (backendData) {
+      return NextResponse.json({
+        ...backendData,
+        source: "kusto",
+      });
+    }
+
+    // Fall back to aggregated JSON
     const copilotData = getAggregatedData("copilot-insights.json");
     
     if (!copilotData) {
       return NextResponse.json(
         { 
           error: "Copilot data not available",
-          message: "Run 'npm run fetch:copilot' to fetch Copilot metrics from GitHub API",
+          message: "Start FastAPI backend or run 'npm run aggregate-data'",
           instructions: [
-            "1. Set GITHUB_TOKEN environment variable",
-            "2. Set GITHUB_ORG environment variable",
-            "3. Run: npm run fetch:copilot",
-            "4. Run: npm run aggregate-data"
+            "Option 1: Start FastAPI backend: cd backend && uvicorn app.main:app --reload",
+            "Option 2: Run: npm run aggregate-data"
           ]
         },
         { status: 404 }
       );
     }
 
-    return NextResponse.json(copilotData);
+    return NextResponse.json({
+      ...copilotData,
+      source: "aggregated",
+    });
   } catch (error) {
     console.error("Error fetching copilot data:", error);
     return NextResponse.json(

@@ -5,12 +5,17 @@ Provides endpoints for querying enriched learner data with full
 company/demographics/product usage information.
 """
 
+import json
 import logging
+import os
+from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
 from app.database import get_database, LearnerQueries
+from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/enriched", tags=["enriched"])
@@ -275,4 +280,70 @@ async def reload_database() -> Dict[str, str]:
         
     except Exception as e:
         logger.error(f"Error reloading database: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/sync/status")
+async def get_sync_status() -> Dict[str, Any]:
+    """
+    Get status of the last data sync.
+    
+    Returns:
+        - last_sync: Timestamp of last successful sync
+        - sync_duration_seconds: How long the sync took
+        - records_synced: Number of records synced
+        - data_file_age_hours: Age of the data file in hours
+        - next_sync_scheduled: When next sync is scheduled (if cron is set up)
+    """
+    try:
+        settings = get_settings()
+        data_dir = settings.data_path
+        
+        # Check for sync status file (created by sync script)
+        sync_status_file = data_dir / "sync_status.json"
+        sync_status = {}
+        
+        if sync_status_file.exists():
+            with open(sync_status_file) as f:
+                sync_status = json.load(f)
+        
+        # Check parquet file age
+        parquet_file = data_dir / "learners_enriched.parquet"
+        parquet_age_hours = None
+        parquet_size_mb = None
+        
+        if parquet_file.exists():
+            file_stat = parquet_file.stat()
+            file_mtime = datetime.fromtimestamp(file_stat.st_mtime)
+            parquet_age_hours = round((datetime.now() - file_mtime).total_seconds() / 3600, 1)
+            parquet_size_mb = round(file_stat.st_size / (1024 * 1024), 1)
+        
+        # Check if cron job is set up
+        cron_status = "unknown"
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["crontab", "-l"], 
+                capture_output=True, 
+                text=True
+            )
+            if "sync-enriched-learners" in result.stdout or "run-sync.sh" in result.stdout:
+                cron_status = "active"
+            else:
+                cron_status = "not_configured"
+        except:
+            cron_status = "unknown"
+        
+        return {
+            "last_sync": sync_status.get("last_sync"),
+            "sync_duration_seconds": sync_status.get("sync_duration_seconds"),
+            "records_synced": sync_status.get("records_synced"),
+            "data_file_age_hours": parquet_age_hours,
+            "data_file_size_mb": parquet_size_mb,
+            "cron_status": cron_status,
+            "data_file_exists": parquet_file.exists(),
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting sync status: {e}")
         raise HTTPException(status_code=500, detail=str(e))

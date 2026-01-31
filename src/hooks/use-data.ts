@@ -1,5 +1,18 @@
 "use client";
 
+/**
+ * @deprecated This hook file is deprecated. Use `use-unified-data.ts` instead.
+ * The unified hooks provide:
+ * - Enriched learner data with data quality scores
+ * - Automatic FastAPI backend → Next.js fallback
+ * - Better TypeScript types
+ * 
+ * Migration guide:
+ * - useMetrics → useMetrics from use-unified-data.ts (same API)
+ * - useLearners → useEnrichedLearners for full enrichment
+ * - useCopilotInsights → useCopilotStats for live Kusto data
+ */
+
 import { useQuery } from "@tanstack/react-query";
 import type { 
   DashboardMetrics, 
@@ -9,6 +22,15 @@ import type {
   CertifiedUser,
   UnifiedUser,
 } from "@/types/data";
+
+// Deprecation warning helper
+const warnDeprecated = (hookName: string, replacement: string) => {
+  if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
+    console.warn(
+      `[DEPRECATED] ${hookName} is deprecated. Use ${replacement} from '@/hooks/use-unified-data' instead.`
+    );
+  }
+};
 
 // Dashboard metrics hook
 interface MetricsResponse {
@@ -23,7 +45,11 @@ interface MetricsResponse {
   };
 }
 
+/**
+ * @deprecated Use `useMetrics` from `@/hooks/use-unified-data` instead.
+ */
 export function useMetrics() {
+  warnDeprecated("useMetrics", "useMetrics");
   return useQuery<MetricsResponse>({
     queryKey: ["metrics"],
     queryFn: async () => {
@@ -43,7 +69,11 @@ interface LearnersResponse {
   pageSize: number;
 }
 
+/**
+ * @deprecated Use `useEnrichedLearners` from `@/hooks/use-unified-data` for full enrichment.
+ */
 export function useLearners(filters: LearnerFilters = {}) {
+  warnDeprecated("useLearners", "useEnrichedLearners");
   const params = new URLSearchParams();
   if (filters.search) params.set("search", filters.search);
   if (filters.learnerStatus && filters.learnerStatus !== "all") {
@@ -86,7 +116,11 @@ interface JourneyResponse {
   totalJourneyUsers: number;
 }
 
+/**
+ * @deprecated Use `useJourney` from `@/hooks/use-unified-data` instead.
+ */
 export function useJourney() {
+  warnDeprecated("useJourney", "useJourney");
   return useQuery<JourneyResponse>({
     queryKey: ["journey"],
     queryFn: async () => {
@@ -137,7 +171,11 @@ interface ImpactResponse {
   };
 }
 
+/**
+ * @deprecated Use `useImpact` from `@/hooks/use-unified-data` instead.
+ */
 export function useImpact() {
+  warnDeprecated("useImpact", "useImpact");
   return useQuery<ImpactResponse>({
     queryKey: ["impact"],
     queryFn: async () => {

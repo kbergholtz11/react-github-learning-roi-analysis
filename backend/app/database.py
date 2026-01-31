@@ -91,24 +91,52 @@ class LearnerDatabase:
         _ = self.conn
         return len(self._tables_loaded) > 0
 
-    def query(self, sql: str) -> List[Dict[str, Any]]:
+    def query(self, sql: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """
         Execute SQL query and return results as list of dicts.
         
         Args:
-            sql: SQL query string
+            sql: SQL query string with $param placeholders
+            params: Optional dict of parameter values for parameterized queries
             
         Returns:
             List of row dictionaries (with JSON-serializable types)
         """
         try:
-            result = self.conn.execute(sql).fetchdf()
+            if params:
+                result = self.conn.execute(sql, params).fetchdf()
+            else:
+                result = self.conn.execute(sql).fetchdf()
             records = result.to_dict("records")
             # Convert numpy types to native Python types for JSON serialization
             return [self._convert_numpy_types(record) for record in records]
         except Exception as e:
             logger.error(f"Query failed: {e}\nSQL: {sql[:200]}...")
             raise
+    
+    @staticmethod
+    def sanitize_string(value: str) -> str:
+        """
+        Sanitize a string value to prevent SQL injection.
+        Use parameterized queries when possible - this is a fallback.
+        """
+        if not isinstance(value, str):
+            return str(value)
+        # Remove or escape dangerous characters
+        # DuckDB uses single quotes for strings
+        return value.replace("'", "''").replace("\\", "\\\\").replace(";", "")
+    
+    @staticmethod
+    def sanitize_identifier(value: str) -> str:
+        """
+        Sanitize an identifier (column/table name).
+        Only allow alphanumeric and underscore.
+        """
+        import re
+        if not isinstance(value, str):
+            return ""
+        # Only allow alphanumeric and underscore
+        return re.sub(r'[^a-zA-Z0-9_]', '', value)
     
     def _convert_numpy_types(self, record: Dict[str, Any]) -> Dict[str, Any]:
         """Convert numpy types in a record to native Python types."""
@@ -196,6 +224,8 @@ class LearnerQueries:
         """
         Get learners with optional filters.
         
+        Uses sanitized inputs to prevent SQL injection.
+        
         Args:
             search: Search term for email/userhandle
             status: Filter by learner_status
@@ -214,18 +244,24 @@ class LearnerQueries:
         
         conditions = ["1=1"]
         
+        # Sanitize all string inputs to prevent SQL injection
         if search:
-            conditions.append(f"(email ILIKE '%{search}%' OR userhandle ILIKE '%{search}%')")
+            safe_search = db.sanitize_string(search)
+            conditions.append(f"(email ILIKE '%{safe_search}%' OR userhandle ILIKE '%{safe_search}%')")
         if status:
-            conditions.append(f"learner_status = '{status}'")
+            safe_status = db.sanitize_string(status)
+            conditions.append(f"learner_status = '{safe_status}'")
         if company:
-            conditions.append(f"company_name ILIKE '%{company}%'")
+            safe_company = db.sanitize_string(company)
+            conditions.append(f"company_name ILIKE '%{safe_company}%'")
         if country:
-            conditions.append(f"country = '{country}'")
+            safe_country = db.sanitize_string(country)
+            conditions.append(f"country = '{safe_country}'")
         if region:
-            conditions.append(f"region = '{region}'")
+            safe_region = db.sanitize_string(region)
+            conditions.append(f"region = '{safe_region}'")
         if uses_copilot is not None:
-            conditions.append(f"uses_copilot = {uses_copilot}")
+            conditions.append(f"uses_copilot = {bool(uses_copilot)}")
         if is_certified is not None:
             if is_certified:
                 conditions.append("exams_passed > 0")
@@ -234,35 +270,42 @@ class LearnerQueries:
 
         where_clause = " AND ".join(conditions)
         
+        # Sanitize numeric inputs
+        safe_limit = max(1, min(int(limit), 1000))  # Cap at 1000
+        safe_offset = max(0, int(offset))
+        
         sql = f"""
             SELECT *
             FROM learners_enriched
             WHERE {where_clause}
             ORDER BY exams_passed DESC, total_exams DESC
-            LIMIT {limit}
-            OFFSET {offset}
+            LIMIT {safe_limit}
+            OFFSET {safe_offset}
         """
         
         return db.query(sql)
 
     @staticmethod
     def get_learner_by_email(email: str) -> Optional[Dict]:
-        """Get a single learner by email."""
+        """Get a single learner by email (sanitized)."""
         db = get_database()
+        safe_email = db.sanitize_string(email.lower())
         results = db.query(f"""
             SELECT * FROM learners_enriched
-            WHERE email = '{email.lower()}'
+            WHERE email = '{safe_email}'
             LIMIT 1
         """)
         return results[0] if results else None
 
     @staticmethod
     def get_learner_by_dotcom_id(dotcom_id: int) -> Optional[Dict]:
-        """Get a single learner by dotcom_id."""
+        """Get a single learner by dotcom_id (type-safe)."""
         db = get_database()
+        # Ensure dotcom_id is an integer
+        safe_id = int(dotcom_id)
         results = db.query(f"""
             SELECT * FROM learners_enriched
-            WHERE dotcom_id = {dotcom_id}
+            WHERE dotcom_id = {safe_id}
             LIMIT 1
         """)
         return results[0] if results else None
@@ -322,8 +365,10 @@ class LearnerQueries:
 
     @staticmethod
     def get_top_companies(limit: int = 20) -> List[Dict]:
-        """Get top companies by learner count."""
+        """Get top companies by learner count (sanitized limit)."""
         db = get_database()
+        # Ensure limit is a safe integer
+        safe_limit = max(1, min(int(limit), 100))
         return db.query(f"""
             SELECT
                 company_name,
@@ -338,7 +383,7 @@ class LearnerQueries:
             WHERE company_name != ''
             GROUP BY company_name, company_source
             ORDER BY learner_count DESC
-            LIMIT {limit}
+            LIMIT {safe_limit}
         """)
 
     @staticmethod
@@ -360,8 +405,11 @@ class LearnerQueries:
 
     @staticmethod
     def search_learners(term: str, limit: int = 50) -> List[Dict]:
-        """Full-text search across multiple fields."""
+        """Full-text search across multiple fields (sanitized)."""
         db = get_database()
+        # Sanitize search term and limit
+        safe_term = db.sanitize_string(term)
+        safe_limit = max(1, min(int(limit), 200))
         return db.query(f"""
             SELECT 
                 email, userhandle, first_name, last_name,
@@ -369,13 +417,13 @@ class LearnerQueries:
                 learner_status, exams_passed, uses_copilot
             FROM learners_enriched
             WHERE 
-                email ILIKE '%{term}%'
-                OR userhandle ILIKE '%{term}%'
-                OR first_name ILIKE '%{term}%'
-                OR last_name ILIKE '%{term}%'
-                OR company_name ILIKE '%{term}%'
+                email ILIKE '%{safe_term}%'
+                OR userhandle ILIKE '%{safe_term}%'
+                OR first_name ILIKE '%{safe_term}%'
+                OR last_name ILIKE '%{safe_term}%'
+                OR company_name ILIKE '%{safe_term}%'
             ORDER BY exams_passed DESC
-            LIMIT {limit}
+            LIMIT {safe_limit}
         """)
 
     @staticmethod

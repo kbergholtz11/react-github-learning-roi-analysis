@@ -63,6 +63,111 @@ export interface UnifiedUser {
   learner_status: LearnerStatus;
 }
 
+// Data quality level - matches enrichment pipeline output
+export type DataQualityLevel = "high" | "medium" | "low";
+
+// Enriched Learner (from DuckDB/Parquet enriched data)
+export interface EnrichedLearner {
+  email: string;
+  dotcom_id: number;
+  userhandle: string;
+  first_name: string | null;
+  last_name: string | null;
+  job_role: string | null;
+  
+  // Company fields
+  exam_company: string | null;
+  exam_company_type: string | null;
+  ace_company: string | null;
+  ace_company_type: string | null;
+  company_name: string;
+  company_source: string;
+  
+  // Location fields
+  exam_country: string | null;
+  exam_region: string | null;
+  ace_country: string | null;
+  ace_region: string | null;
+  country: string | null;
+  region: string | null;
+  
+  // Certification fields
+  registration_date: boolean;
+  total_exams: number;
+  exams_passed: number;
+  first_exam: string | null;
+  last_exam: string | null;
+  cert_names: string[] | null;
+  exam_codes: string[] | null;
+  learner_status: LearnerStatus;
+  journey_stage: string;
+  
+  // Partner certs
+  partner_certs: number;
+  partner_cert_names: string | null;
+  partner_companies: string | null;
+  first_partner_cert: string | null;
+  last_partner_cert: string | null;
+  
+  // Events
+  events_registered: number;
+  first_event: string | null;
+  last_event: string | null;
+  
+  // Account flags
+  is_staff: boolean;
+  is_spammy: boolean;
+  is_suspended: boolean;
+  is_disabled: boolean;
+  is_paid: boolean;
+  is_dunning: boolean;
+  is_education: boolean;
+  plan: string | null;
+  billing_type: string | null;
+  billing_cycle: string | null;
+  
+  // Org data
+  org_msft_tpid: string | null;
+  org_msft_tpid_name: string | null;
+  org_customer_name: string | null;
+  enterprise_customer_name: string | null;
+  org_has_enterprise_agreements: boolean;
+  org_count: number;
+  
+  // Copilot usage
+  uses_copilot: boolean;
+  copilot_days: number;
+  copilot_engagement_events: number;
+  copilot_contribution_events: number;
+  copilot_products: string | null;
+  copilot_features: string | null;
+  
+  // Actions usage
+  uses_actions: boolean;
+  actions_days: number;
+  actions_engagement_events: number;
+  actions_contribution_events: number;
+  
+  // Security usage
+  uses_security: boolean;
+  security_days: number;
+  security_engagement_events: number;
+  
+  // Aggregate activity
+  total_active_days: number;
+  total_engagement_events: number;
+  total_contribution_events: number;
+  products_used: string | null;
+  features_used: string | null;
+  countries_active: string | null;
+  first_activity: string | null;
+  last_activity: string | null;
+  
+  // Data quality
+  data_quality_score: number;
+  data_quality_level: DataQualityLevel;
+}
+
 // Product Usage (from product_usage.csv)
 export interface ProductUsage {
   dotcom_id: number;
