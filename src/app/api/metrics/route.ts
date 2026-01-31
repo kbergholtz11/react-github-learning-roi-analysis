@@ -17,10 +17,12 @@ export async function GET() {
     // Try FastAPI backend first - use /api/metrics which includes statusBreakdown
     const backendData = await proxyToBackend<Record<string, unknown>>(backendEndpoints.metrics);
     if (backendData) {
-      // Backend /api/metrics returns the full response with metrics, status_breakdown, funnel
+      // Backend /api/metrics returns the full response with metrics, status_breakdown, funnel, certification_analytics
       const metrics = backendData.metrics as Record<string, unknown> || {};
       const statusBreakdown = backendData.status_breakdown as Array<{status: string; count: number; percentage: number}> || [];
       const funnel = backendData.funnel as Array<Record<string, unknown>> || [];
+      const certificationAnalytics = backendData.certification_analytics as Record<string, unknown> || null;
+      const productAdoption = backendData.product_adoption as Record<string, unknown> || null;
       
       return NextResponse.json({
         metrics: {
@@ -48,6 +50,8 @@ export async function GET() {
           percentage: s.percentage,
         })),
         funnel: funnel,
+        certificationAnalytics: certificationAnalytics,
+        productAdoption: productAdoption,
         source: "backend",
       });
     }

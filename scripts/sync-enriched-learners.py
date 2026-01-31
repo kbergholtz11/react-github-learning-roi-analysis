@@ -2,24 +2,66 @@
 """
 Comprehensive Learner Enrichment Sync Script
 
-Syncs ALL learner data with full enrichment from canonical tables:
-- Query 1: ACE Learners (users, certifications, exams, events) - BASE POPULATION
-- Query 2: Skills/Learn Activity (hydro page views)
-- Query 2B: Skills Users (skills/* repos) - ADDED TO BASE (62k+ new learners!)
-- Query 3: Partner Credentials (cse-analytics cluster)
-- Query 4: User Demographics (accounts_all)
-- Query 5: Org Enrichment (relationships → account_hierarchy_global_all via global_id)
-- Query 7: Product Usage (user_daily_activity_per_product, 365-day window with multi-window metrics)
+Syncs ALL learner data with full enrichment from GitHub's canonical tables.
+Follows GitHub Data architecture patterns from:
+  - https://github.com/github/data/blob/master/docs/learn-data.md
+  - Data Dot: https://data.githubapp.com/
+
+=============================================================================
+DATA SOURCES (following GitHub's data hierarchy)
+=============================================================================
+
+CANONICAL TABLES (curated, high-quality):
+  - canonical.accounts_all: User demographics, plan info
+    https://data.githubapp.com/warehouse/hive/canonical/accounts_all
+  - canonical.relationships_all: User↔Org relationships  
+    https://data.githubapp.com/warehouse/hive/canonical/relationships_all
+  - canonical.account_hierarchy_global_all: Company/customer attribution
+    https://data.githubapp.com/warehouse/hive/canonical/account_hierarchy_global_all
+  - canonical.user_daily_activity_per_product: Product usage (Copilot, Actions, etc.)
+    https://data.githubapp.com/warehouse/hive/canonical/user_daily_activity_per_product
+
+HYDRO TABLES (event streams):
+  - hydro.analytics_v0_page_view: Skills/Learn page views (~90 day retention in Kusto)
+  - hydro.github_v1_user_signup: Email-to-dotcom_id mapping
+
+SNAPSHOT TABLES (production DB copies):
+  - snapshots.github_mysql1_user_emails_current: Verified email mapping
+
+ACE TABLES (certification-specific):
+  - ace.exam_results: FY22-25 exam results (gh-analytics cluster)
+  - ace.users: ACE portal registrations
+  - ACE.pearson_exam_results: FY26 exams (cse-analytics cluster)
+
+=============================================================================
+QUERY MAPPING
+=============================================================================
+  Query 1: ACE Learners (users, certifications, exams, events) - BASE POPULATION
+  Query 2: Skills/Learn Activity (hydro page views)
+  Query 2B: Skills Users (skills/* repos) - ADDED TO BASE (62k+ new learners!)
+  Query 2C: GitHub Learn (learn.github.com) engagement
+  Query 3: Partner Credentials (cse-analytics cluster)
+  Query 4: User Demographics (canonical.accounts_all)
+  Query 5: Org Enrichment (relationships → account_hierarchy_global_all via global_id)
+  Query 5B: Direct User Company (account_hierarchy_dotcom_all)
+  Query 7: Product Usage (canonical.user_daily_activity_per_product)
 
 Company attribution uses account_hierarchy_global_all with priority:
-1. customer_name (billing customer - most authoritative, 1:1 with Zuora)
-2. salesforce_account_name (CRM account)
-3. salesforce_parent_account_name (CRM parent)
-4. partner_companies (partner credential)
-5. org_name (GitHub org login fallback)
+  1. customer_name (billing customer - most authoritative, 1:1 with Zuora)
+  2. salesforce_account_name (CRM account)
+  3. salesforce_parent_account_name (CRM parent)
+  4. partner_companies (partner credential)
+  5. org_name (GitHub org login fallback)
 
-Skills-only users (who engaged with skills/* repos but never registered for exams)
-are now included as first-class learners with full enrichment.
+=============================================================================
+RETENTION NOTES
+=============================================================================
+  - Kusto hydro tables: ~90 days (hot cache limit)
+  - Trino/Hive hydro tables: 7+ months (requires Production VPN)
+  - Canonical tables: Generally 2+ years historical
+  - ACE tables: Full history since program inception
+
+For historical Skills/Learn data beyond 90 days, run sync-trino-skills.py first.
 
 Output: data/learners_enriched.parquet
 
@@ -29,6 +71,9 @@ Usage:
 Options:
   --full      Force full refresh (ignore existing data)
   --dry-run   Show queries without executing
+
+Questions? Open a Data Request: 
+  https://github.com/github/data/issues/new?assignees=&labels=Data+Request
 """
 
 import argparse
@@ -195,6 +240,49 @@ def save_to_cache(query_name: str, df: pd.DataFrame):
         log(f"  Cache write failed for {query_name}: {e}", "warning")
 
 
+def load_trino_historical_data() -> tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
+    """
+    Load historical Skills/Learn data from Trino exports if available.
+    
+    Trino/Hive has longer retention (~7+ months) compared to Kusto (~90 days).
+    Run scripts/sync-trino-skills.py to generate these files.
+    
+    Returns:
+        Tuple of (skills_df, learn_df) or (None, None) if not available
+    """
+    skills_file = DATA_DIR / "skills_historical_trino.csv"
+    learn_file = DATA_DIR / "learn_historical_trino.csv"
+    
+    skills_df = None
+    learn_df = None
+    
+    if skills_file.exists():
+        try:
+            skills_df = pd.read_csv(skills_file)
+            # Parse dates
+            for col in ['first_skills_visit', 'last_skills_visit']:
+                if col in skills_df.columns:
+                    skills_df[col] = pd.to_datetime(skills_df[col], errors='coerce')
+            log(f"Loaded Trino historical skills: {len(skills_df):,} users", "success")
+            log(f"  Date range: {skills_df['first_skills_visit'].min()} to {skills_df['last_skills_visit'].max()}")
+        except Exception as e:
+            log(f"Failed to load Trino skills data: {e}", "warning")
+    
+    if learn_file.exists():
+        try:
+            learn_df = pd.read_csv(learn_file)
+            # Parse dates
+            for col in ['first_learn_visit', 'last_learn_visit']:
+                if col in learn_df.columns:
+                    learn_df[col] = pd.to_datetime(learn_df[col], errors='coerce')
+            log(f"Loaded Trino historical learn: {len(learn_df):,} users", "success")
+            log(f"  Date range: {learn_df['first_learn_visit'].min()} to {learn_df['last_learn_visit'].max()}")
+        except Exception as e:
+            log(f"Failed to load Trino learn data: {e}", "warning")
+    
+    return skills_df, learn_df
+
+
 def execute_query_with_cache(
     client, database: str, query: str, query_name: str, 
     force_refresh: bool = False
@@ -225,6 +313,9 @@ def merge_on_dotcom_id(base_df: pd.DataFrame, right_df: pd.DataFrame,
     """
     Optimized merge on dotcom_id using index-based join.
     ~2x faster than default pandas merge for large DataFrames.
+    
+    For columns that already exist in base_df, this will UPDATE/FILL
+    values where base_df has NaN but right_df has data (coalesce pattern).
     """
     if right_df is None or right_df.empty:
         return base_df
@@ -239,14 +330,34 @@ def merge_on_dotcom_id(base_df: pd.DataFrame, right_df: pd.DataFrame,
         if "dotcom_id" in base_df.columns:
             base_indexed = base_df.set_index("dotcom_id", drop=False)
             
-            # Get columns to add (excluding join key)
+            # Split columns into new (to add) and existing (to update)
             cols_to_add = [c for c in right_df.columns if c != "dotcom_id" and c not in base_df.columns]
+            cols_to_update = [c for c in right_df.columns if c != "dotcom_id" and c in base_df.columns]
             
+            # Add new columns via join
             if cols_to_add:
                 result = base_indexed.join(right_indexed[cols_to_add], how="left", rsuffix="_right")
-                result = result.reset_index(drop=True)
             else:
-                result = base_df
+                result = base_indexed.copy()
+            
+            # Update existing columns by filling NaN values with right_df data
+            if cols_to_update:
+                update_count = 0
+                for col in cols_to_update:
+                    # Get the right values aligned by index (dotcom_id)
+                    right_values = right_indexed[col]
+                    # Only update rows where base is NaN/null
+                    mask = result[col].isna()
+                    if mask.any():
+                        # Map right values to result index
+                        result.loc[mask, col] = result.loc[mask].index.map(
+                            lambda x: right_values.get(x, None)
+                        )
+                        update_count += mask.sum()
+                if update_count > 0:
+                    log(f"  Updated {update_count:,} values in existing columns from {right_name}", "debug")
+            
+            result = result.reset_index(drop=True)
         else:
             result = base_df.merge(right_df, on="dotcom_id", how="left")
     else:
@@ -562,10 +673,11 @@ github_learning_views
 QUERY_2C_GITHUB_LEARN = """
 // GitHub Learn Engagement (learn.github.com)
 // Aggregates page views from learn.github.com by user
+// Uses full available timeframe to match certification data (back to FY22)
 analytics_v0_page_view
 | where app == 'learn'
 | where isnotempty(actor_id)
-| where timestamp >= datetime(2024-01-01)
+| where timestamp >= datetime(2021-09-01)
 | extend path = extract("learn.github.com(/[^?#]*)", 1, page)
 | extend content_type = case(
     path has "/certifications" or path has "/certification/", "Certifications",
@@ -595,10 +707,11 @@ analytics_v0_page_view
 QUERY_2B_SKILLS_USERS = """
 // GitHub Skills Users - authenticated users who viewed skills/* repos
 // These are potential learners who started with Skills courses
+// Uses full available timeframe to match certification data (back to FY22)
 let skills_users = analytics_v0_page_view
     | where repository_nwo startswith "skills/"
     | where isnotempty(actor_id)
-    | where timestamp >= datetime(2024-01-01)
+    | where timestamp >= datetime(2021-09-01)
     | extend skill_name = tostring(split(repository_nwo, "/")[1])
     | extend skill_category = case(
         skill_name has "copilot" or skill_name has "mcp" or skill_name has "spark", "AI/Copilot",
@@ -682,10 +795,11 @@ let ace_ids = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').u
     | distinct dotcom_id;
 
 // Skills user IDs (from hydro page views of skills/* repos)
+// Uses full available timeframe to match certification data (back to FY22)
 let skills_ids = cluster('gh-analytics.eastus.kusto.windows.net').database('hydro').analytics_v0_page_view
     | where repository_nwo startswith "skills/"
     | where isnotempty(actor_id)
-    | where timestamp >= datetime(2024-01-01)
+    | where timestamp >= datetime(2021-09-01)
     | extend dotcom_id = actor_id
     | where dotcom_id > 0
     | distinct dotcom_id;
@@ -767,6 +881,7 @@ user_orgs
 # Fetching 50+ columns is slow; focus on most important metrics
 QUERY_7_PRODUCT_USAGE_TEMPLATE = """
 // Get product usage for learners (OPTIMIZED: fewer columns, pre-fetched IDs)
+// Includes first_use dates for each product to calculate pre-certification usage
 let learner_ids = datatable(dotcom_id: long) [{learner_ids_filter}];
 
 let d90 = ago(90d);
@@ -776,22 +891,26 @@ user_daily_activity_per_product
 | where day >= ago(365d)
 | where user_id in (learner_ids)
 | summarize
-    // Copilot - key metrics only
+    // Copilot - key metrics with first/last use for pre-cert analysis
     copilot_days_90d = dcountif(day, product has "Copilot" and day >= d90),
     copilot_days = dcountif(day, product has "Copilot"),
     copilot_engagement_events = sumif(num_engagement_events, product has "Copilot"),
     copilot_first_use = minif(day, product has "Copilot"),
     copilot_last_use = maxif(day, product has "Copilot"),
-    // Actions
+    // Actions - with first use date
     actions_days_90d = dcountif(day, product == "Actions" and day >= d90),
     actions_days = dcountif(day, product == "Actions"),
     actions_engagement_events = sumif(num_engagement_events, product == "Actions"),
-    // Security
+    actions_first_use = minif(day, product == "Actions"),
+    // Security - with first use date
     security_days_90d = dcountif(day, product has_any ("Security", "Dependabot", "CodeQL") and day >= d90),
     security_days = dcountif(day, product has_any ("Security", "Dependabot", "CodeQL")),
-    // Core GitHub activity
+    security_first_use = minif(day, product has_any ("Security", "Dependabot", "CodeQL")),
+    // Core GitHub activity - with first use dates
     pr_days = dcountif(day, product == "Pull Requests"),
+    pr_first_use = minif(day, product == "Pull Requests"),
     issues_days = dcountif(day, product == "Issues"),
+    issues_first_use = minif(day, product == "Issues"),
     // Overall
     total_active_days_90d = dcountif(day, day >= d90),
     total_active_days = dcount(day),
@@ -819,8 +938,11 @@ by user_id
     copilot_days_90d, copilot_days, copilot_engagement_events,
     copilot_first_use, copilot_last_use,
     actions_days_90d, actions_days, actions_engagement_events,
+    actions_first_use,
     security_days_90d, security_days,
-    pr_days, issues_days,
+    security_first_use,
+    pr_days, pr_first_use,
+    issues_days, issues_first_use,
     total_active_days_90d, total_active_days, total_engagement_events,
     first_activity, last_activity
 """
@@ -837,10 +959,11 @@ let ace_ids = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').u
     | distinct dotcom_id;
 
 // Skills user IDs (from hydro page views of skills/* repos)
+// Uses full available timeframe to match certification data (back to FY22)
 let skills_ids = cluster('gh-analytics.eastus.kusto.windows.net').database('hydro').analytics_v0_page_view
     | where repository_nwo startswith "skills/"
     | where isnotempty(actor_id)
-    | where timestamp >= datetime(2024-01-01)
+    | where timestamp >= datetime(2021-09-01)
     | extend dotcom_id = actor_id
     | where dotcom_id > 0
     | distinct dotcom_id;
@@ -886,10 +1009,11 @@ let ace_ids = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').u
     | distinct dotcom_id;
 
 // Skills user IDs
+// Uses full available timeframe to match certification data (back to FY22)
 let skills_ids = cluster('gh-analytics.eastus.kusto.windows.net').database('hydro').analytics_v0_page_view
     | where repository_nwo startswith "skills/"
     | where isnotempty(actor_id)
-    | where timestamp >= datetime(2024-01-01)
+    | where timestamp >= datetime(2021-09-01)
     | extend dotcom_id = actor_id
     | where dotcom_id > 0
     | distinct dotcom_id;
@@ -956,10 +1080,11 @@ let ace_ids = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').u
     | distinct dotcom_id;
 
 // Skills user IDs
+// Uses full available timeframe to match certification data (back to FY22)
 let skills_ids = cluster('gh-analytics.eastus.kusto.windows.net').database('hydro').analytics_v0_page_view
     | where repository_nwo startswith "skills/"
     | where isnotempty(actor_id)
-    | where timestamp >= datetime(2024-01-01)
+    | where timestamp >= datetime(2021-09-01)
     | extend dotcom_id = actor_id
     | where dotcom_id > 0
     | distinct dotcom_id;
@@ -1040,7 +1165,13 @@ user_daily_activity_per_product
     total_active_days = dcount(day),
     total_events = sum(num_engagement_events),
     first_activity = min(day),
-    last_activity = max(day)
+    last_activity = max(day),
+    // First use dates for pre-certification tracking
+    copilot_first_use = minif(day, product has "Copilot"),
+    actions_first_use = minif(day, product == "Actions"),
+    security_first_use = minif(day, product has_any ("Security", "Dependabot", "CodeQL")),
+    pr_first_use = minif(day, product == "Pull Requests"),
+    issues_first_use = minif(day, product == "Issues")
 by user_id
 | project
     dotcom_id = user_id,
@@ -1079,7 +1210,335 @@ by user_id
     total_active_days,
     total_engagement_events = total_events,
     first_activity,
-    last_activity
+    last_activity,
+    // First use dates for pre-certification tracking
+    copilot_first_use,
+    actions_first_use,
+    security_first_use,
+    pr_first_use,
+    issues_first_use
+"""
+
+# Query 7B: Pre-Certification Product Usage
+# Calculates product usage in the 90 days BEFORE each learner's first certification
+# Joins product activity with exam dates to isolate pre-certification behavior
+QUERY_7B_PRECERT_USAGE = """
+// Pre-certification product usage - 90 days before first exam
+// OPTIMIZED: Use broadcast join with pre-aggregated exam dates
+// Strategy: Materialize exam dates first, then broadcast to filter product data
+
+// Step 1: Get exam dates (small table ~65k rows)
+let certified_users = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').exam_results
+    | where passed == true and isnotempty(dotcomid)
+    | extend dotcom_id = tolong(dotcomid)
+    | where dotcom_id > 0
+    | summarize first_exam = min(endtime) by dotcom_id;
+
+// Step 2: Get product activity for certified users only, using broadcast hint
+// Only get data from the 90-day window before each user's exam
+user_daily_activity_per_product
+| where user_id > 0
+| lookup kind=inner (certified_users) on $left.user_id == $right.dotcom_id
+| where day < first_exam and day >= datetime_add('day', -90, first_exam)
+| summarize
+    copilot_days_precert = dcountif(day, product has "Copilot"),
+    actions_days_precert = dcountif(day, product == "Actions"),
+    security_days_precert = dcountif(day, product has_any ("Security", "Dependabot", "CodeQL")),
+    pr_days_precert = dcountif(day, product == "Pull Requests"),
+    issues_days_precert = dcountif(day, product == "Issues"),
+    code_search_days_precert = dcountif(day, product == "Code Search"),
+    packages_days_precert = dcountif(day, product == "Packages"),
+    projects_days_precert = dcountif(day, product == "Projects"),
+    discussions_days_precert = dcountif(day, product == "Discussions"),
+    pages_days_precert = dcountif(day, product == "Pages"),
+    total_active_days_precert = dcount(day),
+    total_events_precert = sum(num_engagement_events)
+by dotcom_id
+| project
+    dotcom_id,
+    used_copilot_precert = copilot_days_precert > 0,
+    used_actions_precert = actions_days_precert > 0,
+    used_security_precert = security_days_precert > 0,
+    used_pr_precert = pr_days_precert > 0,
+    used_issues_precert = issues_days_precert > 0,
+    copilot_days_precert,
+    actions_days_precert,
+    security_days_precert,
+    pr_days_precert,
+    issues_days_precert,
+    code_search_days_precert,
+    packages_days_precert,
+    projects_days_precert,
+    discussions_days_precert,
+    pages_days_precert,
+    total_active_days_precert,
+    total_events_precert,
+    products_used_precert = toint(copilot_days_precert > 0) + toint(actions_days_precert > 0) + 
+                            toint(security_days_precert > 0) + toint(pr_days_precert > 0) + 
+                            toint(issues_days_precert > 0) + toint(code_search_days_precert > 0) +
+                            toint(packages_days_precert > 0) + toint(projects_days_precert > 0) +
+                            toint(discussions_days_precert > 0) + toint(pages_days_precert > 0)
+"""
+
+# =============================================================================
+# NEW QUERIES: Repository Activity, MEU, Browser Events, Actions Engagement
+# Based on github/data documentation for additional data sources
+# =============================================================================
+
+# Query 8: Repository Activity - Track repos learners contribute to
+# Source: canonical.repositories_current
+# Data Dot: https://data.githubapp.com/warehouse/hive/canonical/repositories_current
+QUERY_8_REPO_ACTIVITY_TEMPLATE = """
+// Repository Activity for Learners
+// Tracks what repositories learners own/contribute to
+// Uses repositories_current canonical table
+let learner_ids = datatable(dotcom_id: long) [{learner_ids_filter}];
+
+repositories_current
+| where owner_id in (learner_ids)
+| summarize 
+    repos_owned = count(),
+    public_repos = countif(visibility == "public"),
+    private_repos = countif(visibility == "private"),
+    languages = make_set(primary_language, 10),
+    total_stars = sum(stargazers_count),
+    total_forks = sum(forks_count),
+    newest_repo = max(created_at),
+    last_push = max(pushed_at),
+    has_actions = countif(has_workflow_files)
+by owner_id
+| project
+    dotcom_id = owner_id,
+    repos_owned,
+    public_repos,
+    private_repos,
+    languages,
+    total_stars,
+    total_forks,
+    newest_repo,
+    last_push,
+    repos_with_actions = has_actions,
+    is_oss_contributor = public_repos > 0
+"""
+
+# Query 9: MEU (Monthly Enrolled Users) Tracking
+# Source: canonical.metric_enrollments
+# Data Dot: https://data.githubapp.com/warehouse/hive/canonical/metric_enrollments
+# MEU is a key enterprise activation metric
+QUERY_9_MEU_TRACKING_TEMPLATE = """
+// MEU (Monthly Enrolled Users) Tracking for Learners
+// Measures enterprise activation - key business metric
+// Uses metric_enrollments canonical table
+let learner_ids = datatable(dotcom_id: long) [{learner_ids_filter}];
+
+metric_enrollments
+| where metric == "meu"
+| where dotcom_id in (learner_ids)
+| summarize 
+    meu_qualified = countif(qualified == true) > 0,
+    meu_months_qualified = dcountif(day, qualified == true),
+    first_meu_qualified = minif(day, qualified == true),
+    last_meu_qualified = maxif(day, qualified == true),
+    products_contributing = make_set(product, 10)
+by dotcom_id
+| project
+    dotcom_id,
+    is_meu_qualified = meu_qualified,
+    meu_months_qualified,
+    first_meu_qualified,
+    last_meu_qualified,
+    meu_products = products_contributing
+"""
+
+# Query 10: Browser Events for Click Tracking
+# Source: hydro.analytics_v0_browser_event
+# Goes beyond page views to understand actual engagement depth
+QUERY_10_BROWSER_EVENTS_TEMPLATE = """
+// Browser Event Tracking for Learners
+// Captures clicks, time on page, and engagement beyond page views
+// Uses analytics_v0_browser_event hydro table
+let learner_ids = datatable(dotcom_id: long) [{learner_ids_filter}];
+
+analytics_v0_browser_event
+| where timestamp > ago(90d)
+| where actor_id in (learner_ids)
+| where context_app in ("skills", "learn", "docs")
+| summarize
+    total_clicks = count(),
+    unique_sessions = dcount(client_id),
+    avg_engagement_time_ms = avg(engagement_time_msec),
+    skills_clicks = countif(context_app == "skills"),
+    learn_clicks = countif(context_app == "learn"),
+    docs_clicks = countif(context_app == "docs"),
+    first_event = min(timestamp),
+    last_event = max(timestamp)
+by actor_id
+| project
+    dotcom_id = actor_id,
+    total_browser_events = total_clicks,
+    browser_sessions = unique_sessions,
+    avg_engagement_seconds = toint(avg_engagement_time_ms / 1000),
+    skills_clicks,
+    learn_clicks,
+    docs_clicks,
+    first_browser_event = first_event,
+    last_browser_event = last_event
+"""
+
+# Query 11: GitHub Activity Metrics (Commits, PRs, Issues)
+# Correlates learning with actual GitHub engagement
+# Uses user_daily_activity_per_product or github_v1_request
+QUERY_11_GITHUB_ACTIVITY_TEMPLATE = """
+// GitHub Activity Metrics for Learners
+// Tracks commits, PRs, issues to correlate with learning
+// Uses user_daily_activity_per_product canonical table
+let learner_ids = datatable(dotcom_id: long) [{learner_ids_filter}];
+
+let d30 = ago(30d);
+let d90 = ago(90d);
+
+user_daily_activity_per_product
+| where day >= ago(365d)
+| where user_id in (learner_ids)
+| where product in ("Pull Requests", "Issues", "Commits", "Code Review")
+| summarize
+    // 30-day activity
+    prs_30d = dcountif(day, product == "Pull Requests" and day >= d30),
+    issues_30d = dcountif(day, product == "Issues" and day >= d30),
+    commits_30d = sumif(num_engagement_events, product == "Commits" and day >= d30),
+    reviews_30d = dcountif(day, product == "Code Review" and day >= d30),
+    // 90-day activity
+    prs_90d = dcountif(day, product == "Pull Requests" and day >= d90),
+    issues_90d = dcountif(day, product == "Issues" and day >= d90),
+    commits_90d = sumif(num_engagement_events, product == "Commits" and day >= d90),
+    reviews_90d = dcountif(day, product == "Code Review" and day >= d90),
+    // Total activity
+    total_pr_days = dcountif(day, product == "Pull Requests"),
+    total_issue_days = dcountif(day, product == "Issues"),
+    total_commit_events = sumif(num_engagement_events, product == "Commits"),
+    total_review_days = dcountif(day, product == "Code Review"),
+    first_contribution = min(day),
+    last_contribution = max(day)
+by user_id
+| extend
+    activity_score = prs_90d * 3 + issues_90d * 2 + toint(commits_90d / 10) + reviews_90d * 2,
+    is_active_contributor = prs_30d > 0 or commits_30d > 5
+| project
+    dotcom_id = user_id,
+    prs_30d, issues_30d, commits_30d, reviews_30d,
+    prs_90d, issues_90d, commits_90d, reviews_90d,
+    total_pr_days, total_issue_days, total_commit_events, total_review_days,
+    first_contribution, last_contribution,
+    github_activity_score = activity_score,
+    is_active_contributor
+"""
+
+# Query 12: Actions Engagement Levels
+# Source: scratch_data_science.actions_engagement_repo (via Trino/Kusto snapshot)
+# Documentation: /github/data/team-docs/trust_compute_data/docs/how_to_guides/actions_engagement_metric_user_guide.md
+# 
+# Actions engagement levels (0-5) are data-driven based on clustering:
+#   Level 0: No Actions usage
+#   Level 1: 1-4 days usage in L28, 1+ workflow executions
+#   Level 2: 5-9 days usage in L28, 1+ workflow executions  
+#   Level 3: 10-17 days usage in L28, 1+ workflow executions
+#   Level 4: 18+ days usage in L28, 1-59 workflow executions
+#   Level 5: 18+ days usage in L28, 60+ workflow executions (power users)
+#
+# This query calculates per-user Actions engagement based on repo ownership
+QUERY_12_ACTIONS_ENGAGEMENT_TEMPLATE = """
+// Actions Engagement Levels for Learners
+// Calculates engagement level (0-5) based on workflow activity
+// Pattern from github/data actions engagement metric
+let learner_ids = datatable(dotcom_id: long) [{learner_ids_filter}];
+
+// Get workflow activity for repos owned by learners
+let repo_activity = cluster('gh-analytics.eastus.kusto.windows.net').database('hydro').github_v1_request
+    | where timestamp >= ago(28d)
+    | where request_category == "check_runs" or request_category == "workflow_runs"
+    | where actor_id in (learner_ids)
+    | extend day = startofday(timestamp)
+    | summarize 
+        workflow_executions = count(),
+        days_with_activity = dcount(day)
+      by actor_id
+    | extend
+        // Calculate Actions engagement level (0-5) per documentation
+        actions_engagement_level = case(
+            workflow_executions == 0 or days_with_activity == 0, 0,
+            days_with_activity <= 4, 1,
+            days_with_activity <= 9, 2,
+            days_with_activity <= 17, 3,
+            days_with_activity >= 18 and workflow_executions < 60, 4,
+            days_with_activity >= 18 and workflow_executions >= 60, 5,
+            0
+        );
+
+// Return engagement data
+repo_activity
+| project
+    dotcom_id = actor_id,
+    actions_engagement_level,
+    actions_workflow_executions_l28 = workflow_executions,
+    actions_days_with_activity_l28 = days_with_activity,
+    actions_is_power_user = actions_engagement_level >= 4
+"""
+
+# Query 13: Copilot Adoption Lifecycle
+# Tracks trial → paid conversion and usage patterns
+# Based on github/data copilot data definitions
+QUERY_13_COPILOT_LIFECYCLE_TEMPLATE = """
+// Copilot Adoption Lifecycle for Learners
+// Tracks subscription status, trial conversion, IDE usage
+// Based on copilot data definitions from github/data
+let learner_ids = datatable(dotcom_id: long) [{learner_ids_filter}];
+
+// Get Copilot subscription info from hydro
+let copilot_subs = cluster('gh-analytics.eastus.kusto.windows.net').database('hydro').github_copilot_v1_copilot_signup_subscription_created
+    | where actor_id in (learner_ids)
+    | summarize 
+        subscription_date = min(timestamp),
+        is_subscribed = any(subscription_status == "active")
+      by actor_id = actor_id;
+
+// Get Copilot token generation (usage patterns by IDE)
+let copilot_usage = cluster('gh-analytics.eastus.kusto.windows.net').database('hydro').github_copilot_v0_copilot_token_generated
+    | where timestamp >= ago(90d)
+    | where actor_id in (learner_ids)
+    | extend 
+        ide_name = case(
+            editor_version startswith "vsc", "VSCode",
+            editor_version startswith "vs/", "VisualStudio",
+            editor_version startswith "JetBrains", "JetBrains",
+            editor_version startswith "neovim", "Neovim",
+            editor_version startswith "vim", "Vim",
+            editor_version startswith "Xcode", "Xcode",
+            isempty(editor_version), "Unknown",
+            "Other"
+        )
+    | summarize
+        total_tokens = count(),
+        active_days = dcount(startofday(timestamp)),
+        ides_used = make_set(ide_name, 5),
+        primary_ide = take_any(ide_name),
+        first_use = min(timestamp),
+        last_use = max(timestamp)
+      by actor_id;
+
+// Join subscription and usage data
+copilot_subs
+| join kind=leftouter copilot_usage on actor_id
+| project
+    dotcom_id = actor_id,
+    copilot_subscription_date = subscription_date,
+    copilot_is_subscribed = coalesce(is_subscribed, false),
+    copilot_total_tokens_90d = coalesce(total_tokens, 0),
+    copilot_active_days_90d = coalesce(active_days, 0),
+    copilot_ides = coalesce(ides_used, dynamic([])),
+    copilot_primary_ide = coalesce(primary_ide, ""),
+    copilot_first_use = first_use,
+    copilot_last_use = last_use,
+    copilot_is_active = coalesce(active_days, 0) > 0
 """
 
 
@@ -1508,6 +1967,7 @@ def main():
         ("Org Enrichment", gh_client, "canonical", QUERY_5_ORG_ENRICHMENT, "org_enrichment"),
         ("User Company", gh_client, "canonical", QUERY_5B_DIRECT_USER_COMPANY, "user_company"),
         ("Product Usage", gh_client, "canonical", QUERY_7_PRODUCT_USAGE, "product_usage"),
+        ("Pre-Cert Usage", gh_client, "canonical", QUERY_7B_PRECERT_USAGE, "precert_usage"),
         ("Partner Creds", cse_client, "ACE", QUERY_3_PARTNER_CREDS, "partner_creds"),
     ]
     
@@ -1549,7 +2009,46 @@ def main():
     df_org = all_results.get("Org Enrichment") if all_results.get("Org Enrichment") is not None else pd.DataFrame()
     df_user_company = all_results.get("User Company") if all_results.get("User Company") is not None else pd.DataFrame()
     df_usage = all_results.get("Product Usage") if all_results.get("Product Usage") is not None else pd.DataFrame()
+    df_precert_usage = all_results.get("Pre-Cert Usage") if all_results.get("Pre-Cert Usage") is not None else pd.DataFrame()
     df_partner = all_results.get("Partner Creds") if all_results.get("Partner Creds") is not None else pd.DataFrame()
+    
+    # ==========================================================================
+    # Load Trino historical data if available (has longer retention than Kusto)
+    # Run scripts/sync-trino-skills.py to generate these files
+    # ==========================================================================
+    trino_skills, trino_learn = load_trino_historical_data()
+    
+    # Merge Trino historical data with Kusto data (Trino has priority - longer history)
+    if trino_skills is not None and not trino_skills.empty:
+        log(f"Using Trino historical skills data ({len(trino_skills):,} users)", "info")
+        if df_skills_users.empty:
+            df_skills_users = trino_skills
+        else:
+            # Merge: Trino data takes priority, Kusto fills gaps
+            df_skills_users = trino_skills.merge(
+                df_skills_users[["dotcom_id"]], 
+                on="dotcom_id", 
+                how="outer", 
+                indicator=True
+            )
+            # Keep Trino data where available
+            df_skills_users = df_skills_users[df_skills_users["_merge"] != "right_only"].drop("_merge", axis=1)
+            log(f"  Merged to {len(df_skills_users):,} skills users", "info")
+    
+    if trino_learn is not None and not trino_learn.empty:
+        log(f"Using Trino historical learn data ({len(trino_learn):,} users)", "info")
+        if df_learn.empty:
+            df_learn = trino_learn
+        else:
+            # Merge: Trino data takes priority
+            df_learn = trino_learn.merge(
+                df_learn[["dotcom_id"]], 
+                on="dotcom_id", 
+                how="outer",
+                indicator=True
+            )
+            df_learn = df_learn[df_learn["_merge"] != "right_only"].drop("_merge", axis=1)
+            log(f"  Merged to {len(df_learn):,} learn users", "info")
     
     # Update sync status for each query
     for name, df in [("github_learn", df_learn), 
@@ -1737,6 +2236,10 @@ def main():
     df = merge_on_dotcom_id(df, df_usage, "Product Usage")
     del df_usage  # Free memory
     
+    # Merge Pre-Certification Usage (product usage in 90 days before certification)
+    df = merge_on_dotcom_id(df, df_precert_usage, "Pre-Cert Usage")
+    del df_precert_usage  # Free memory
+    
     merge_elapsed = (datetime.now() - merge_start).total_seconds()
     log(f"All merges completed in {merge_elapsed:.1f}s", "success")
 
@@ -1887,6 +2390,88 @@ def main():
     quality_dist = df["data_quality_level"].value_counts()
     avg_score = df["data_quality_score"].mean()
     log(f"Data quality calculated in {quality_elapsed:.1f}s - Avg: {avg_score:.1f}, High: {quality_dist.get('high', 0):,}, Med: {quality_dist.get('medium', 0):,}, Low: {quality_dist.get('low', 0):,}", "info")
+
+    # ==========================================================================
+    # COMPREHENSIVE JOURNEY STAGE RECALCULATION
+    # Recalculate journey_stage and learner_status using ALL merged signals:
+    # - Certification data (exams_passed)
+    # - Skills course enrollments (skills_count)
+    # - Learning page views (learn_page_views, skills_page_views)
+    # - Product adoption (copilot_days, actions_days, uses_copilot, uses_actions)
+    # - Platform activity (total_active_days, total_contribution_events)
+    # - Engagement (total_engagement_events)
+    #
+    # Stages (from first touch to mastery):
+    # 1. Discovered: User exists in system (registered but no activity)
+    # 2. Exploring: Engaged with learning content or GitHub products
+    # 3. Active: Regular platform activity and contributions
+    # 4. Learning: Actively enrolled in courses or consuming learning content
+    # 5. Certified: Earned first GitHub certification
+    # 6. Power User: Multiple certifications or deep product expertise
+    # 7. Champion: 4+ certifications, expert driving adoption
+    # ==========================================================================
+    log("Recalculating journey stages with comprehensive signals...", "start")
+    journey_start = datetime.now()
+    
+    # Get all relevant columns with safe defaults
+    exams_passed = df["exams_passed"].fillna(0).astype(int) if "exams_passed" in df.columns else pd.Series(0, index=df.index)
+    skills_count = df["skills_count"].fillna(0).astype(int) if "skills_count" in df.columns else pd.Series(0, index=df.index)
+    learn_views = df["learn_page_views"].fillna(0).astype(int) if "learn_page_views" in df.columns else pd.Series(0, index=df.index)
+    skills_views = df["skills_page_views"].fillna(0).astype(int) if "skills_page_views" in df.columns else pd.Series(0, index=df.index)
+    copilot_days = df["copilot_days"].fillna(0).astype(int) if "copilot_days" in df.columns else pd.Series(0, index=df.index)
+    actions_days = df["actions_days"].fillna(0).astype(int) if "actions_days" in df.columns else pd.Series(0, index=df.index)
+    active_days = df["total_active_days"].fillna(0).astype(int) if "total_active_days" in df.columns else pd.Series(0, index=df.index)
+    engagement = df["total_engagement_events"].fillna(0).astype(int) if "total_engagement_events" in df.columns else pd.Series(0, index=df.index)
+    contributions = df["total_contribution_events"].fillna(0).astype(int) if "total_contribution_events" in df.columns else pd.Series(0, index=df.index)
+    products_used = df["products_adopted_count"].fillna(0).astype(int) if "products_adopted_count" in df.columns else pd.Series(0, index=df.index)
+    
+    # Calculate journey stage using vectorized conditions (ordered from highest to lowest)
+    # Start with lowest stage and override with higher stages
+    journey_stage = pd.Series("Discovered", index=df.index)
+    learner_status = pd.Series("Registered", index=df.index)
+    
+    # Stage 2: Exploring - Visited learning content OR any engagement OR product usage
+    is_exploring = (learn_views > 0) | (skills_views > 0) | (engagement > 0) | (copilot_days > 0) | (actions_days > 0)
+    journey_stage = journey_stage.where(~is_exploring, "Exploring")
+    learner_status = learner_status.where(~is_exploring, "Engaged")
+    
+    # Stage 3: Active - GitHub platform activity (commits, PRs, etc.)
+    is_active = (contributions > 0) | (active_days >= 7)
+    journey_stage = journey_stage.where(~is_active, "Active")
+    learner_status = learner_status.where(~is_active, "Active")
+    
+    # Stage 4: Learning - Skills enrollment OR high learn engagement
+    is_learning = (skills_count > 0) | ((learn_views > 0) & (engagement >= 10))
+    journey_stage = journey_stage.where(~is_learning, "Learning")
+    learner_status = learner_status.where(~is_learning, "Learning")
+    
+    # Stage 5: Certified - 1 certification
+    is_certified = (exams_passed >= 1)
+    journey_stage = journey_stage.where(~is_certified, "Certified")
+    learner_status = learner_status.where(~is_certified, "Certified")
+    
+    # Stage 6: Power User - 2-3 certs OR (1 cert + 2 products + 30 active days)
+    is_power_user = (exams_passed >= 2) | ((exams_passed >= 1) & (products_used >= 2) & (active_days >= 30))
+    journey_stage = journey_stage.where(~is_power_user, "Power User")
+    learner_status = learner_status.where(~is_power_user, "Multi-Certified")
+    
+    # Stage 7: Champion - 4+ certifications
+    is_champion = (exams_passed >= 4)
+    journey_stage = journey_stage.where(~is_champion, "Champion")
+    learner_status = learner_status.where(~is_champion, "Champion")
+    
+    # Update the dataframe with recalculated values
+    df["journey_stage"] = journey_stage
+    df["learner_status"] = learner_status
+    
+    journey_elapsed = (datetime.now() - journey_start).total_seconds()
+    stage_counts = df["journey_stage"].value_counts()
+    log(f"Journey stages recalculated in {journey_elapsed:.1f}s", "success")
+    log("Journey stage distribution:", "info")
+    for stage in ["Discovered", "Exploring", "Active", "Learning", "Certified", "Power User", "Champion"]:
+        count = stage_counts.get(stage, 0)
+        pct = 100 * count / len(df)
+        log(f"  {stage}: {count:,} ({pct:.1f}%)", "info")
 
     # Fill NaN for boolean fields
     bool_cols = [

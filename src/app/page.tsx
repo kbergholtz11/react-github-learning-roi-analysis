@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { MetricCard, DonutChart, SimpleAreaChart, TrendLineChart } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Users, 
   Award, 
@@ -20,10 +21,17 @@ import {
   Activity,
   Target,
   AlertCircle,
-  Shield
+  Shield,
+  Clock,
+  RefreshCw,
+  Calendar,
+  AlertTriangle,
+  CheckCircle2,
+  XCircle,
+  BarChart3
 } from "lucide-react";
-import { useMetrics, useSkillsCourses } from "@/hooks/use-data";
-import { useCopilotTrend, useEnrichedStats } from "@/hooks/use-unified-data";
+import { useMetrics, useSkillsCourses, useSkillJourney } from "@/hooks/use-data";
+import { useCopilotTrend, useEnrichedStats, useJourney, useImpact } from "@/hooks/use-unified-data";
 
 // Quick Navigation Cards - defined outside component to avoid recreation
 const quickNavCards = [
@@ -110,14 +118,17 @@ function ErrorState({ error }: { error: Error }) {
 }
 
 export default function DashboardPage() {
+  const [activeTab, setActiveTab] = useState("overview");
   const { data, isLoading, error } = useMetrics();
   const { data: copilotTrend } = useCopilotTrend(30);
   const { data: enrichedStats } = useEnrichedStats();
   const { data: skillsData } = useSkillsCourses();
+  const { data: journeyData } = useJourney();
+  const { data: skillJourneyData } = useSkillJourney();
 
   // Memoize expensive data transformations
-  const { metrics, funnel, statusBreakdown } = useMemo(() => {
-    if (!data) return { metrics: null, funnel: [], statusBreakdown: [] };
+  const { metrics, funnel, statusBreakdown, certificationAnalytics } = useMemo(() => {
+    if (!data) return { metrics: null, funnel: [], statusBreakdown: [], certificationAnalytics: null };
     
     // Normalize metrics - handle both old and new API response shapes
     // Use type assertion to handle different API shapes
@@ -132,9 +143,12 @@ export default function DashboardPage() {
         learningUsers: Number(rawMetrics.learningUsers ?? rawMetrics.learning_users ?? rawMetrics.totalLearners ?? 0),
         avgLearningHours: Number(rawMetrics.avgLearningHours ?? rawMetrics.avg_learning_hours ?? 0),
         retentionRate: Number(rawMetrics.retentionRate ?? rawMetrics.retention_rate ?? 0),
+        totalPassedExams: Number(rawMetrics.totalPassed ?? 0),
+        overallPassRate: Number(rawMetrics.overallPassRate ?? 0),
       },
       funnel: data.funnel || [],
       statusBreakdown: data.statusBreakdown || [],
+      certificationAnalytics: data.certificationAnalytics || null,
     };
   }, [data]);
 
@@ -188,6 +202,35 @@ export default function DashboardPage() {
       }));
   }, [skillsData]);
 
+  // Journey velocity data - how long it takes to move through stages
+  const stageVelocity = useMemo(() => {
+    if (!journeyData?.stageVelocity) return null;
+    return journeyData.stageVelocity;
+  }, [journeyData]);
+
+  // Skill dimensions radar data
+  const skillDimensions = useMemo(() => {
+    if (!skillJourneyData?.dimensionAverages) return [];
+    const dims = skillJourneyData.dimensionAverages;
+    return [
+      { name: "Learning", value: dims.learning || 0, fullMark: 100 },
+      { name: "Product Usage", value: dims.product_usage || 0, fullMark: 100 },
+      { name: "Certification", value: dims.certification || 0, fullMark: 100 },
+      { name: "Consistency", value: dims.consistency || 0, fullMark: 100 },
+      { name: "Growth", value: dims.growth || 0, fullMark: 100 },
+    ];
+  }, [skillJourneyData]);
+
+  // Near miss and retry analytics
+  const examInsights = useMemo(() => {
+    if (!certificationAnalytics) return null;
+    return {
+      nearMiss: certificationAnalytics.nearMissSegment || null,
+      retry: certificationAnalytics.retryAnalytics || null,
+      forecast: certificationAnalytics.examForecast || null,
+    };
+  }, [certificationAnalytics]);
+
   // Early returns after all hooks
   if (isLoading) return <LoadingSkeleton />;
   if (error) return <ErrorState error={error as Error} />;
@@ -220,7 +263,7 @@ export default function DashboardPage() {
         <MetricCard
           title="Certified Users"
           value={metrics.certifiedUsers.toLocaleString()}
-          description="Passed certifications"
+          description={`${metrics.overallPassRate}% pass rate`}
           icon={<Award className="h-4 w-4" />}
         />
         <MetricCard
@@ -238,256 +281,695 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Journey Funnel Overview */}
-      <Card className="border-2 border-primary/20">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <GraduationCap className="h-5 w-5 text-primary" />
-            Learning Journey Overview
-          </CardTitle>
-          <CardDescription>
-            User progression through the learning stages
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {journeyStages.map((stage) => (
-              <div key={stage.stage} className="flex items-center gap-4">
-                <div className="w-32 text-sm font-medium">{stage.stage}</div>
-                <div className="flex-1">
-                  <div className="h-8 bg-muted rounded-lg overflow-hidden">
-                    <div 
-                      className="h-full rounded-lg transition-all duration-500"
-                      style={{ 
-                        width: `${stage.percentage}%`,
-                        backgroundColor: stage.color,
-                      }}
-                    />
-                  </div>
-                </div>
-                <div className="w-24 text-right">
-                  <span className="font-semibold">{stage.count.toLocaleString()}</span>
-                  <span className="text-muted-foreground text-xs ml-1">({stage.percentage}%)</span>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-6 flex justify-end">
-            <Button variant="outline" asChild>
-              <Link href="/journey/funnel">
-                View Detailed Funnel <ArrowRight className="h-4 w-4 ml-2" />
-              </Link>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Tabbed Dashboard Sections */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid">
+          <TabsTrigger value="overview" className="gap-2">
+            <Target className="h-4 w-4" />
+            Overview
+          </TabsTrigger>
+          <TabsTrigger value="certifications" className="gap-2">
+            <Award className="h-4 w-4" />
+            Certifications
+          </TabsTrigger>
+          <TabsTrigger value="skills" className="gap-2">
+            <BarChart3 className="h-4 w-4" />
+            Skills
+          </TabsTrigger>
+          <TabsTrigger value="velocity" className="gap-2">
+            <Clock className="h-4 w-4" />
+            Velocity
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Charts Row */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        {/* Certification Pass Rates by Exam */}
-        <Card className="col-span-4">
-          <CardHeader>
-            <CardTitle>Certification Performance by Exam</CardTitle>
-            <CardDescription>Pass count and success rate across certifications</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {certificationTrend.length > 0 ? (
-              <>
-                <SimpleAreaChart 
-                  data={certificationTrend}
-                  dataKey="completions"
-                  secondaryDataKey="usage"
-                  color="#22c55e"
-                  secondaryColor="#3b82f6"
-                  useSecondaryAxis={true}
-                />
-                <div className="flex justify-center gap-6 mt-4 text-sm">
-                  <div className="flex items-center gap-2">
-                    <div className="h-3 w-3 rounded-full bg-green-500" />
-                    <span className="text-muted-foreground">Passed Count</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="h-3 w-3 rounded-full bg-blue-500" />
-                    <span className="text-muted-foreground">Pass Rate %</span>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="h-[200px] flex items-center justify-center text-muted-foreground">
-                <p>Loading certification data...</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Status Distribution */}
-        <Card className="col-span-3">
-          <CardHeader>
-            <CardTitle>Learner Journey Distribution</CardTitle>
-            <CardDescription>Learning + Product Adoption + Engagement</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <DonutChart data={impactSummary} />
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Copilot & Product Usage Row */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        {/* Copilot Adoption Trend */}
-        <Card className="col-span-4">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-violet-500" />
-              Copilot Adoption Trend
-            </CardTitle>
-            <CardDescription>Daily active learners using GitHub Copilot (30 days)</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {copilotTrend && copilotTrend.length > 0 ? (
-              <>
-                <SimpleAreaChart 
-                  data={copilotTrend.map(d => ({
-                    name: new Date(d.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-                    value: d.active_users,
-                    events: d.total_events || 0
-                  }))}
-                  dataKey="value"
-                  color="#8b5cf6"
-                />
-                <div className="flex justify-center gap-6 mt-4 text-sm">
-                  <div className="flex items-center gap-2">
-                    <div className="h-3 w-3 rounded-full bg-violet-500" />
-                    <span className="text-muted-foreground">Active Users</span>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="h-[200px] flex items-center justify-center text-muted-foreground">
-                <p>Copilot trend data loading...</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Product Usage from Enriched Data */}
-        <Card className="col-span-3">
-          <CardHeader>
-            <CardTitle>Product Adoption</CardTitle>
-            <CardDescription>Learners using GitHub products (90-day active)</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {enrichedStats ? (
+        {/* Overview Tab */}
+        <TabsContent value="overview" className="space-y-6">
+          {/* Journey Funnel Overview */}
+          <Card className="border-2 border-primary/20">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <GraduationCap className="h-5 w-5 text-primary" />
+                Learning Journey Funnel
+              </CardTitle>
+              <CardDescription>
+                User progression through the learning stages
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
               <div className="space-y-4">
-                <div className="flex items-center justify-between p-3 bg-violet-50 dark:bg-violet-950/30 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="h-5 w-5 text-violet-600" />
-                    <span className="font-medium">Copilot</span>
+                {journeyStages.map((stage) => (
+                  <div key={stage.stage} className="flex items-center gap-4">
+                    <div className="w-32 text-sm font-medium">{stage.stage}</div>
+                    <div className="flex-1">
+                      <div className="h-8 bg-muted rounded-lg overflow-hidden">
+                        <div 
+                          className="h-full rounded-lg transition-all duration-500"
+                          style={{ 
+                            width: `${stage.percentage}%`,
+                            backgroundColor: stage.color,
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div className="w-24 text-right">
+                      <span className="font-semibold">{stage.count.toLocaleString()}</span>
+                      <span className="text-muted-foreground text-xs ml-1">({stage.percentage}%)</span>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <span className="text-xl font-bold text-violet-600">{(enrichedStats.copilot_users || 0).toLocaleString()}</span>
-                    <span className="text-xs text-muted-foreground ml-2">
-                      ({enrichedStats.total_learners ? Math.round((enrichedStats.copilot_users || 0) / enrichedStats.total_learners * 100) : 0}%)
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <Zap className="h-5 w-5 text-blue-600" />
-                    <span className="font-medium">Actions</span>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-xl font-bold text-blue-600">{(enrichedStats.actions_users || 0).toLocaleString()}</span>
-                    <span className="text-xs text-muted-foreground ml-2">
-                      ({enrichedStats.total_learners ? Math.round((enrichedStats.actions_users || 0) / enrichedStats.total_learners * 100) : 0}%)
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <Shield className="h-5 w-5 text-amber-600" />
-                    <span className="font-medium">Security</span>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-xl font-bold text-amber-600">{(enrichedStats.security_users || 0).toLocaleString()}</span>
-                    <span className="text-xs text-muted-foreground ml-2">
-                      ({enrichedStats.total_learners ? Math.round((enrichedStats.security_users || 0) / enrichedStats.total_learners * 100) : 0}%)
-                    </span>
-                  </div>
-                </div>
-                <div className="pt-2 border-t">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Enriched Learners</span>
-                    <span className="font-semibold">{(enrichedStats.total_learners || 0).toLocaleString()}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">With Company</span>
-                    <span className="font-semibold">{(enrichedStats.learners_with_company || 0).toLocaleString()}</span>
-                  </div>
-                  <Link 
-                    href="/adoption" 
-                    className="flex items-center justify-center gap-1 mt-3 text-sm text-primary hover:underline"
-                  >
-                    View Full Product Adoption Analysis
-                    <ArrowUpRight className="h-3 w-3" />
-                  </Link>
-                </div>
+                ))}
               </div>
-            ) : (
-              <div className="h-[200px] flex items-center justify-center text-muted-foreground">
-                <p>Loading enriched stats...</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+            </CardContent>
+          </Card>
 
-      {/* Top Learning Paths by Impact */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Top Skills Tracks by Activity</CardTitle>
-          <CardDescription>Real skills course categories with highest learner engagement</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {topPaths.length > 0 ? (
-            <div className="space-y-4">
-              {topPaths.map((path, index) => (
-                <div key={path.name} className="flex items-center gap-4 p-4 rounded-lg bg-muted/50">
-                  <div className="flex items-center justify-center h-10 w-10 rounded-full bg-primary/10 text-primary font-bold">
-                    {index + 1}
+          {/* Charts Row */}
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+            {/* Copilot Adoption Trend */}
+            <Card className="col-span-4">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-violet-500" />
+                  Copilot Adoption Trend
+                </CardTitle>
+                <CardDescription>Daily active learners using GitHub Copilot (30 days)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {copilotTrend && copilotTrend.length > 0 ? (
+                  <>
+                    <SimpleAreaChart 
+                      data={copilotTrend.map(d => ({
+                        name: new Date(d.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+                        value: d.active_users,
+                        events: d.total_events || 0
+                      }))}
+                      dataKey="value"
+                      color="#8b5cf6"
+                    />
+                    <div className="flex justify-center gap-6 mt-4 text-sm">
+                      <div className="flex items-center gap-2">
+                        <div className="h-3 w-3 rounded-full bg-violet-500" />
+                        <span className="text-muted-foreground">Active Users</span>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="h-[200px] flex items-center justify-center text-muted-foreground">
+                    <p>Copilot trend data loading...</p>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-semibold">{path.name}</span>
-                      <Badge variant="secondary" className="text-blue-600 dark:text-blue-400">
-                        {path.adoption}
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Status Distribution */}
+            <Card className="col-span-3">
+              <CardHeader>
+                <CardTitle>Learner Distribution</CardTitle>
+                <CardDescription>By certification level</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <DonutChart data={impactSummary} />
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Product Adoption Row */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Product Adoption Overview</CardTitle>
+              <CardDescription>Learners actively using GitHub products (90-day window)</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {enrichedStats ? (
+                <div className="grid gap-4 md:grid-cols-4">
+                  <div className="flex items-center justify-between p-4 bg-violet-50 dark:bg-violet-950/30 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-violet-100 dark:bg-violet-900">
+                        <Sparkles className="h-5 w-5 text-violet-600" />
+                      </div>
+                      <div>
+                        <span className="font-medium">Copilot</span>
+                        <p className="text-xs text-muted-foreground">AI pair programmer</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-2xl font-bold text-violet-600">{(enrichedStats.copilot_users || 0).toLocaleString()}</span>
+                      <p className="text-xs text-muted-foreground">
+                        {enrichedStats.total_learners ? Math.round((enrichedStats.copilot_users || 0) / enrichedStats.total_learners * 100) : 0}% of learners
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900">
+                        <Zap className="h-5 w-5 text-blue-600" />
+                      </div>
+                      <div>
+                        <span className="font-medium">Actions</span>
+                        <p className="text-xs text-muted-foreground">CI/CD automation</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-2xl font-bold text-blue-600">{(enrichedStats.actions_users || 0).toLocaleString()}</span>
+                      <p className="text-xs text-muted-foreground">
+                        {enrichedStats.total_learners ? Math.round((enrichedStats.actions_users || 0) / enrichedStats.total_learners * 100) : 0}% of learners
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between p-4 bg-amber-50 dark:bg-amber-950/30 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900">
+                        <Shield className="h-5 w-5 text-amber-600" />
+                      </div>
+                      <div>
+                        <span className="font-medium">Security</span>
+                        <p className="text-xs text-muted-foreground">GHAS features</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-2xl font-bold text-amber-600">{(enrichedStats.security_users || 0).toLocaleString()}</span>
+                      <p className="text-xs text-muted-foreground">
+                        {enrichedStats.total_learners ? Math.round((enrichedStats.security_users || 0) / enrichedStats.total_learners * 100) : 0}% of learners
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between p-4 bg-green-50 dark:bg-green-950/30 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900">
+                        <Users className="h-5 w-5 text-green-600" />
+                      </div>
+                      <div>
+                        <span className="font-medium">With Company</span>
+                        <p className="text-xs text-muted-foreground">Enterprise learners</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-2xl font-bold text-green-600">{(enrichedStats.learners_with_company || 0).toLocaleString()}</span>
+                      <p className="text-xs text-muted-foreground">
+                        {enrichedStats.total_learners ? Math.round((enrichedStats.learners_with_company || 0) / enrichedStats.total_learners * 100) : 0}% of learners
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="h-[100px] flex items-center justify-center text-muted-foreground">
+                  <p>Loading product adoption data...</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Certifications Tab */}
+        <TabsContent value="certifications" className="space-y-6">
+          {/* Certification Performance */}
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-green-500" />
+                  Total Passed
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-green-600">{metrics.totalPassedExams.toLocaleString()}</div>
+                <p className="text-xs text-muted-foreground mt-1">Certification exams passed</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <Target className="h-4 w-4 text-blue-500" />
+                  Pass Rate
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-blue-600">{metrics.overallPassRate}%</div>
+                <p className="text-xs text-muted-foreground mt-1">Overall success rate</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <RefreshCw className="h-4 w-4 text-violet-500" />
+                  First-Time Pass
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-violet-600">
+                  {examInsights?.retry?.firstTimePassRate || 0}%
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">Pass on first attempt</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Pass Rates by Certification */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Certification Performance by Exam</CardTitle>
+              <CardDescription>Pass count and success rate across certifications</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {certificationTrend.length > 0 ? (
+                <>
+                  <SimpleAreaChart 
+                    data={certificationTrend}
+                    dataKey="completions"
+                    secondaryDataKey="usage"
+                    color="#22c55e"
+                    secondaryColor="#3b82f6"
+                    useSecondaryAxis={true}
+                  />
+                  <div className="flex justify-center gap-6 mt-4 text-sm">
+                    <div className="flex items-center gap-2">
+                      <div className="h-3 w-3 rounded-full bg-green-500" />
+                      <span className="text-muted-foreground">Passed Count</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="h-3 w-3 rounded-full bg-blue-500" />
+                      <span className="text-muted-foreground">Pass Rate %</span>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="h-[200px] flex items-center justify-center text-muted-foreground">
+                  <p>Loading certification data...</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Near Miss & Retry Analytics */}
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* Near Miss Segment */}
+            <Card className="border-amber-200 dark:border-amber-800">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-amber-500" />
+                  Near-Miss Segment
+                </CardTitle>
+                <CardDescription>
+                  Learners within 5% of passing threshold — high-value intervention targets
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {examInsights?.nearMiss ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-4 bg-amber-50 dark:bg-amber-950/30 rounded-lg">
+                      <div>
+                        <span className="text-3xl font-bold text-amber-600">
+                          {examInsights.nearMiss.nearMissCount?.toLocaleString() || 0}
+                        </span>
+                        <p className="text-sm text-muted-foreground">
+                          Near-miss attempts ({examInsights.nearMiss.nearMissThreshold || "60-69%"})
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="border-amber-500 text-amber-600">
+                        High Priority
                       </Badge>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <span className="text-sm text-muted-foreground">
-                        {path.learners.toLocaleString()} known learners
-                      </span>
-                      <div className="flex-1 flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">Completion:</span>
-                        <Progress value={path.impact} className="h-2 flex-1" />
-                        <span className="text-sm font-medium">{path.impact}%</span>
+                    <div className="space-y-2">
+                      {examInsights.nearMiss.nearMissByCertification?.slice(0, 4).map((cert: { certification: string; count: number }) => (
+                        <div key={cert.certification} className="flex items-center justify-between text-sm">
+                          <span>{cert.certification.replace("GitHub ", "")}</span>
+                          <span className="font-medium">{cert.count.toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="h-[150px] flex items-center justify-center text-muted-foreground">
+                    <p>Loading near-miss data...</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Retry Analytics */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <RefreshCw className="h-5 w-5 text-blue-500" />
+                  Retry Analytics
+                </CardTitle>
+                <CardDescription>
+                  How learners perform on subsequent attempts
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {examInsights?.retry ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-3 bg-green-50 dark:bg-green-950/30 rounded-lg text-center">
+                        <div className="text-2xl font-bold text-green-600">
+                          {examInsights.retry.firstTimePassRate}%
+                        </div>
+                        <p className="text-xs text-muted-foreground">First-time pass</p>
+                      </div>
+                      <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg text-center">
+                        <div className="text-2xl font-bold text-blue-600">
+                          {examInsights.retry.retrySuccessRate}%
+                        </div>
+                        <p className="text-xs text-muted-foreground">Retry success</p>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Attempt Distribution</p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs w-16">1st try</span>
+                        <Progress value={100} className="h-2 flex-1" />
+                        <span className="text-xs font-medium w-16 text-right">
+                          {examInsights.retry.attemptDistribution?.firstTry?.toLocaleString() || 0}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs w-16">2nd try</span>
+                        <Progress 
+                          value={examInsights.retry.attemptDistribution?.firstTry ? 
+                            (examInsights.retry.attemptDistribution.secondTry / examInsights.retry.attemptDistribution.firstTry) * 100 : 0} 
+                          className="h-2 flex-1" 
+                        />
+                        <span className="text-xs font-medium w-16 text-right">
+                          {examInsights.retry.attemptDistribution?.secondTry?.toLocaleString() || 0}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs w-16">3rd try</span>
+                        <Progress 
+                          value={examInsights.retry.attemptDistribution?.firstTry ? 
+                            (examInsights.retry.attemptDistribution.thirdTry / examInsights.retry.attemptDistribution.firstTry) * 100 : 0} 
+                          className="h-2 flex-1" 
+                        />
+                        <span className="text-xs font-medium w-16 text-right">
+                          {examInsights.retry.attemptDistribution?.thirdTry?.toLocaleString() || 0}
+                        </span>
                       </div>
                     </div>
                   </div>
+                ) : (
+                  <div className="h-[150px] flex items-center justify-center text-muted-foreground">
+                    <p>Loading retry analytics...</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Exam Forecast */}
+          {examInsights?.forecast && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5 text-green-500" />
+                  Exam Forecast (Next 3 Months)
+                </CardTitle>
+                <CardDescription>
+                  Scheduled exams and projected outcomes
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4 md:grid-cols-3">
+                  {examInsights.forecast.monthlyForecast?.slice(0, 3).map((month: { 
+                    month: string; 
+                    scheduled: number; 
+                    projectedPasses: number; 
+                    projectedPassRate: number;
+                  }) => (
+                    <div key={month.month} className="p-4 border rounded-lg">
+                      <div className="text-lg font-semibold mb-3">
+                        {new Date(month.month + "-01").toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Scheduled</span>
+                          <span className="font-medium">{month.scheduled}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Projected Passes</span>
+                          <span className="font-medium text-green-600">{month.projectedPasses}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Expected Rate</span>
+                          <span className="font-medium">{month.projectedPassRate}%</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="h-[200px] flex items-center justify-center text-muted-foreground">
-              <p>Run <code className="bg-muted px-1 rounded">npm run fetch:skills</code> to load skills data</p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* Skills Tab */}
+        <TabsContent value="skills" className="space-y-6">
+          {/* Skill Dimensions */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Skill Dimension Averages</CardTitle>
+              <CardDescription>
+                Average scores across the 5 dimensions that make up the skill score
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {skillDimensions.length > 0 ? (
+                <div className="space-y-4">
+                  {skillDimensions.map((dim) => (
+                    <div key={dim.name} className="flex items-center gap-4">
+                      <div className="w-32 text-sm font-medium">{dim.name}</div>
+                      <div className="flex-1">
+                        <Progress value={dim.value} className="h-4" />
+                      </div>
+                      <div className="w-16 text-right font-semibold">{dim.value.toFixed(1)}%</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="h-[200px] flex items-center justify-center text-muted-foreground">
+                  <p>Loading skill dimensions...</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Growth Metrics */}
+          {skillJourneyData?.growthMetrics && (
+            <div className="grid gap-4 md:grid-cols-3">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-green-500" />
+                    Growing Learners
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold text-green-600">
+                    {skillJourneyData.growthMetrics.growing_percentage}%
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {skillJourneyData.growthMetrics.growing_learners.toLocaleString()} actively improving
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    <Activity className="h-4 w-4 text-blue-500" />
+                    Active (30d)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold text-blue-600">
+                    {skillJourneyData.growthMetrics.active_percentage}%
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {skillJourneyData.growthMetrics.active_30_days.toLocaleString()} active learners
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    <Award className="h-4 w-4 text-violet-500" />
+                    Certified
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold text-violet-600">
+                    {skillJourneyData.growthMetrics.cert_percentage}%
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {skillJourneyData.growthMetrics.with_certifications.toLocaleString()} with certs
+                  </p>
+                </CardContent>
+              </Card>
             </div>
           )}
-        </CardContent>
-      </Card>
+
+          {/* Top Learning Paths */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Top Skills Tracks by Activity</CardTitle>
+              <CardDescription>Skills course categories with highest learner engagement</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {topPaths.length > 0 ? (
+                <div className="space-y-4">
+                  {topPaths.map((path, index) => (
+                    <div key={path.name} className="flex items-center gap-4 p-4 rounded-lg bg-muted/50">
+                      <div className="flex items-center justify-center h-10 w-10 rounded-full bg-primary/10 text-primary font-bold">
+                        {index + 1}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-semibold">{path.name}</span>
+                          <Badge variant="secondary" className="text-blue-600 dark:text-blue-400">
+                            {path.adoption}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <span className="text-sm text-muted-foreground">
+                            {path.learners.toLocaleString()} known learners
+                          </span>
+                          <div className="flex-1 flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">Completion:</span>
+                            <Progress value={path.impact} className="h-2 flex-1" />
+                            <span className="text-sm font-medium">{path.impact}%</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="h-[200px] flex items-center justify-center text-muted-foreground">
+                  <p>Run <code className="bg-muted px-1 rounded">npm run fetch:skills</code> to load skills data</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Velocity Tab */}
+        <TabsContent value="velocity" className="space-y-6">
+          {/* Stage Velocity */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-blue-500" />
+                Journey Stage Velocity
+              </CardTitle>
+              <CardDescription>
+                Average time (in days) learners spend at each stage of the journey
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {stageVelocity ? (
+                <div className="space-y-4">
+                  {Object.entries(stageVelocity).map(([stage, days]) => {
+                    const stageName = stage.charAt(0).toUpperCase() + stage.slice(1).replace(/([A-Z])/g, ' $1');
+                    const maxDays = Math.max(...Object.values(stageVelocity as Record<string, number>));
+                    const percentage = maxDays > 0 ? ((days as number) / maxDays) * 100 : 0;
+                    return (
+                      <div key={stage} className="flex items-center gap-4">
+                        <div className="w-28 text-sm font-medium">{stageName}</div>
+                        <div className="flex-1">
+                          <div className="h-6 bg-muted rounded-lg overflow-hidden">
+                            <div 
+                              className="h-full bg-gradient-to-r from-blue-400 to-blue-600 rounded-lg transition-all duration-500 flex items-center justify-end pr-2"
+                              style={{ width: `${Math.max(percentage, 5)}%` }}
+                            >
+                              {percentage > 20 && (
+                                <span className="text-xs font-medium text-white">{days}d</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        {percentage <= 20 && (
+                          <div className="w-12 text-right text-sm font-medium">{days}d</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="h-[200px] flex items-center justify-center text-muted-foreground">
+                  <p>Loading velocity data...</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Key Insights */}
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Fastest Progression</CardTitle>
+                <CardDescription>Stages with quickest advancement</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {stageVelocity ? (
+                  <div className="space-y-3">
+                    {Object.entries(stageVelocity)
+                      .filter(([, days]) => days as number > 0)
+                      .sort((a, b) => (a[1] as number) - (b[1] as number))
+                      .slice(0, 3)
+                      .map(([stage, days], i) => (
+                        <div key={stage} className="flex items-center gap-3">
+                          <div className={`h-8 w-8 rounded-full flex items-center justify-center text-white font-bold ${
+                            i === 0 ? 'bg-green-500' : i === 1 ? 'bg-blue-500' : 'bg-violet-500'
+                          }`}>
+                            {i + 1}
+                          </div>
+                          <div>
+                            <div className="font-medium">{stage.charAt(0).toUpperCase() + stage.slice(1)}</div>
+                            <div className="text-sm text-muted-foreground">{days} days average</div>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground">Loading...</p>
+                )}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Bottlenecks</CardTitle>
+                <CardDescription>Stages where learners spend most time</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {stageVelocity ? (
+                  <div className="space-y-3">
+                    {Object.entries(stageVelocity)
+                      .filter(([, days]) => days as number > 0)
+                      .sort((a, b) => (b[1] as number) - (a[1] as number))
+                      .slice(0, 3)
+                      .map(([stage, days], i) => (
+                        <div key={stage} className="flex items-center gap-3">
+                          <div className={`h-8 w-8 rounded-full flex items-center justify-center text-white font-bold ${
+                            i === 0 ? 'bg-red-500' : i === 1 ? 'bg-orange-500' : 'bg-amber-500'
+                          }`}>
+                            {i + 1}
+                          </div>
+                          <div>
+                            <div className="font-medium">{stage.charAt(0).toUpperCase() + stage.slice(1)}</div>
+                            <div className="text-sm text-muted-foreground">{days} days average</div>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground">Loading...</p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+      </Tabs>
 
       {/* Quick Navigation */}
       <div>
-        <h2 className="text-lg font-semibold mb-4">Explore More</h2>
+        <h2 className="text-lg font-semibold mb-4">Deep Dive</h2>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {quickNavCards.map((card) => (
             <Link key={card.href} href={card.href}>
@@ -503,54 +985,6 @@ export default function DashboardPage() {
             </Link>
           ))}
         </div>
-      </div>
-
-      {/* Quick Stats Row */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Still Learning</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{metrics.learningUsers.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">
-              Active learners not yet certified
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Avg Learning Hours</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{metrics.avgLearningHours}</div>
-            <p className="text-xs text-muted-foreground">
-              Hours per learner
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Impact Score</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{metrics.impactScore}</div>
-            <p className="text-xs text-muted-foreground">
-              Learning → usage correlation
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Retention Rate</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{metrics.retentionRate}%</div>
-            <p className="text-xs text-muted-foreground">
-              Active at 30 days
-            </p>
-          </CardContent>
-        </Card>
       </div>
     </div>
   );

@@ -51,11 +51,16 @@ export async function GET() {
         platformTime: c.platform_time,
       }));
       
+      // Get additional data from aggregated files for fields not in backend
+      const aggregatedData = getAggregatedData("impact.json");
+      
       return NextResponse.json({
         stageImpact,
         productAdoption: backendData.product_adoption,
         correlationData,
         roiBreakdown: backendData.roi_breakdown,
+        impactFlow: aggregatedData?.impactFlow || { learningHours: 0, skillsAcquired: 0, productAdoption: 0, timeOnPlatform: 0 },
+        metrics: aggregatedData?.metrics || { activeLearners: 0, avgUsageIncrease: 0, featuresAdopted: 0, timeToValue: 0 },
         source: "kusto",
       });
     }

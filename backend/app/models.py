@@ -177,6 +177,7 @@ class MetricsResponse(BaseModel):
     status_breakdown: List[StatusBreakdown]
     funnel: List[JourneyFunnelStage]
     certification_analytics: Optional[dict] = None
+    product_adoption: Optional[dict] = None
 
 
 # =============================================================================

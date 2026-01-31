@@ -1,6 +1,6 @@
 "use client";
 
-import { MetricCard, DonutChart, SimpleBarChart } from "@/components/dashboard";
+import { MetricCard, TrendLineChart } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Award, Calendar, Loader2, Target, AlertCircle, CheckCircle2, RefreshCw, Users, CalendarDays } from "lucide-react";
@@ -52,6 +52,20 @@ export default function CertificationROIPage() {
   const nearMissSegment = certAnalytics?.nearMissSegment;
   const examForecast = certAnalytics?.examForecast;
 
+  // Monthly exam trends for rate chart (must be after examForecast is defined)
+  const historicalTrend = examForecast?.historicalTrend || [];
+  const monthlyRatesData = historicalTrend.map((m: { month: string; actual: number; passed: number; noShows: number; passRate: number }) => {
+    const monthDate = new Date(m.month + '-01');
+    const monthName = monthDate.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+    const noShowRate = m.actual + m.noShows > 0 ? Math.round((m.noShows / (m.actual + m.noShows)) * 100 * 10) / 10 : 0;
+    return {
+      name: monthName,
+      passRate: m.passRate,
+      noShowRate,
+      attempts: m.actual,
+    };
+  });
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -69,7 +83,13 @@ export default function CertificationROIPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+        <MetricCard
+          title="Exam Attempts"
+          value={(examSummary?.totalExamAttempts || 0).toLocaleString()}
+          description={`${examSummary?.totalPassed?.toLocaleString() || 0} passed, ${examSummary?.totalFailed?.toLocaleString() || 0} failed`}
+          icon={<Target className="h-4 w-4" />}
+        />
         <MetricCard
           title="Total Certified"
           value={certifiedUsers.toLocaleString()}
@@ -83,17 +103,18 @@ export default function CertificationROIPage() {
           icon={<Calendar className="h-4 w-4" />}
         />
         <MetricCard
-          title="Exam Attempts"
-          value={(examSummary?.totalExamAttempts || 0).toLocaleString()}
-          description={`${examSummary?.totalPassed?.toLocaleString() || 0} passed, ${examSummary?.totalFailed?.toLocaleString() || 0} failed`}
-          icon={<Target className="h-4 w-4" />}
-        />
-        <MetricCard
           title="Pass Rate"
           value={`${examSummary?.overallPassRate || 0}%`}
           description="Overall success rate"
           trend={{ value: examSummary?.overallPassRate || 0, isPositive: (examSummary?.overallPassRate || 0) >= 70 }}
           icon={<CheckCircle2 className="h-4 w-4" />}
+        />
+        <MetricCard
+          title="No Show Rate"
+          value={`${examSummary?.totalExamAttempts ? Math.round((examSummary?.totalNoShows || 0) / ((examSummary?.totalExamAttempts || 1) + (examSummary?.totalNoShows || 0)) * 100) : 0}%`}
+          description={`${(examSummary?.totalNoShows || 0).toLocaleString()} no shows`}
+          trend={{ value: examSummary?.totalExamAttempts ? Math.round((examSummary?.totalNoShows || 0) / ((examSummary?.totalExamAttempts || 1) + (examSummary?.totalNoShows || 0)) * 100) : 0, isPositive: false }}
+          icon={<AlertCircle className="h-4 w-4" />}
         />
       </div>
 
@@ -328,19 +349,30 @@ export default function CertificationROIPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <CalendarDays className="h-5 w-5" />
-              Scheduled Exam Forecast
+              ML-Powered Exam Forecast
             </CardTitle>
             <CardDescription>
-              Projected certifications based on scheduled exams and historical pass rates
+              Projections using Holt-Winters exponential smoothing on historical data 
+              {examForecast.avgMonthlyGrowthRate !== undefined && (
+                <Badge variant="outline" className={`ml-2 ${examForecast.avgMonthlyGrowthRate >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {examForecast.avgMonthlyGrowthRate >= 0 ? '+' : ''}{examForecast.avgMonthlyGrowthRate}% trend
+                </Badge>
+              )}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 md:grid-cols-3 mb-6">
+            <div className="grid gap-4 md:grid-cols-4 mb-6">
               <div className="p-4 rounded-lg border bg-blue-500/5">
                 <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
                   {examForecast.totalScheduledNext3Months.toLocaleString()}
                 </div>
                 <div className="text-sm text-muted-foreground">Scheduled (Next 3 Months)</div>
+              </div>
+              <div className="p-4 rounded-lg border bg-purple-500/5">
+                <div className="text-3xl font-bold text-purple-600 dark:text-purple-400">
+                  {(examForecast.projectedAttemptsNext3Months || examForecast.totalScheduledNext3Months).toLocaleString()}
+                </div>
+                <div className="text-sm text-muted-foreground">ML Projected Attempts</div>
               </div>
               <div className="p-4 rounded-lg border bg-green-500/5">
                 <div className="text-3xl font-bold text-green-600 dark:text-green-400">
@@ -350,36 +382,135 @@ export default function CertificationROIPage() {
               </div>
               <div className="p-4 rounded-lg border">
                 <div className="text-3xl font-bold">
-                  {examForecast.totalScheduledNext3Months > 0 
-                    ? Math.round((examForecast.projectedPassesNext3Months / examForecast.totalScheduledNext3Months) * 100)
+                  {(examForecast.projectedAttemptsNext3Months || examForecast.totalScheduledNext3Months) > 0 
+                    ? Math.round((examForecast.projectedPassesNext3Months / (examForecast.projectedAttemptsNext3Months || examForecast.totalScheduledNext3Months)) * 100)
                     : 0}%
                 </div>
                 <div className="text-sm text-muted-foreground">Projected Pass Rate</div>
               </div>
             </div>
 
+            {/* Historical Trend */}
+            {examForecast.historicalTrend && examForecast.historicalTrend.length > 0 && (
+              <div className="mb-6">
+                <h4 className="text-sm font-medium mb-3">Historical Trend (Last 12 Months)</h4>
+                <div className="flex gap-2 items-end px-2">
+                  {examForecast.historicalTrend.map((m: { month: string; actual: number; passed: number; failed?: number; noShows?: number; passRate: number }) => {
+                    const trendData = examForecast.historicalTrend!;
+                    const failed = m.failed ?? (m.actual - m.passed);
+                    const noShows = m.noShows ?? 0;
+                    const totalWithNoShows = m.actual + noShows;
+                    const maxTotal = Math.max(...trendData.map((h) => h.actual + (h.noShows ?? 0)));
+                    const heightPercent = (totalWithNoShows / maxTotal) * 100;
+                    const passPercent = totalWithNoShows > 0 ? (m.passed / totalWithNoShows) * 100 : 0;
+                    const failedPercent = totalWithNoShows > 0 ? (failed / totalWithNoShows) * 100 : 0;
+                    const noShowPercent = totalWithNoShows > 0 ? (noShows / totalWithNoShows) * 100 : 0;
+                    const displayValue = totalWithNoShows >= 1000 ? `${(totalWithNoShows / 1000).toFixed(1)}k` : totalWithNoShows.toString();
+                    
+                    // Format month name and fiscal year
+                    const [year, monthNum] = m.month.split('-');
+                    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    const monthName = monthNames[parseInt(monthNum) - 1];
+                    // Fiscal year: Feb-Jan = FY, so Feb 2025 = FY25, Jan 2026 = FY26
+                    const fiscalYear = parseInt(monthNum) >= 2 ? parseInt(year) % 100 : (parseInt(year)) % 100;
+                    const monthLabel = `${monthName}`;
+                    const fyLabel = `FY${fiscalYear.toString().padStart(2, '0')}`;
+                    const fullMonthName = monthNames[parseInt(monthNum) - 1] + ' ' + year;
+                    
+                    return (
+                      <div 
+                        key={m.month} 
+                        className="flex-1 flex flex-col items-center gap-0 group cursor-pointer relative"
+                      >
+                        {/* Data label at top */}
+                        <div className="text-xs font-semibold text-foreground mb-1">
+                          {displayValue}
+                        </div>
+                        {/* Bar container */}
+                        <div className="w-full flex flex-col justify-end" style={{ height: '140px' }}>
+                          <div 
+                            className="w-full rounded-t overflow-hidden flex flex-col" 
+                            style={{ height: `${heightPercent}%`, minHeight: '8px' }}
+                          >
+                            {noShowPercent > 0 && (
+                              <div className="w-full bg-yellow-400 dark:bg-yellow-500" style={{ height: `${noShowPercent}%` }} />
+                            )}
+                            {failedPercent > 0 && (
+                              <div className="w-full bg-red-400 dark:bg-red-500" style={{ height: `${failedPercent}%` }} />
+                            )}
+                            <div className="w-full bg-green-500 dark:bg-green-600 flex-1" />
+                          </div>
+                        </div>
+                        {/* Month and FY label */}
+                        <div className="flex flex-col items-center mt-1">
+                          <span className="text-[11px] text-foreground font-medium">{monthLabel}</span>
+                          <span className="text-[9px] text-muted-foreground">{fyLabel}</span>
+                        </div>
+                        {/* Tooltip */}
+                        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-popover text-popover-foreground border rounded-lg shadow-lg p-3 opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none whitespace-nowrap">
+                          <div className="font-semibold mb-1">{fullMonthName}</div>
+                          <div className="text-sm space-y-0.5">
+                            <div className="flex items-center gap-2">
+                              <span className="w-2.5 h-2.5 bg-green-500 rounded-sm" />
+                              <span>Passed: {m.passed.toLocaleString()}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="w-2.5 h-2.5 bg-red-400 rounded-sm" />
+                              <span>Failed: {failed.toLocaleString()}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="w-2.5 h-2.5 bg-yellow-400 rounded-sm" />
+                              <span>No Shows: {noShows.toLocaleString()}{noShows === 0 ? ' (not tracked)' : ''}</span>
+                            </div>
+                            <div className="border-t mt-1 pt-1 text-muted-foreground">
+                              Pass Rate: {m.passRate}%
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="flex justify-center gap-6 mt-3 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-green-500 rounded" /> Passed</span>
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-red-400 rounded" /> Failed</span>
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-yellow-400 rounded" /> No Show (FY26+ only)</span>
+                </div>
+                <div className="text-center text-xs text-muted-foreground mt-2 italic">
+                  Note: FY22-25 exam data (before Jul 2025) only tracked Pass/Fail outcomes. No-show tracking is available from FY26 Pearson data.
+                </div>
+              </div>
+            )}
+
             {/* Monthly breakdown */}
             <div className="rounded-md border">
-              <div className="grid grid-cols-5 gap-4 p-4 bg-muted/50 text-sm font-medium">
+              <div className="grid grid-cols-6 gap-4 p-4 bg-muted/50 text-sm font-medium">
                 <div>Month</div>
                 <div className="text-right">Scheduled</div>
+                <div className="text-right">ML Attempts</div>
                 <div className="text-right">Projected Passes</div>
                 <div className="text-right">Pass Rate</div>
-                <div className="text-right">Top Certification</div>
+                <div className="text-right">Method</div>
               </div>
-              {examForecast.monthlyForecast.map((month) => (
-                <div key={month.month} className="grid grid-cols-5 gap-4 p-4 border-t items-center">
+              {examForecast.monthlyForecast.map((month: { month: string; scheduled: number; projectedAttempts?: number; projectedPasses: number; projectedPassRate: number; confidence?: number; forecastMethod?: string; byCertification: Array<{ certification: string }> }) => (
+                <div key={month.month} className="grid grid-cols-6 gap-4 p-4 border-t items-center">
                   <div className="font-medium">{month.month}</div>
                   <div className="text-right">{month.scheduled.toLocaleString()}</div>
+                  <div className="text-right text-purple-600 dark:text-purple-400">
+                    {(month.projectedAttempts || month.scheduled).toLocaleString()}
+                  </div>
                   <div className="text-right text-green-600 dark:text-green-400 font-medium">
                     {month.projectedPasses.toLocaleString()}
                   </div>
                   <div className="text-right">
-                    <Progress value={month.projectedPassRate} className="w-16 h-2 inline-block mr-2" />
+                    <Progress value={month.projectedPassRate} className="w-12 h-2 inline-block mr-1" />
                     <span className="text-sm">{month.projectedPassRate}%</span>
                   </div>
-                  <div className="text-right text-sm text-muted-foreground">
-                    {month.byCertification[0]?.certification || '-'}
+                  <div className="text-right">
+                    <Badge variant="outline" className="text-xs">
+                      {month.forecastMethod === 'scheduled+trend' ? 'Scheduled' : 'ML'}
+                      {month.confidence && ` (${month.confidence}%)`}
+                    </Badge>
                   </div>
                 </div>
               ))}
@@ -392,65 +523,201 @@ export default function CertificationROIPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
         <Card className="col-span-3">
           <CardHeader>
-            <CardTitle>Certifications by Level</CardTitle>
-            <CardDescription>Distribution across certification levels</CardDescription>
+            <CardTitle>Pass Rate by Certification</CardTitle>
+            <CardDescription>Which certifications are most challenging</CardDescription>
           </CardHeader>
           <CardContent>
-            <DonutChart data={certificationsByPath} />
+            <div className="space-y-3">
+              {certPassRates.slice(0, 6).map((cert: { certification: string; passRate: number; totalAttempts: number; passed: number }) => {
+                const isAboveTarget = cert.passRate >= 70;
+                return (
+                  <div key={cert.certification} className="space-y-1">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium truncate max-w-[140px]" title={cert.certification}>
+                        {cert.certification.replace('GitHub ', '')}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={`font-semibold ${isAboveTarget ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                          {cert.passRate}%
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          ({cert.totalAttempts.toLocaleString()})
+                        </span>
+                      </div>
+                    </div>
+                    <div className="relative h-2 bg-muted rounded-full overflow-hidden">
+                      <div 
+                        className={`absolute left-0 top-0 h-full rounded-full transition-all ${isAboveTarget ? 'bg-green-500' : 'bg-amber-500'}`}
+                        style={{ width: `${cert.passRate}%` }}
+                      />
+                      {/* 70% target marker */}
+                      <div className="absolute top-0 h-full w-0.5 bg-gray-400 dark:bg-gray-500" style={{ left: '70%' }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-3 pt-3 border-t flex items-center gap-2 text-xs text-muted-foreground">
+              <div className="w-0.5 h-3 bg-gray-400" />
+              <span>70% target</span>
+            </div>
           </CardContent>
         </Card>
 
         <Card className="col-span-4">
           <CardHeader>
-            <CardTitle>Monthly Certifications</CardTitle>
-            <CardDescription>Actual vs target</CardDescription>
+            <CardTitle>Monthly Exam Rates</CardTitle>
+            <CardDescription>Pass rate (left axis) and no-show rate (right axis) trends over time</CardDescription>
           </CardHeader>
           <CardContent>
-            <SimpleBarChart 
-              data={monthlyData} 
-              dataKey="certifications"
-              secondaryDataKey="target"
-              color="#22c55e"
-              secondaryColor="#94a3b8"
-            />
+            {monthlyRatesData.length > 0 ? (
+              <TrendLineChart 
+                data={monthlyRatesData}
+                lines={[
+                  { dataKey: 'passRate', color: '#22c55e', name: 'Pass Rate %', yAxisId: 'left' },
+                  { dataKey: 'noShowRate', color: '#f59e0b', name: 'No Show Rate %', yAxisId: 'right' },
+                ]}
+                showSecondaryAxis={true}
+                leftAxisDomain={[60, 90]}
+                rightAxisDomain={[0, 20]}
+                referenceLines={[
+                  { value: 70, label: '70% Target', color: '#16a34a', yAxisId: 'left' },
+                  { value: 10, label: '10% Min', color: '#d97706', yAxisId: 'right' },
+                ]}
+              />
+            ) : (
+              <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                No historical trend data available
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Certification Levels Summary */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Certification Levels</CardTitle>
-          <CardDescription>Breakdown by achievement level</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-md border">
-            <div className="grid grid-cols-4 gap-4 p-4 bg-muted/50 text-sm font-medium">
-              <div>Level</div>
-              <div className="text-right">Count</div>
-              <div className="text-right">Percentage</div>
-              <div className="text-right">Trend</div>
-            </div>
-            {statusBreakdown
-              .filter(s => ["Certified", "Multi-Certified", "Specialist", "Champion"].includes(s.status))
-              .map((status, index) => (
-              <div key={status.status} className="grid grid-cols-4 gap-4 p-4 border-t items-center">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-green-500/10 dark:bg-green-500/20 flex items-center justify-center">
-                    <Award className="h-5 w-5 text-green-600 dark:text-green-400" />
-                  </div>
-                  <span className="font-medium">{status.status}</span>
+      {/* Certification ROI: Product Adoption */}
+      {metricsData?.productAdoption && (() => {
+        const adoption = metricsData.productAdoption as { 
+          copilot: { before: number; after: number; certifiedCount?: number; learningCount?: number };
+          actions: { before: number; after: number; certifiedCount?: number; learningCount?: number };
+          security: { before: number; after: number; certifiedCount?: number; learningCount?: number };
+          learningUserCount?: number;
+          certifiedUserCount?: number;
+        };
+        return (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5" />
+              Certification ROI: Product Adoption
+            </CardTitle>
+            <CardDescription>
+              How certification correlates with GitHub product usage
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-6 md:grid-cols-3">
+              {/* Copilot */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">Copilot</span>
+                  <Badge variant="outline" className="bg-green-500/10 text-green-700 dark:text-green-400">
+                    +{((adoption.copilot.after / adoption.copilot.before - 1) * 100).toFixed(0)}% lift
+                  </Badge>
                 </div>
-                <div className="text-right text-sm">{status.count.toLocaleString()}</div>
-                <div className="text-right text-sm text-muted-foreground">{status.percentage}%</div>
-                <div className="text-right">
-                  <Badge variant="secondary" className="text-green-600 dark:text-green-400">+{[12, 8, 15, 10][index % 4]}%</Badge>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Learning</span>
+                    <span>{adoption.copilot.before}%</span>
+                  </div>
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                    <div className="h-full bg-blue-400 rounded-full" style={{ width: `${adoption.copilot.before}%` }} />
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Certified</span>
+                    <span className="font-semibold text-green-600 dark:text-green-400">{adoption.copilot.after}%</span>
+                  </div>
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                    <div className="h-full bg-green-500 rounded-full" style={{ width: `${adoption.copilot.after}%` }} />
+                  </div>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {(adoption.copilot.certifiedCount || 0).toLocaleString()} certified users
                 </div>
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+
+              {/* Actions */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">Actions</span>
+                  <Badge variant="outline" className="bg-green-500/10 text-green-700 dark:text-green-400">
+                    +{((adoption.actions.after / adoption.actions.before - 1) * 100).toFixed(0)}% lift
+                  </Badge>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Learning</span>
+                    <span>{adoption.actions.before}%</span>
+                  </div>
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                    <div className="h-full bg-blue-400 rounded-full" style={{ width: `${adoption.actions.before}%` }} />
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Certified</span>
+                    <span className="font-semibold text-green-600 dark:text-green-400">{adoption.actions.after}%</span>
+                  </div>
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                    <div className="h-full bg-green-500 rounded-full" style={{ width: `${adoption.actions.after}%` }} />
+                  </div>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {(adoption.actions.certifiedCount || 0).toLocaleString()} certified users
+                </div>
+              </div>
+
+              {/* Security */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">Advanced Security</span>
+                  <Badge variant="outline" className="bg-green-500/10 text-green-700 dark:text-green-400">
+                    +{((adoption.security.after / adoption.security.before - 1) * 100).toFixed(0)}% lift
+                  </Badge>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Learning</span>
+                    <span>{adoption.security.before}%</span>
+                  </div>
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                    <div className="h-full bg-blue-400 rounded-full" style={{ width: `${adoption.security.before}%` }} />
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Certified</span>
+                    <span className="font-semibold text-green-600 dark:text-green-400">{adoption.security.after}%</span>
+                  </div>
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                    <div className="h-full bg-green-500 rounded-full" style={{ width: `${adoption.security.after}%` }} />
+                  </div>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {(adoption.security.certifiedCount || 0).toLocaleString()} certified users
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 pt-4 border-t flex items-center gap-4 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-2 bg-blue-400 rounded" />
+                <span>Learning users ({(adoption.learningUserCount || 0).toLocaleString()})</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-2 bg-green-500 rounded" />
+                <span>Certified users ({(adoption.certifiedUserCount || 0).toLocaleString()})</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      );
+      })()}
 
       {/* Pass Rates by Certification */}
       {certPassRates.length > 0 && (

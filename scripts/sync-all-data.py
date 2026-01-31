@@ -222,24 +222,120 @@ all_learners
 """
 
 # Individual exam records query (unions FY22-25 and FY26)
+# FY22-25 uses ACE event tables (in hydro database) for full status tracking (including Absent)
 INDIVIDUAL_EXAMS_QUERY = """
-// FY22-25 exam results with calculated scores from gh-analytics
-let FY22_25_Records = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').exam_results
-    | extend
-        email = tolower(email),
-        exam_code = examcode,
-        exam_name = examname,
-        exam_date = endtime,
-        exam_status = case(passed == true, "Passed", "Failed"),
-        total_questions = toint(correct) + toint(incorrect),
-        score_percent = iff(toint(correct) + toint(incorrect) > 0,
-                           round(100.0 * toint(correct) / (toint(correct) + toint(incorrect)), 1),
-                           0.0),
-        source = "FY22-25"
-    | where isnotempty(email)
-    | project email, exam_code, exam_name, exam_date, exam_status, score_percent, source;
+// ============================================================================
+// FY22-25 DATA: Use ACE event tables from hydro database for full status tracking
+// ============================================================================
 
-// FY26 Pearson data
+// 0. Deduplicate eligibility_sent to the latest record per eligibility_id
+let EligibilityData = cluster('gh-analytics.eastus.kusto.windows.net').database('hydro').ace_v0_eligibility_sent
+    | extend eligibility_id = tostring(existing_eligibility_id)
+    | summarize arg_max(kafka_timestamp, *) by eligibility_id
+    | project
+        eligibility_id,
+        user_handle_meta = coalesce(tostring(user.handle), ""),
+        exam_name_meta   = coalesce(tostring(exam.name), ""),
+        exam_code_meta   = coalesce(tostring(exam.code), ""),
+        RegisteredDate   = todatetime(start_date);
+
+// 1. Scheduled exams
+let ScheduledExams = cluster('gh-analytics.eastus.kusto.windows.net').database('hydro').ace_v0_exam_scheduled
+    | project
+        eligibility_id    = tostring(eligibility_id),
+        ExamDate          = todatetime(scheduled_for),
+        Status            = "Scheduled",
+        exam_timestamp    = timestamp,
+        user_handle_event = coalesce(tostring(user.handle), ""),
+        examname_event    = coalesce(tostring(exam.name), ""),
+        examcode_event    = coalesce(tostring(exam.code), "");
+
+// 2. Cancelled exams
+let CancelledExams = cluster('gh-analytics.eastus.kusto.windows.net').database('hydro').ace_v0_exam_cancelled
+    | project
+        eligibility_id    = tostring(eligibility_id),
+        ExamDate          = todatetime(cancelled_on),
+        Status            = "Cancelled",
+        exam_timestamp    = timestamp,
+        user_handle_event = coalesce(tostring(user.handle), ""),
+        examname_event    = coalesce(tostring(exam.name), ""),
+        examcode_event    = coalesce(tostring(exam.code), "");
+
+// 3. Absent exams (No Show)
+let AbsentExams = cluster('gh-analytics.eastus.kusto.windows.net').database('hydro').ace_v0_exam_absent
+    | project
+        eligibility_id    = tostring(eligibility_id),
+        ExamDate          = todatetime(absent_on),
+        Status            = "No Show",  // Normalize to No Show
+        exam_timestamp    = timestamp,
+        user_handle_event = coalesce(tostring(user.handle), ""),
+        examname_event    = coalesce(tostring(exam.name), ""),
+        examcode_event    = coalesce(tostring(exam.code), "");
+
+// 4. Completed exams (Passed/Failed) with scores
+let CompletedExams = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').exam_results
+    | extend
+        RoundedScore = iff(correct + incorrect > 0,
+                          round((todouble(correct) / (correct + incorrect)) * 100, 1),
+                          real(null))
+    | project
+        eligibility_id    = tostring(eligibilityid),
+        ExamDate          = todatetime(endtime),
+        Status            = iff(passed, "Passed", "Failed"),
+        exam_timestamp    = updateddate,
+        user_handle_event = coalesce(userhandle, ""),
+        examname_event    = coalesce(examname, ""),
+        examcode_event    = coalesce(examcode, ""),
+        email_direct      = tolower(email),
+        score_percent     = RoundedScore;
+
+// 5. Union FY22-25 event streams and get latest status per eligibility
+let FY22_25_Events = union
+    (ScheduledExams | extend email_direct = "", score_percent = real(null)),
+    (CancelledExams | extend email_direct = "", score_percent = real(null)),
+    (AbsentExams | extend email_direct = "", score_percent = real(null)),
+    CompletedExams;
+
+// 6. Rank statuses and pick the most relevant one per eligibility
+let FY22_25_Ranked = FY22_25_Events
+    | extend status_rank = case(
+          Status == "Passed",    1,
+          Status == "Failed",    2,
+          Status == "No Show",   3,
+          Status == "Scheduled", 5,
+          Status == "Cancelled", 7,
+          10
+      );
+
+// Get final status per eligibility (prefer Passed > Failed > No Show > others)
+let FY22_25_Final = FY22_25_Ranked
+    | summarize arg_min(status_rank, *) by eligibility_id
+    | join kind=leftouter EligibilityData on eligibility_id
+    | extend
+        handle = coalesce(user_handle_meta, user_handle_event),
+        exam_name = coalesce(exam_name_meta, examname_event),
+        exam_code = coalesce(exam_code_meta, examcode_event);
+
+// 7. Get emails for FY22-25 records by joining with users table
+let FY22_25_WithEmail = FY22_25_Final
+    | join kind=leftouter (
+        cluster('gh-analytics.eastus.kusto.windows.net').database('ace').users
+        | project userhandle, user_email = tolower(coalesce(email, workemail))
+    ) on $left.handle == $right.userhandle
+    | extend email = coalesce(email_direct, user_email)
+    | where isnotempty(email)
+    | project
+        email,
+        exam_code,
+        exam_name,
+        exam_date = ExamDate,
+        exam_status = Status,
+        score_percent,
+        source = "FY22-25";
+
+// ============================================================================
+// FY26 DATA: Pearson exam results
+// ============================================================================
 let FY26_Records = cluster('cse-analytics.centralus.kusto.windows.net').database('ACE').pearson_exam_results
     | extend
         email = tolower(['Candidate Email']),
@@ -250,7 +346,7 @@ let FY26_Records = cluster('cse-analytics.centralus.kusto.windows.net').database
             ['Total Passed'] > 0, "Passed",
             ['Total Failed'] > 0, "Failed",
             ['Registration Status'] == "No Show", "No Show",
-            ['Registration Status'] == "Absent", "Absent",
+            ['Registration Status'] == "Absent", "No Show",  // Normalize Absent to No Show
             ['Registration Status'] == "Canceled", "Cancelled",
             ['Registration Status'] == "Scheduled", "Scheduled",
             "Registered"
@@ -260,8 +356,10 @@ let FY26_Records = cluster('cse-analytics.centralus.kusto.windows.net').database
     | where isnotempty(email)
     | project email, exam_code, exam_name, exam_date, exam_status, score_percent, source;
 
-// Combine all records
-union FY22_25_Records, FY26_Records
+// ============================================================================
+// Combine FY22-25 + FY26
+// ============================================================================
+union FY22_25_WithEmail, FY26_Records
 | order by email asc, exam_date asc
 """
 

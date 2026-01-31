@@ -3,6 +3,37 @@ DuckDB Database Service for Fast Learner Queries
 
 Provides blazing-fast in-memory queries over Parquet files using DuckDB.
 Query latency: <20ms for most operations.
+
+=============================================================================
+DATA LINEAGE (from github/data learn-data.md)
+=============================================================================
+
+This service queries data that originated from GitHub's canonical tables:
+
+PRIMARY DATA (learners_enriched.parquet):
+  - canonical.accounts_all: User demographics, plan info
+    https://data.githubapp.com/warehouse/hive/canonical/accounts_all
+  - canonical.relationships_all: User↔Org relationships
+    https://data.githubapp.com/warehouse/hive/canonical/relationships_all  
+  - canonical.account_hierarchy_global_all: Company/customer attribution
+    https://data.githubapp.com/warehouse/hive/canonical/account_hierarchy_global_all
+  - canonical.user_daily_activity_per_product: Product usage (Copilot, Actions)
+    https://data.githubapp.com/warehouse/hive/canonical/user_daily_activity_per_product
+  - hydro.analytics_v0_page_view: Skills/Learn page views (~90d Kusto, 7mo+ Trino)
+  - ace.exam_results: Certification exam data (gh-analytics + cse-analytics)
+
+KEY COLUMNS:
+  - dotcom_id: GitHub user ID (primary key for joins)
+  - global_id: Account global ID (for canonical hierarchy joins)
+  - customer_name: Billing customer (most authoritative company attribution)
+  - salesforce_account_name: CRM account name
+
+RETENTION:
+  - Canonical tables: 2+ years historical
+  - Hydro tables (Kusto): ~90 days hot cache
+  - Hydro tables (Trino): 7+ months (requires Production VPN)
+
+For data questions: https://github.com/github/data/issues/new?labels=Data+Request
 """
 
 import logging

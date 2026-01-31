@@ -90,15 +90,29 @@ interface CertificationAnalytics {
     needsPrepCount: number;
     nearMissByCertification: { certification: string; count: number }[];
   };
-  // Exam forecasting
+  // ML-based exam forecasting with Holt-Winters exponential smoothing
   examForecast?: {
     totalScheduledNext3Months: number;
+    projectedAttemptsNext3Months?: number;
     projectedPassesNext3Months: number;
+    avgMonthlyGrowthRate?: number;
+    forecastMethod?: string;
+    historicalTrend?: {
+      month: string;
+      actual: number;
+      passed: number;
+      failed: number;
+      noShows: number;
+      passRate: number;
+    }[];
     monthlyForecast: {
       month: string;
       scheduled: number;
+      projectedAttempts?: number;
       projectedPasses: number;
       projectedPassRate: number;
+      confidence?: number;
+      forecastMethod?: string;
       byCertification: { certification: string; scheduled: number }[];
     }[];
   };

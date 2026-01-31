@@ -17,6 +17,8 @@ from slowapi.errors import RateLimitExceeded
 
 from app.config import get_settings
 from app.routes import metrics, learners, journey, impact, query, copilot, enriched, hydro
+from app.routes import health as health_routes
+from app.routes.company import router as companies_router, company_router
 from app.middleware.rate_limit import limiter, RateLimitMiddleware
 from app.middleware.logging import LoggingMiddleware, setup_logging, ErrorTracker
 
@@ -182,6 +184,9 @@ app.include_router(query.router, prefix="/api")
 app.include_router(copilot.router, prefix="/api")
 app.include_router(enriched.router, prefix="/api")
 app.include_router(hydro.router, prefix="/api")
+app.include_router(companies_router, prefix="/api")
+app.include_router(company_router, prefix="/api")
+app.include_router(health_routes.router, tags=["Health"])
 
 
 if __name__ == "__main__":

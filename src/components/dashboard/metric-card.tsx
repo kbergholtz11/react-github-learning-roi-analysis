@@ -45,9 +45,9 @@ function MetricCardComponent({
       role="region"
       aria-label={`${title} metric`}
     >
-      <CardContent className="p-6">
+      <CardContent className="p-3">
         <div className="flex items-start justify-between">
-          <div className="space-y-2">
+          <div className="space-y-1">
             <p className="text-sm font-medium text-muted-foreground" id={`metric-${title.toLowerCase().replace(/\s/g, '-')}-label`}>{title}</p>
             <p className="text-3xl font-bold tracking-tight" aria-labelledby={`metric-${title.toLowerCase().replace(/\s/g, '-')}-label`}>{value}</p>
             {trend && (
@@ -62,7 +62,7 @@ function MetricCardComponent({
             )}
           </div>
           {icon && (
-            <div className="rounded-lg bg-primary/10 p-3 text-primary" aria-hidden="true">
+            <div className="rounded-lg bg-primary/10 p-2 text-primary" aria-hidden="true">
               {icon}
             </div>
           )}

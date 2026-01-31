@@ -485,6 +485,13 @@ export function ScatterPlot({
 // Line Chart with Trend Lines
 // =============================================================================
 
+interface ReferenceLineConfig {
+  value: number;
+  label: string;
+  color: string;
+  yAxisId?: 'left' | 'right';
+}
+
 interface TrendLineChartProps {
   data: ChartDataItem[];
   lines: {
@@ -492,10 +499,15 @@ interface TrendLineChartProps {
     color: string;
     name?: string;
     showTrend?: boolean;
+    yAxisId?: 'left' | 'right';
   }[];
   showReferenceLine?: boolean;
   referenceValue?: number;
   referenceLabel?: string;
+  showSecondaryAxis?: boolean;
+  leftAxisDomain?: [number | 'auto' | 'dataMin' | 'dataMax', number | 'auto' | 'dataMin' | 'dataMax'];
+  rightAxisDomain?: [number | 'auto' | 'dataMin' | 'dataMax', number | 'auto' | 'dataMin' | 'dataMax'];
+  referenceLines?: ReferenceLineConfig[];
 }
 
 export function TrendLineChart({
@@ -504,13 +516,17 @@ export function TrendLineChart({
   showReferenceLine = false,
   referenceValue,
   referenceLabel = "Target",
+  showSecondaryAxis = false,
+  leftAxisDomain,
+  rightAxisDomain,
+  referenceLines = [],
 }: TrendLineChartProps) {
   const colors = useChartColors();
 
   return (
     <div className="h-[300px] w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+        <LineChart data={data} margin={{ top: 10, right: showSecondaryAxis ? 50 : 30, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
           <XAxis
             dataKey="name"
@@ -519,13 +535,44 @@ export function TrendLineChart({
             tickLine={{ stroke: colors.grid }}
           />
           <YAxis
+            yAxisId="left"
             tick={{ fill: colors.text, fontSize: 12 }}
             axisLine={{ stroke: colors.grid }}
             tickLine={{ stroke: colors.grid }}
             tickFormatter={formatNumber}
+            domain={leftAxisDomain}
           />
+          {showSecondaryAxis && (
+            <YAxis
+              yAxisId="right"
+              orientation="right"
+              tick={{ fill: colors.text, fontSize: 12 }}
+              axisLine={{ stroke: colors.grid }}
+              tickLine={{ stroke: colors.grid }}
+              tickFormatter={formatNumber}
+              domain={rightAxisDomain}
+            />
+          )}
           <Tooltip content={<CustomTooltip colors={colors} />} />
           <Legend />
+          {/* Reference lines - render before data lines so they appear behind */}
+          {referenceLines.map((refLine, index) => (
+            <ReferenceLine
+              key={`ref-${index}`}
+              y={refLine.value}
+              stroke={refLine.color}
+              strokeDasharray="6 4"
+              strokeWidth={1.5}
+              yAxisId={refLine.yAxisId || 'left'}
+              label={{
+                value: refLine.label,
+                position: refLine.yAxisId === 'right' ? 'left' : 'right',
+                fill: refLine.color,
+                fontSize: 11,
+                fontWeight: 500,
+              }}
+            />
+          ))}
           {lines.map((line) => (
             <Line
               key={line.dataKey}
@@ -535,6 +582,7 @@ export function TrendLineChart({
               strokeWidth={2}
               dot={{ fill: line.color, strokeWidth: 2 }}
               name={line.name || line.dataKey}
+              yAxisId={line.yAxisId || 'left'}
             />
           ))}
           {showReferenceLine && referenceValue !== undefined && (
@@ -542,6 +590,7 @@ export function TrendLineChart({
               y={referenceValue}
               stroke="#ef4444"
               strokeDasharray="5 5"
+              yAxisId="left"
               label={{
                 value: referenceLabel,
                 position: "right",

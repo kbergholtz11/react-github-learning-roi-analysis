@@ -60,10 +60,14 @@ export default function LearningImpactPage() {
 
   const { impactFlow, productAdoption, stageImpact, correlationData, roiBreakdown, metrics } = data;
 
+  // Default metrics if undefined
+  const safeMetrics = metrics || { avgUsageIncrease: 0, featuresAdopted: 0, activeLearners: 0, timeToValue: 0 };
+  const safeImpactFlow = impactFlow || { learningHours: 0, skillsAcquired: 0, productAdoption: 0, timeOnPlatform: 0 };
+  
   // Calculate impact score
   const impactScore = Math.min(100, Math.round(
-    (metrics.avgUsageIncrease / 100) * 40 +
-    (metrics.featuresAdopted / 5) * 30 +
+    (safeMetrics.avgUsageIncrease / 100) * 40 +
+    (safeMetrics.featuresAdopted / 5) * 30 +
     30
   ));
 
@@ -102,7 +106,7 @@ export default function LearningImpactPage() {
                 Learning Investment
               </div>
               <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-                {impactFlow.learningHours.toLocaleString()}
+                {safeImpactFlow.learningHours.toLocaleString()}
               </div>
               <div className="text-sm text-muted-foreground">hours consumed</div>
               <ArrowRight className="absolute right-[-20px] top-1/2 -translate-y-1/2 h-6 w-6 text-muted-foreground z-10" />
@@ -114,7 +118,7 @@ export default function LearningImpactPage() {
                 Skills Developed
               </div>
               <div className="text-3xl font-bold text-violet-600 dark:text-violet-400">
-                {impactFlow.skillsAcquired.toLocaleString()}
+                {safeImpactFlow.skillsAcquired.toLocaleString()}
               </div>
               <div className="text-sm text-muted-foreground">certifications earned</div>
               <ArrowRight className="absolute right-[-20px] top-1/2 -translate-y-1/2 h-6 w-6 text-muted-foreground z-10" />
@@ -126,7 +130,7 @@ export default function LearningImpactPage() {
                 Product Adoption
               </div>
               <div className="text-3xl font-bold text-green-600 dark:text-green-400">
-                {impactFlow.productAdoption >= 0 ? '+' : ''}{impactFlow.productAdoption}%
+                {safeImpactFlow.productAdoption >= 0 ? '+' : ''}{safeImpactFlow.productAdoption}%
               </div>
               <div className="text-sm text-muted-foreground">usage change</div>
               <ArrowRight className="absolute right-[-20px] top-1/2 -translate-y-1/2 h-6 w-6 text-muted-foreground z-10" />
@@ -138,7 +142,7 @@ export default function LearningImpactPage() {
                 Platform Engagement
               </div>
               <div className="text-3xl font-bold text-amber-600 dark:text-amber-400">
-                {impactFlow.timeOnPlatform >= 0 ? '+' : ''}{impactFlow.timeOnPlatform}%
+                {safeImpactFlow.timeOnPlatform >= 0 ? '+' : ''}{safeImpactFlow.timeOnPlatform}%
               </div>
               <div className="text-sm text-muted-foreground">time on platform</div>
             </div>
@@ -150,26 +154,26 @@ export default function LearningImpactPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           title="Active Learners"
-          value={metrics.activeLearners.toLocaleString()}
+          value={safeMetrics.activeLearners.toLocaleString()}
           description="Enrolled in learning paths"
           icon={<Users className="h-4 w-4" />}
         />
         <MetricCard
           title="Avg Usage Change"
-          value={`${metrics.avgUsageIncrease >= 0 ? '+' : ''}${metrics.avgUsageIncrease}%`}
+          value={`${safeMetrics.avgUsageIncrease >= 0 ? '+' : ''}${safeMetrics.avgUsageIncrease}%`}
           description="After completing courses"
-          trend={metrics.avgUsageIncrease >= 0 ? { value: Math.abs(metrics.avgUsageIncrease), isPositive: true } : { value: Math.abs(metrics.avgUsageIncrease), isPositive: false }}
+          trend={safeMetrics.avgUsageIncrease >= 0 ? { value: Math.abs(safeMetrics.avgUsageIncrease), isPositive: true } : { value: Math.abs(safeMetrics.avgUsageIncrease), isPositive: false }}
           icon={<TrendingUp className="h-4 w-4" />}
         />
         <MetricCard
           title="Features Adopted"
-          value={metrics.featuresAdopted.toString()}
+          value={safeMetrics.featuresAdopted.toString()}
           description="New features per learner"
           icon={<Zap className="h-4 w-4" />}
         />
         <MetricCard
           title="Time to Value"
-          value={`${metrics.timeToValue}%`}
+          value={`${safeMetrics.timeToValue}%`}
           description="Faster onboarding"
           icon={<Clock className="h-4 w-4" />}
         />
@@ -345,7 +349,7 @@ export default function LearningImpactPage() {
               <div>
                 <div className="font-medium">Strong Correlation</div>
                 <div className="text-sm text-muted-foreground">
-                  Certified users show {metrics.avgUsageIncrease}% higher product usage
+                  Certified users show {safeMetrics.avgUsageIncrease}% higher product usage
                 </div>
               </div>
             </div>
@@ -354,7 +358,7 @@ export default function LearningImpactPage() {
               <div>
                 <div className="font-medium">Multi-Product Adoption</div>
                 <div className="text-sm text-muted-foreground">
-                  Learners adopt {metrics.featuresAdopted} features on average
+                  Learners adopt {safeMetrics.featuresAdopted} features on average
                 </div>
               </div>
             </div>
@@ -363,7 +367,7 @@ export default function LearningImpactPage() {
               <div>
                 <div className="font-medium">Faster Onboarding</div>
                 <div className="text-sm text-muted-foreground">
-                  New users with training reach proficiency {Math.abs(metrics.timeToValue)}% faster
+                  New users with training reach proficiency {Math.abs(safeMetrics.timeToValue)}% faster
                 </div>
               </div>
             </div>

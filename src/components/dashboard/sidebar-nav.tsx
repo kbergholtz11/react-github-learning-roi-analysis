@@ -7,23 +7,12 @@ import {
   Users,
   TrendingUp,
   Target,
-  Settings,
   GraduationCap,
-  Bot,
   Award,
-  FileText,
-  Activity,
-  Bell,
-  UserCircle,
-  Calendar,
-  MessageSquare,
   BarChart2,
   Filter,
   Zap,
-  LineChart,
   Package,
-  Download,
-  Gauge,
   Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -47,8 +36,7 @@ const navItems = [
   {
     title: "Overview",
     items: [
-      { title: "Home", href: "/", icon: Home, prefetch: true },
-      { title: "Executive Summary", href: "/executive/summary", icon: FileText, prefetch: true },
+      { title: "Dashboard", href: "/", icon: Home, prefetch: true },
       { title: "Learning Insights", href: "/insights", icon: Sparkles, prefetch: true },
     ],
   },
@@ -57,26 +45,23 @@ const navItems = [
     items: [
       { title: "Journey Overview", href: "/journey/overview", icon: Target, prefetch: true },
       { title: "Journey Funnel", href: "/journey/funnel", icon: Filter, prefetch: true },
-      { title: "Learner Explorer", href: "/journey/explorer", icon: Users, prefetch: false }, // Heavy page, don't prefetch
-      { title: "Learner Profile", href: "/journey/profile", icon: UserCircle, prefetch: false },
+      { title: "Learner Explorer", href: "/journey/explorer", icon: Users, prefetch: false },
     ],
   },
   {
-    title: "Skills & Growth",
+    title: "Skills & Certifications",
     items: [
-      { title: "Progression", href: "/progression", icon: LineChart, prefetch: true },
       { title: "Skills Analysis", href: "/skills", icon: Zap, prefetch: true },
-      { title: "Skills Analytics", href: "/skills/analytics", icon: BarChart2, prefetch: false },
+      { title: "Skills Deep Dive", href: "/skills/analytics", icon: BarChart2, prefetch: false },
       { title: "Certifications", href: "/analytics/certification", icon: Award, prefetch: true },
     ],
   },
   {
-    title: "Impact & Correlation",
+    title: "Impact & Adoption",
     items: [
       { title: "Learning Impact", href: "/impact", icon: TrendingUp, prefetch: true },
       { title: "Product Adoption", href: "/adoption", icon: Package, prefetch: true },
-      { title: "Product Alignment", href: "/alignment", icon: Package, prefetch: false },
-      { title: "Behavior Change", href: "/behavior", icon: Activity, prefetch: true },
+      { title: "Learning → Adoption", href: "/insights/adoption", icon: Zap, prefetch: true },
       { title: "Compare Cohorts", href: "/compare", icon: BarChart2, prefetch: false },
     ],
   },

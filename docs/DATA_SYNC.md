@@ -2,14 +2,35 @@
 
 This document explains how to sync data from Kusto clusters for the Learning ROI Dashboard.
 
+> **📚 Data Architecture Reference**: See [learn-data.md](https://github.com/github/data/blob/master/docs/learn-data.md) for GitHub's data documentation patterns.
+>
+> **🔍 Explore Tables**: [Data Dot](https://data.githubapp.com/) (set profile to 'advanced' for all tables)
+
 ## Overview
 
-The dashboard uses data from two Azure Data Explorer (Kusto) clusters:
+The dashboard uses data from GitHub's data warehouse following the [canonical data patterns](https://data.githubapp.com/search?query=canonical):
+
+| Data Layer | Source | Retention | VPN Required |
+|------------|--------|-----------|--------------|
+| **Canonical Tables** | `canonical.*` on gh-analytics | 2+ years | No |
+| **Hydro Events** | `hydro.*` on gh-analytics | ~90 days | No |
+| **Trino/Hive** | `hive_hydro.*` | 7+ months | **Yes** (Production) |
+| **ACE Specific** | `ace.*` on both clusters | Full history | No |
+
+### Kusto Clusters
 
 | Cluster | URL | Databases | Data |
 |---------|-----|-----------|------|
-| **CSE Analytics** | cse-analytics.centralus.kusto.windows.net | ACE | FY26 Pearson exam data |
-| **GH Analytics** | gh-analytics.eastus.kusto.windows.net | ace, copilot, hydro, snapshots | FY22-25 exam data, product usage, learning activity |
+| **CSE Analytics** | cse-analytics.centralus.kusto.windows.net | ACE | FY26 Pearson exam data, partner credentials |
+| **GH Analytics** | gh-analytics.eastus.kusto.windows.net | ace, canonical, hydro, snapshots | FY22-25 exam data, product usage, learning activity |
+
+### Table Types (from learn-data.md)
+
+| Type | Pattern | Description | Example |
+|------|---------|-------------|---------|
+| **Canonical** | `canonical.*_all/current` | Curated, high-quality | `accounts_all`, `relationships_all` |
+| **Hydro** | `hydro.*` | Event streams | `analytics_v0_page_view` |
+| **Snapshots** | `snapshots.*_current` | Production DB copies | `github_mysql1_user_emails_current` |
 
 ## Quick Start
 
@@ -140,9 +161,44 @@ az account show
 
 You need read access to both clusters. Contact your Azure admin if you see 403 errors.
 
+Common entitlements needed:
+- `azure-datawarehouse-viewer` for gh-analytics canonical tables
+- ACE-specific access for cse-analytics
+
 ### Query Timeouts
 
 Large queries may timeout. The script uses 5-minute timeouts for complex cross-cluster queries.
+
+### Hydro Data Retention (~90 days)
+
+If Skills/Learn data is missing for older users:
+
+1. **Problem**: Kusto hydro tables only keep ~90 days of hot cache data
+2. **Solution**: Run the Trino sync for historical data:
+
+```bash
+# 1. Connect to Production VPN (Viscosity)
+# 2. Run Trino sync
+python scripts/sync-trino-skills.py
+# 3. Re-run main sync (will merge historical data)
+python scripts/sync-enriched-learners.py
+```
+
+See [data-warehouse-retention.md](https://github.com/github/data/blob/master/docs/data-warehouse-retention.md) for details.
+
+### Finding Column Meanings
+
+If a column isn't documented in Data Dot:
+1. Check the [hydro-schemas repo](https://github.com/github/hydro-schemas) for .proto definitions
+2. Look at the Lineage tab in Data Dot to see source transformations
+3. Ask in [#data](https://github.slack.com/archives/C01BMJPHV98) Slack channel
+
+## Getting Help
+
+- **Data Dot**: https://data.githubapp.com/ (browse table schemas)
+- **Slack**: #data, #data-engineering
+- **Data Request**: [Open a request](https://github.com/github/data/issues/new?labels=Data+Request)
+- **Past requests**: [Search existing issues](https://github.com/github/data/issues?q=label%3A%22Data+Request%22)
 
 ## Manual Testing
 

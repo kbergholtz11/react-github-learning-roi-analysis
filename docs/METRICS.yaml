@@ -1,0 +1,351 @@
+# Metrics Glossary
+#
+# Single source of truth for all metrics used in the Learning ROI application.
+# Follows GitHub Data Principle: "Define a metric just once"
+#
+# Format:
+#   metric_name:
+#     definition: Human-readable description
+#     source: Primary data source table
+#     formula: How the metric is calculated
+#     data_dot: Link to Data Dot documentation
+#     category: Grouping for organization
+#     owner: Team/person responsible for the metric
+#
+# Categories: learners, certifications, skills, engagement, impact, company
+
+# =============================================================================
+# LEARNER METRICS
+# =============================================================================
+
+total_learners:
+  definition: Total unique users with any learning activity (certifications, skills, or GitHub Learn)
+  source: data/learners_enriched.parquet
+  formula: COUNT(DISTINCT dotcom_id)
+  category: learners
+  owner: Learning Analytics
+
+certified_users:
+  definition: Users with at least one passed GitHub certification exam
+  source: ACE.exam_results (gh-analytics) + ACE.pearson_exam_results (cse-analytics)
+  formula: COUNT(DISTINCT dotcom_id) WHERE passed = true
+  data_dot: https://data.githubapp.com/warehouse/kusto/ACE/exam_results
+  category: certifications
+  owner: ACE Team
+
+skills_learners:
+  definition: Users who have visited any skills/* repository or skills.github.com
+  source: hydro.analytics_v0_page_view
+  formula: COUNT(DISTINCT user_id) WHERE path LIKE '/skills/%' OR context_app = 'skills'
+  data_dot: https://data.githubapp.com/warehouse/kusto/hydro/analytics_v0_page_view
+  retention_note: "~90 days in Kusto, 7+ months in Trino"
+  category: skills
+  owner: Skills Team
+
+github_learn_users:
+  definition: Users who have visited learn.github.com
+  source: hydro.analytics_v0_page_view
+  formula: COUNT(DISTINCT user_id) WHERE context_app = 'learn' OR request_host = 'learn.github.com'
+  category: engagement
+  owner: Docs Team
+
+# =============================================================================
+# CERTIFICATION METRICS
+# =============================================================================
+
+certification_count:
+  definition: Total number of unique certification types earned by a user
+  source: ACE.exam_results
+  formula: COUNT(DISTINCT certification_type) WHERE passed = true GROUP BY dotcom_id
+  category: certifications
+  owner: ACE Team
+
+certification_pass_rate:
+  definition: Percentage of exam attempts that result in passing
+  source: ACE.exam_results
+  formula: SUM(passed) / COUNT(*) * 100
+  category: certifications
+  owner: ACE Team
+
+first_certification_date:
+  definition: Date of a user's first passed certification exam
+  source: ACE.exam_results
+  formula: MIN(exam_date) WHERE passed = true GROUP BY dotcom_id
+  category: certifications
+  owner: ACE Team
+
+# Certification types
+is_ghf_certified:
+  definition: User has passed the GitHub Foundations certification
+  source: ACE.exam_results
+  formula: "certification_type = 'GitHub Foundations' AND passed = true"
+  category: certifications
+  owner: ACE Team
+
+is_ghac_certified:
+  definition: User has passed the GitHub Actions certification
+  source: ACE.exam_results
+  formula: "certification_type = 'GitHub Actions' AND passed = true"
+  category: certifications
+  owner: ACE Team
+
+is_ghcs_certified:
+  definition: User has passed the GitHub Copilot certification
+  source: ACE.exam_results
+  formula: "certification_type = 'GitHub Copilot' AND passed = true"
+  category: certifications
+  owner: ACE Team
+
+is_ghas_certified:
+  definition: User has passed the GitHub Advanced Security certification
+  source: ACE.exam_results
+  formula: "certification_type = 'GitHub Advanced Security' AND passed = true"
+  category: certifications
+  owner: ACE Team
+
+is_admin_certified:
+  definition: User has passed the GitHub Administration certification
+  source: ACE.exam_results
+  formula: "certification_type = 'GitHub Administration' AND passed = true"
+  category: certifications
+  owner: ACE Team
+
+# =============================================================================
+# SKILLS & LEARNING METRICS
+# =============================================================================
+
+skills_courses_started:
+  definition: Number of unique skills courses a user has started (visited first page)
+  source: hydro.analytics_v0_page_view
+  formula: COUNT(DISTINCT course_path) WHERE path LIKE '/skills/%/blob/main/README.md'
+  category: skills
+  owner: Skills Team
+
+skills_courses_completed:
+  definition: Number of skills courses a user has completed (all steps visited)
+  source: hydro.analytics_v0_page_view
+  formula: Derived from progression through all course steps
+  note: "Requires session-level analysis of page view sequences"
+  category: skills
+  owner: Skills Team
+
+skills_completion_rate:
+  definition: Percentage of started skills courses that were completed
+  source: hydro.analytics_v0_page_view
+  formula: skills_courses_completed / skills_courses_started * 100
+  category: skills
+  owner: Skills Team
+
+learn_articles_viewed:
+  definition: Number of unique learn.github.com articles viewed by a user
+  source: hydro.analytics_v0_page_view
+  formula: COUNT(DISTINCT path) WHERE context_app = 'learn'
+  category: engagement
+  owner: Docs Team
+
+# =============================================================================
+# PRODUCT USAGE METRICS
+# =============================================================================
+
+copilot_active:
+  definition: User has used GitHub Copilot in the last 30 days
+  source: canonical.user_daily_activity_per_product
+  formula: product = 'copilot' AND day >= ago(30d)
+  data_dot: https://data.githubapp.com/warehouse/hive/canonical/user_daily_activity_per_product
+  category: impact
+  owner: Enterprise & Core Metrics
+
+actions_active:
+  definition: User has triggered GitHub Actions workflows in the last 30 days
+  source: canonical.user_daily_activity_per_product
+  formula: product = 'actions' AND day >= ago(30d)
+  category: impact
+  owner: Enterprise & Core Metrics
+
+codespaces_active:
+  definition: User has used GitHub Codespaces in the last 30 days
+  source: canonical.user_daily_activity_per_product
+  formula: product = 'codespaces' AND day >= ago(30d)
+  category: impact
+  owner: Enterprise & Core Metrics
+
+has_product_usage:
+  definition: User has any recorded product usage (Copilot, Actions, or Codespaces)
+  source: canonical.user_daily_activity_per_product
+  formula: copilot_active OR actions_active OR codespaces_active
+  category: impact
+  owner: Enterprise & Core Metrics
+
+# =============================================================================
+# COMPANY METRICS
+# =============================================================================
+
+company:
+  definition: Attributed company name for a user (follows hierarchy)
+  source: canonical.account_hierarchy_global_all
+  formula: |
+    COALESCE(
+      customer_name,           -- Zuora billing customer (most authoritative)
+      salesforce_account_name, -- CRM account
+      salesforce_parent_account_name, -- CRM parent
+      partner_companies,       -- Partner credential
+      org_name                 -- GitHub org fallback
+    )
+  data_dot: https://data.githubapp.com/warehouse/hive/canonical/account_hierarchy_global_all
+  category: company
+  owner: Enterprise & Core Metrics
+
+company_learner_count:
+  definition: Number of unique learners attributed to a company
+  source: data/learners_enriched.parquet
+  formula: COUNT(DISTINCT dotcom_id) GROUP BY company
+  category: company
+  owner: Learning Analytics
+
+company_certification_rate:
+  definition: Percentage of company learners who have earned at least one certification
+  source: data/learners_enriched.parquet
+  formula: COUNT(DISTINCT dotcom_id WHERE certification_count > 0) / COUNT(DISTINCT dotcom_id) * 100
+  category: company
+  owner: Learning Analytics
+
+# =============================================================================
+# JOURNEY & PROGRESSION METRICS
+# =============================================================================
+
+journey_stage:
+  definition: Current stage in the learning journey (Visitor → Explorer → Learner → Practitioner → Certified → Advocate)
+  source: data/learners_enriched.parquet
+  formula: |
+    CASE 
+      WHEN certification_count >= 3 THEN 'Advocate'
+      WHEN certification_count >= 1 THEN 'Certified'
+      WHEN skills_courses_completed > 0 AND copilot_active THEN 'Practitioner'
+      WHEN skills_courses_started > 0 THEN 'Learner'
+      WHEN github_learn_views > 0 THEN 'Explorer'
+      ELSE 'Visitor'
+    END
+  category: engagement
+  owner: Learning Analytics
+
+time_to_first_certification:
+  definition: Days from first learning activity to first certification
+  source: data/learners_enriched.parquet
+  formula: DATEDIFF(first_certification_date, first_activity_date)
+  category: engagement
+  owner: Learning Analytics
+
+multi_certified_rate:
+  definition: Percentage of certified users with more than one certification
+  source: data/learners_enriched.parquet
+  formula: COUNT(dotcom_id WHERE certification_count > 1) / COUNT(dotcom_id WHERE certification_count >= 1) * 100
+  category: certifications
+  owner: Learning Analytics
+
+# =============================================================================
+# ACTIONS ENGAGEMENT METRICS (from github/data Actions Engagement User Guide)
+# =============================================================================
+
+actions_engagement_level:
+  definition: |
+    Data-driven engagement level (0-5) based on workflow activity in last 28 days.
+    Levels are derived via clustering algorithm from github/data documentation.
+  source: Calculated from hydro.github_v1_request + repositories_current
+  documentation: github/data/team-docs/trust_compute_data/docs/how_to_guides/actions_engagement_metric_user_guide.md
+  formula: |
+    Level 0: No Actions usage
+    Level 1: 1-4 days usage in L28, 1+ workflow executions
+    Level 2: 5-9 days usage in L28, 1+ workflow executions  
+    Level 3: 10-17 days usage in L28, 1+ workflow executions
+    Level 4: 18+ days usage in L28, 1-59 workflow executions
+    Level 5: 18+ days usage in L28, 60+ workflow executions (power users)
+  category: impact
+  owner: Trust & Compute Data
+
+actions_workflow_executions_l28:
+  definition: Number of push- or PR-triggered workflow executions in last 28 days
+  source: hydro.github_v1_request (request_category in check_runs, workflow_runs)
+  formula: COUNT(workflow_executions) WHERE day >= ago(28d)
+  category: impact
+  owner: Trust & Compute Data
+
+actions_is_power_user:
+  definition: User is at Actions engagement level 4 or 5 (18+ days + high workflow count)
+  source: Derived from actions_engagement_level
+  formula: actions_engagement_level >= 4
+  category: impact
+  owner: Trust & Compute Data
+
+# =============================================================================
+# COPILOT LIFECYCLE METRICS (from github/data Copilot Data Definitions)
+# =============================================================================
+
+copilot_subscription_status:
+  definition: Current Copilot subscription status (active, trial, cancelled)
+  source: hydro.github_copilot_v1_copilot_signup_subscription_created
+  documentation: github/data/team-docs/creator-communities/copilot/data-definitions.md
+  formula: subscription_status from latest subscription record
+  category: impact
+  owner: Creator Communities
+
+copilot_primary_ide:
+  definition: Primary IDE used for Copilot completions (VSCode, JetBrains, etc.)
+  source: hydro.github_copilot_v0_copilot_token_generated
+  documentation: github/data/team-docs/creator-communities/copilot/data-definitions.md
+  formula: Most frequently used IDE based on token generation requests
+  note: |
+    IDE is determined from editor_version field:
+    - vsc* → VSCode
+    - vs/* → Visual Studio
+    - JetBrains* → JetBrains (PY, GO, etc.)
+    - neovim* → Neovim
+  category: impact
+  owner: Creator Communities
+
+copilot_active_days_90d:
+  definition: Number of days with Copilot usage in last 90 days
+  source: hydro.github_copilot_v0_copilot_token_generated
+  formula: DCOUNT(day) WHERE token_generated AND day >= ago(90d)
+  category: impact
+  owner: Creator Communities
+
+# =============================================================================
+# IMPACT METRICS
+# =============================================================================
+
+learning_to_adoption_rate:
+  definition: Percentage of learners who become active product users within 30 days
+  source: Cross-reference of learning activity and product usage
+  formula: |
+    COUNT(DISTINCT dotcom_id WHERE has_product_usage AND first_activity_date <= ago(30d))
+    / COUNT(DISTINCT dotcom_id WHERE first_activity_date <= ago(30d)) * 100
+  category: impact
+  owner: Learning Analytics
+
+certification_impact_score:
+  definition: Relative increase in product usage after certification (vs before)
+  source: canonical.user_daily_activity_per_product joined with ACE.exam_results
+  formula: |
+    (AVG(daily_activity POST-cert) - AVG(daily_activity PRE-cert)) 
+    / AVG(daily_activity PRE-cert) * 100
+  note: "Positive score indicates certification correlated with increased usage"
+  category: impact
+  owner: Learning Analytics
+
+# =============================================================================
+# REGIONAL METRICS
+# =============================================================================
+
+region:
+  definition: Geographic region (AMER, EMEA, APAC)
+  source: Derived from canonical.accounts_current.country_account
+  formula: Map country codes to regions using COUNTRY_TO_REGION mapping
+  category: learners
+  owner: Learning Analytics
+
+region_certification_rate:
+  definition: Certification rate by geographic region
+  source: data/learners_enriched.parquet
+  formula: COUNT(dotcom_id WHERE certified) / COUNT(dotcom_id) * 100 GROUP BY region
+  category: learners
+  owner: Learning Analytics

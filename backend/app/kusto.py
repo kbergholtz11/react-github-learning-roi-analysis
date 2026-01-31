@@ -1,4 +1,39 @@
-"""Kusto (Azure Data Explorer) client for live queries."""
+"""
+Kusto (Azure Data Explorer) client for live queries.
+
+=============================================================================
+DATA ARCHITECTURE (from github/data learn-data.md)
+=============================================================================
+
+This service queries GitHub's data warehouse clusters directly:
+
+CLUSTERS:
+  - gh-analytics.eastus.kusto.windows.net
+    - canonical.*: Curated tables (accounts_all, relationships_all, etc.)
+    - hydro.*: Event streams (analytics_v0_page_view)
+    - snapshots.*: Production DB copies
+    - ace.*: ACE exam/certification data (FY22-25)
+  
+  - cse-analytics.centralus.kusto.windows.net
+    - ACE.*: FY26 Pearson exam data, partner credentials
+
+KEY CANONICAL TABLES:
+  - canonical.accounts_all: User demographics
+    https://data.githubapp.com/warehouse/hive/canonical/accounts_all
+  - canonical.user_daily_activity_per_product: Product usage
+    https://data.githubapp.com/warehouse/hive/canonical/user_daily_activity_per_product
+
+IMPORTANT PATTERNS:
+  - Use `*_all` tables with `| summarize arg_max(day, *) by dotcom_id` for latest
+  - Use `*_current` tables for simple current-state queries
+  - Hydro tables have ~90 day retention (hot cache limit)
+
+AUTHENTICATION:
+  - Uses DefaultAzureCredential (works with az login, managed identity, etc.)
+  - Requires azure-datawarehouse-viewer entitlement for canonical tables
+
+For data questions: https://github.com/github/data/issues/new?labels=Data+Request
+"""
 
 import logging
 from datetime import datetime, timedelta

@@ -1,0 +1,113 @@
+🚀 [17:28:37] Starting Comprehensive Learner Enrichment Sync
+ℹ️ [17:28:37] Output: /Users/kbergholtz11/react-github-learning-roi-analysis/data/learners_enriched.parquet
+ℹ️ [17:28:37] Mode: INCREMENTAL (with cache)
+ℹ️ [17:28:37] Connecting to Kusto clusters...
+/Users/kbergholtz11/react-github-learning-roi-analysis/backend/.venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+🚀 [17:28:37] Query 1: ACE Learners (base population)...
+🔍 [17:28:37]   Using cached ace_learners (0.1h old, TTL=4h)
+✅ [17:28:37]   Loaded ace_learners from cache: 311,504 rows
+ℹ️ [17:28:37] Found 283,751 learners with dotcom_id
+🔍 [17:28:37]   Using cached github_learn (0.0h old, TTL=12h)
+✅ [17:28:37]   Loaded github_learn from cache: 12,682 rows
+🔍 [17:28:37]   Using cached skills_users (0.0h old, TTL=12h)
+✅ [17:28:37]   Loaded skills_users from cache: 63,006 rows
+🔍 [17:28:37]   Using cached demographics (0.0h old, TTL=24h)
+✅ [17:28:37]   Loaded demographics from cache: 305,639 rows
+🔍 [17:28:37]   Using cached org_enrichment (0.0h old, TTL=24h)
+✅ [17:28:38]   Loaded org_enrichment from cache: 146,192 rows
+🔍 [17:28:38]   Using cached user_company (0.0h old, TTL=6h)
+✅ [17:28:38]   Loaded user_company from cache: 237,993 rows
+🔍 [17:28:38]   Using cached partner_creds (0.0h old, TTL=24h)
+✅ [17:28:38]   Loaded partner_creds from cache: 428 rows
+🚀 [17:28:38] Running 2 queries (6 loaded from cache)...
+🚀 [17:28:38] Executing 2 queries in parallel (max 4 workers)...
+🔍 [17:28:38] Executing Product Usage...🔍 [17:28:38] Executing Pre-Cert Usage...
+
+❌ [17:28:40] Pre-Cert Usage failed: Request is invalid and cannot be processed: Semantic error: SEM0100: 'summarize' operator: Failed to resolve scalar expression named 'dotcom_id'
+❌ [17:28:40]   ✗ Pre-Cert Usage: failed
+📊 [17:30:38] Product Usage: 284,882 rows in 120.6s
+✅ [17:30:38]   ✓ Product Usage: 284,882 rows
+✅ [17:30:38] Parallel execution completed in 120.8s
+🔍 [17:30:38]   Cached product_usage: 284,882 rows
+✅ [17:30:38] All queries completed in 121.2s
+🚀 [17:30:38] Merging all data sources...
+ℹ️ [17:30:38] Base: 311,504 ACE learners
+ℹ️ [17:30:39] Adding 57,369 Skills-only users to base population
+ℹ️ [17:30:39] After adding Skills-only users: 368,873 total learners
+🔍 [17:30:44]   Updated 3,115,040 values in existing columns from Skills Users
+ℹ️ [17:30:44] After Skills Users merge: 368,873 rows (5.33s)
+ℹ️ [17:30:44] Adding 266 partner-certified users to base population
+ℹ️ [17:30:44] After adding partner-certified users: 369,139 total learners
+ℹ️ [17:30:45] After GitHub Learn merge: 369,139 rows (0.39s)
+ℹ️ [17:30:45] After Partner merge: 369,139 rows
+ℹ️ [17:30:46] After Demographics merge: 369,139 rows (0.48s)
+ℹ️ [17:30:46] After Org Enrichment merge: 369,139 rows (0.50s)
+ℹ️ [17:30:47] After User Company merge: 369,139 rows (0.66s)
+ℹ️ [17:30:48] After Product Usage merge: 369,139 rows (0.77s)
+✅ [17:30:48] All merges completed in 9.6s
+🚀 [17:30:48] Applying derived fields (vectorized)...
+ℹ️ [17:30:49] Calculating skill maturity scores in Python...
+ℹ️ [17:30:49] Skill maturity calculated: Avg score=45.4
+✅ [17:30:49] Derived fields applied in 1.0s
+🚀 [17:30:49] Calculating data quality scores (vectorized)...
+ℹ️ [17:30:49] Data quality calculated in 0.1s - Avg: 62.7, High: 163,063, Med: 168,736, Low: 37,340
+/Users/kbergholtz11/react-github-learning-roi-analysis/scripts/sync-enriched-learners.py:2392: FutureWarning: Downcasting object dtype arrays on .fillna, .ffill, .bfill is deprecated and will change in a future version. Call result.infer_objects(copy=False) instead. To opt-in to the future behavior, set `pd.set_option('future.no_silent_downcasting', True)`
+  # Stages (from first touch to mastery):
+/Users/kbergholtz11/react-github-learning-roi-analysis/scripts/sync-enriched-learners.py:2392: FutureWarning: Downcasting object dtype arrays on .fillna, .ffill, .bfill is deprecated and will change in a future version. Call result.infer_objects(copy=False) instead. To opt-in to the future behavior, set `pd.set_option('future.no_silent_downcasting', True)`
+  # Stages (from first touch to mastery):
+/Users/kbergholtz11/react-github-learning-roi-analysis/scripts/sync-enriched-learners.py:2392: FutureWarning: Downcasting object dtype arrays on .fillna, .ffill, .bfill is deprecated and will change in a future version. Call result.infer_objects(copy=False) instead. To opt-in to the future behavior, set `pd.set_option('future.no_silent_downcasting', True)`
+  # Stages (from first touch to mastery):
+/Users/kbergholtz11/react-github-learning-roi-analysis/scripts/sync-enriched-learners.py:2392: FutureWarning: Downcasting object dtype arrays on .fillna, .ffill, .bfill is deprecated and will change in a future version. Call result.infer_objects(copy=False) instead. To opt-in to the future behavior, set `pd.set_option('future.no_silent_downcasting', True)`
+  # Stages (from first touch to mastery):
+/Users/kbergholtz11/react-github-learning-roi-analysis/scripts/sync-enriched-learners.py:2392: FutureWarning: Downcasting object dtype arrays on .fillna, .ffill, .bfill is deprecated and will change in a future version. Call result.infer_objects(copy=False) instead. To opt-in to the future behavior, set `pd.set_option('future.no_silent_downcasting', True)`
+  # Stages (from first touch to mastery):
+/Users/kbergholtz11/react-github-learning-roi-analysis/scripts/sync-enriched-learners.py:2392: FutureWarning: Downcasting object dtype arrays on .fillna, .ffill, .bfill is deprecated and will change in a future version. Call result.infer_objects(copy=False) instead. To opt-in to the future behavior, set `pd.set_option('future.no_silent_downcasting', True)`
+  # Stages (from first touch to mastery):
+/Users/kbergholtz11/react-github-learning-roi-analysis/scripts/sync-enriched-learners.py:2392: FutureWarning: Downcasting object dtype arrays on .fillna, .ffill, .bfill is deprecated and will change in a future version. Call result.infer_objects(copy=False) instead. To opt-in to the future behavior, set `pd.set_option('future.no_silent_downcasting', True)`
+  # Stages (from first touch to mastery):
+/Users/kbergholtz11/react-github-learning-roi-analysis/scripts/sync-enriched-learners.py:2392: FutureWarning: Downcasting object dtype arrays on .fillna, .ffill, .bfill is deprecated and will change in a future version. Call result.infer_objects(copy=False) instead. To opt-in to the future behavior, set `pd.set_option('future.no_silent_downcasting', True)`
+  # Stages (from first touch to mastery):
+/Users/kbergholtz11/react-github-learning-roi-analysis/scripts/sync-enriched-learners.py:2392: FutureWarning: Downcasting object dtype arrays on .fillna, .ffill, .bfill is deprecated and will change in a future version. Call result.infer_objects(copy=False) instead. To opt-in to the future behavior, set `pd.set_option('future.no_silent_downcasting', True)`
+  # Stages (from first touch to mastery):
+/Users/kbergholtz11/react-github-learning-roi-analysis/scripts/sync-enriched-learners.py:2392: FutureWarning: Downcasting object dtype arrays on .fillna, .ffill, .bfill is deprecated and will change in a future version. Call result.infer_objects(copy=False) instead. To opt-in to the future behavior, set `pd.set_option('future.no_silent_downcasting', True)`
+  # Stages (from first touch to mastery):
+/Users/kbergholtz11/react-github-learning-roi-analysis/scripts/sync-enriched-learners.py:2392: FutureWarning: Downcasting object dtype arrays on .fillna, .ffill, .bfill is deprecated and will change in a future version. Call result.infer_objects(copy=False) instead. To opt-in to the future behavior, set `pd.set_option('future.no_silent_downcasting', True)`
+  # Stages (from first touch to mastery):
+/Users/kbergholtz11/react-github-learning-roi-analysis/scripts/sync-enriched-learners.py:2392: FutureWarning: Downcasting object dtype arrays on .fillna, .ffill, .bfill is deprecated and will change in a future version. Call result.infer_objects(copy=False) instead. To opt-in to the future behavior, set `pd.set_option('future.no_silent_downcasting', True)`
+  # Stages (from first touch to mastery):
+/Users/kbergholtz11/react-github-learning-roi-analysis/scripts/sync-enriched-learners.py:2392: FutureWarning: Downcasting object dtype arrays on .fillna, .ffill, .bfill is deprecated and will change in a future version. Call result.infer_objects(copy=False) instead. To opt-in to the future behavior, set `pd.set_option('future.no_silent_downcasting', True)`
+  # Stages (from first touch to mastery):
+/Users/kbergholtz11/react-github-learning-roi-analysis/scripts/sync-enriched-learners.py:2406: FutureWarning: Downcasting object dtype arrays on .fillna, .ffill, .bfill is deprecated and will change in a future version. Call result.infer_objects(copy=False) instead. To opt-in to the future behavior, set `pd.set_option('future.no_silent_downcasting', True)`
+  skills_count = df["skills_count"].fillna(0).astype(int) if "skills_count" in df.columns else pd.Series(0, index=df.index)
+ℹ️ [17:30:50] Excluded 1,551 staff/spammy users
+🚀 [17:30:50] Optimizing memory usage...
+✅ [17:30:55] Memory: 1153.5 MB → 948.1 MB (18% reduction)
+🚀 [17:30:55] Saving 367,588 enriched learners to Parquet...
+✅ [17:30:56] Saved learners_enriched.parquet (48.0 MB)
+ℹ️ [17:31:07] Also saved learners_enriched.csv for debugging
+✅ [17:31:07] === SYNC SUMMARY ===
+ℹ️ [17:31:07] Total learners: 367,588
+ℹ️ [17:31:07] With dotcom_id: 339,569
+ℹ️ [17:31:08] With company: 307,587 (83.7%)
+ℹ️ [17:31:08] With country: 359,368 (97.8%)
+ℹ️ [17:31:08] Certified: 65,875
+ℹ️ [17:31:08] Using Copilot: 145,746
+ℹ️ [17:31:08] Using Actions: 104,506
+ℹ️ [17:31:08] Company source breakdown:
+ℹ️ [17:31:08]   billing_customer: 131,344 (35.7%)
+ℹ️ [17:31:08]   user_billing_customer: 119,746 (32.6%)
+ℹ️ [17:31:08]   none: 60,001 (16.3%)
+ℹ️ [17:31:08]   email_domain: 21,596 (5.9%)
+ℹ️ [17:31:08]   ace_registration: 18,029 (4.9%)
+ℹ️ [17:31:08]   exam_registration: 12,166 (3.3%)
+ℹ️ [17:31:08]   user_salesforce_account: 2,247 (0.6%)
+ℹ️ [17:31:08]   org_name: 2,152 (0.6%)
+ℹ️ [17:31:08]   partner_credential: 306 (0.1%)
+ℹ️ [17:31:08]   salesforce_account: 1 (0.0%)
+ℹ️ [17:31:08] Data quality breakdown:
+ℹ️ [17:31:08]   medium: 167,926 (45.7%)
+ℹ️ [17:31:08]   high: 162,336 (44.2%)
+ℹ️ [17:31:08]   low: 37,326 (10.2%)
+ℹ️ [17:31:08] Average data quality score: 62.7
+✅ [17:31:08] Enrichment sync complete!

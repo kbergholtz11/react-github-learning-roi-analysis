@@ -14,15 +14,17 @@ function getAggregatedData(filename: string) {
 
 // Journey-based stage colors (progression from exploration to mastery)
 const stageColors: Record<string, string> = {
-  "Mastery": "#ef4444",        // Red - highest achievement
-  "Power User": "#f59e0b",     // Amber - advanced
-  "Practitioner": "#22c55e",   // Green - actively practicing
-  "Active Learner": "#3b82f6", // Blue - learning
-  "Explorer": "#94a3b8",       // Slate - just starting
+  "Discovered": "#94a3b8",     // Slate - first touch
+  "Exploring": "#64748b",      // Darker slate - exploring
+  "Active": "#0ea5e9",         // Sky blue - active
+  "Learning": "#3b82f6",       // Blue - learning
+  "Certified": "#22c55e",      // Green - certified
+  "Power User": "#8b5cf6",     // Purple - power user
+  "Champion": "#f59e0b",       // Amber - champion (highest)
 };
 
-// Stage order for proper funnel display (top to bottom: highest to lowest)
-const stageOrder = ["Mastery", "Power User", "Practitioner", "Active Learner", "Explorer"];
+// Stage order for proper funnel display (top to bottom: widest to narrowest - discovery to mastery)
+const stageOrder = ["Discovered", "Exploring", "Active", "Learning", "Certified", "Power User", "Champion"];
 
 export async function GET() {
   try {

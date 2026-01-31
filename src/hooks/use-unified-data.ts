@@ -428,6 +428,192 @@ export function useEnrichedStats() {
   });
 }
 
+/**
+ * Skill maturity distribution from FastAPI backend
+ * Returns aggregated counts for all learners, not a paginated sample
+ */
+export interface SkillMaturityDistribution {
+  distribution: Array<{
+    level: string;
+    count: number;
+    percentage: number;
+    avgScore: number;
+    copilot_pct: number;
+    actions_pct: number;
+    security_pct: number;
+    avg_products: number;
+    avg_certs: number;
+  }>;
+  total: number;
+  avgScore: number;
+}
+
+export function useSkillMaturityStats() {
+  return useQuery<SkillMaturityDistribution>({
+    queryKey: ["enriched-skill-maturity"],
+    queryFn: async () => {
+      // Try FastAPI backend first
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/enriched/stats/skill-maturity`);
+        if (res.ok) {
+          return res.json();
+        }
+      } catch {
+        // Backend not available, fall through
+      }
+      
+      // Fallback to Next.js proxy
+      const res = await fetch("/api/enriched/stats/skill-maturity");
+      if (!res.ok) throw new Error("Failed to fetch skill maturity stats");
+      return res.json();
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
+/**
+ * Product adoption stats from FastAPI backend
+ * Returns aggregated adoption rates for all learners
+ */
+export interface ProductAdoptionStats {
+  products: Array<{
+    key: string;
+    name: string;
+    users90d: number;
+    usersEver: number;
+    rate90d: number;
+    rateEver: number;
+  }>;
+  total_learners: number;
+  avg_products: number;
+}
+
+export function useProductAdoptionStats() {
+  return useQuery<ProductAdoptionStats>({
+    queryKey: ["enriched-product-adoption"],
+    queryFn: async () => {
+      // Try FastAPI backend first
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/enriched/stats/product-adoption`);
+        if (res.ok) {
+          return res.json();
+        }
+      } catch {
+        // Backend not available, fall through
+      }
+      
+      // Fallback to Next.js proxy
+      const res = await fetch("/api/enriched/stats/product-adoption");
+      if (!res.ok) throw new Error("Failed to fetch product adoption stats");
+      return res.json();
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
+/**
+ * Product adoption before/after certification comparison
+ * Compares Learning status (pre-cert) vs Certified+ (post-cert) for all 10 products
+ */
+export interface ProductAdoptionByCertification {
+  products: Array<{
+    name: string;
+    key: string;
+    category: string;
+    before?: number;       // 90-day rate before cert (only for copilot, actions, security)
+    after?: number;        // 90-day rate after cert
+    before_ever: number;   // 365-day rate before cert
+    after_ever: number;    // 365-day rate after cert
+    change: number;        // after - before (uses 90d if available, else 365d)
+    change_pct: number;    // percentage change
+  }>;
+  learning_count: number;
+  certified_count: number;
+  methodology: string;
+  note: string;
+}
+
+export function useProductAdoptionByCertification() {
+  return useQuery<ProductAdoptionByCertification>({
+    queryKey: ["enriched-product-adoption-by-certification"],
+    queryFn: async () => {
+      // Try FastAPI backend first
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/enriched/stats/product-adoption-by-certification`);
+        if (res.ok) {
+          return res.json();
+        }
+      } catch {
+        // Backend not available, fall through
+      }
+      
+      // Fallback to Next.js proxy
+      const res = await fetch("/api/enriched/stats/product-adoption-by-certification");
+      if (!res.ok) throw new Error("Failed to fetch product adoption by certification");
+      return res.json();
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
+/**
+ * Certified learner adoption by tenure (time since certification)
+ * Shows the FULL certification journey: pre-cert → recent → established → veteran
+ */
+export interface CertifiedAdoptionByTenure {
+  tenure_groups: Array<{
+    tenure: string;
+    label: string;
+    description?: string;
+    count: number;
+    avg_days_since_cert: number | null;
+    avg_certs: number;
+    avg_skills?: number;
+    avg_learn_views?: number;
+    products: {
+      copilot: { rate_90d: number; rate_ever: number; avg_days: number };
+      actions: { rate_90d: number; rate_ever: number; avg_days: number };
+      security: { rate_90d: number; rate_ever: number };
+      pr: { rate_ever: number };
+      issues: { rate_ever: number };
+      code_search: { rate_ever: number };
+      packages: { rate_ever: number };
+      projects: { rate_ever: number };
+      discussions: { rate_ever: number };
+      pages: { rate_ever: number };
+    };
+    avg_active_days: number;
+    avg_products: number;
+  }>;
+  total_certified: number;
+  total_pre_cert?: number;
+  methodology: string;
+  note: string;
+}
+
+export function useCertifiedAdoptionByTenure() {
+  return useQuery<CertifiedAdoptionByTenure>({
+    queryKey: ["certified-adoption-by-tenure"],
+    queryFn: async () => {
+      // Try FastAPI backend first
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/enriched/stats/certified-adoption-by-tenure`);
+        if (res.ok) {
+          return res.json();
+        }
+      } catch {
+        // Backend not available, fall through
+      }
+      
+      // Fallback to Next.js proxy
+      const res = await fetch("/api/enriched/stats/certified-adoption-by-tenure");
+      if (!res.ok) throw new Error("Failed to fetch certified adoption by tenure");
+      return res.json();
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
 // ============================================================================
 // Journey Hooks
 // ============================================================================

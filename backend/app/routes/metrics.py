@@ -76,6 +76,7 @@ async def get_metrics():
                 status_breakdown=aggregated.get("statusBreakdown", []),
                 funnel=aggregated.get("funnel", []),
                 certification_analytics=aggregated.get("certificationAnalytics"),
+                product_adoption=aggregated.get("productAdoption"),
             )
         
         # Fall back to DuckDB enriched data
