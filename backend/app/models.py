@@ -8,26 +8,33 @@ from pydantic import BaseModel, Field
 
 
 class LearnerStatus(str, Enum):
-    """Learner certification status levels."""
+    """Learner certification status levels.
+
+    Matches the enrichment pipeline output (sync-enriched-learners.py).
+    """
 
     CHAMPION = "Champion"
     SPECIALIST = "Specialist"
     MULTI_CERTIFIED = "Multi-Certified"
     CERTIFIED = "Certified"
     LEARNING = "Learning"
-    PROSPECT = "Prospect"
+    ENGAGED = "Engaged"
+    REGISTERED = "Registered"
 
 
 class JourneyStage(str, Enum):
-    """Learner journey stages."""
+    """Learner journey stages.
 
-    EXPLORING = "Exploring"
-    ACTIVE_LEARNER = "Active Learner"
-    LEARNING = "Learning"
-    CERTIFIED = "Certified"
-    MULTI_CERTIFIED = "Multi-Certified"
-    SPECIALIST = "Specialist"
-    CHAMPION = "Champion"
+    Matches the enrichment pipeline output (sync-enriched-learners.py).
+    """
+
+    REGISTERED = "Stage 2: Registered"
+    ENGAGED = "Stage 3: Engaged"
+    LEARNING = "Stage 4: Learning"
+    CERTIFIED = "Stage 6: Certified"
+    POWER_USER = "Stage 9: Power User"
+    SPECIALIST = "Stage 10: Specialist"
+    CHAMPION = "Stage 11: Champion"
 
 
 # =============================================================================

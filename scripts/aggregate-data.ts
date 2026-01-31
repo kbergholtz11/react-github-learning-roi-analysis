@@ -241,7 +241,7 @@ const statusCounts: Record<string, number> = {
   "Multi-Certified": 0,
   Certified: 0,
   Learning: 0,
-  Prospect: 0,
+  Registered: 0,
 };
 
 // Count from unified users (contains all learners with correct status)
@@ -252,9 +252,9 @@ unifiedUsers.forEach((u) => {
   }
 });
 
-// Total excludes Prospects (they haven't started learning yet)
+// Total excludes Registereds (they haven't started learning yet)
 const totalLearners = unifiedUsers.length;
-const activeLearners = totalLearners - statusCounts["Prospect"];
+const activeLearners = totalLearners - statusCounts["Registered"];
 const certifiedCount = statusCounts["Certified"] + statusCounts["Multi-Certified"] + statusCounts["Specialist"] + statusCounts["Champion"];
 const learningCount = statusCounts["Learning"];
 
@@ -297,7 +297,7 @@ const dashboardMetrics = {
   activeLearners,
   certifiedUsers: certifiedCount,
   learningUsers: learningCount,
-  prospectUsers: statusCounts["Prospect"],
+  prospectUsers: statusCounts["Registered"],
   avgUsageIncrease: usageIncrease,
   avgProductsAdopted: 3.2, // Derived metric
   avgLearningHours: avgLearningHoursPerUser,
@@ -307,9 +307,9 @@ const dashboardMetrics = {
   totalCertsEarned,
 };
 
-// === 2. Status Breakdown (exclude Prospects for learning journey funnel) ===
+// === 2. Status Breakdown (exclude Registereds for learning journey funnel) ===
 const statusBreakdown = Object.entries(statusCounts)
-  .filter(([status]) => status !== "Prospect") // Exclude prospects from learning funnel
+  .filter(([status]) => status !== "Registered") // Exclude prospects from learning funnel
   .map(([status, count]) => ({
     status,
     count,
@@ -808,7 +808,7 @@ writeJSON("summary.json", {
   activeLearners,
   certifiedUsers: certifiedCount,
   learningUsers: learningCount,
-  prospectUsers: statusCounts["Prospect"],
+  prospectUsers: statusCounts["Registered"],
   statusCounts,
   totalCertsEarned,
   totalLearningHours: Math.round(totalLearningHours),
@@ -944,7 +944,7 @@ console.log(`  📊 Total Learners: ${totalLearners.toLocaleString()}`);
 console.log(`  📈 Active Learners: ${activeLearners.toLocaleString()}`);
 console.log(`  🏆 Certified: ${certifiedCount.toLocaleString()}`);
 console.log(`  📚 Learning: ${learningCount.toLocaleString()}`);
-console.log(`  👀 Prospects: ${statusCounts["Prospect"].toLocaleString()}`);
+console.log(`  👀 Registereds: ${statusCounts["Registered"].toLocaleString()}`);
 console.log(`  ⏱️  Usage Increase: ${usageIncrease}%`);
 console.log(`  🎯 Impact Score: ${impactScore}/100`);
 

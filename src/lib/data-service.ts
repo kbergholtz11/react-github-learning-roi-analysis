@@ -359,6 +359,8 @@ export function getJourneyFunnel(): JourneyFunnelData[] {
   const total = Object.values(statusCounts).reduce((a, b) => a + b, 0);
 
   const stageColors: Record<string, string> = {
+    Registered: "#94a3b8",
+    Engaged: "#6366f1",
     Learning: "#3b82f6",
     Certified: "#22c55e",
     "Multi-Certified": "#8b5cf6",
@@ -366,7 +368,7 @@ export function getJourneyFunnel(): JourneyFunnelData[] {
     Champion: "#ef4444",
   };
 
-  const stageOrder = ["Learning", "Certified", "Multi-Certified", "Specialist", "Champion"];
+  const stageOrder = ["Registered", "Engaged", "Learning", "Certified", "Multi-Certified", "Specialist", "Champion"];
 
   return stageOrder.map((stage) => ({
     stage,
@@ -387,6 +389,8 @@ export function getLearnerStatusBreakdown(): LearnerStatusBreakdown[] {
     "Multi-Certified": 0,
     Certified: 0,
     Learning: 0,
+    Engaged: 0,
+    Registered: 0,
   };
 
   // Count from both sources (deduplicated by email)

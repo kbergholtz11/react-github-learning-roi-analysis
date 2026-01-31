@@ -395,16 +395,12 @@ by email
 """
 
 # Query 4: User Demographics from accounts_all
-QUERY_4_USER_DEMOGRAPHICS = """
+# NOTE: This query is now parameterized with dotcom_ids from the combined learner set (Query 1)
+# instead of re-filtering to ace.users, which lost ~30% of learners.
+QUERY_4_USER_DEMOGRAPHICS_TEMPLATE = """
 // Get user demographics for learners
-// Input: learner_ids from previous queries
-let learner_ids = materialize(
-    cluster('gh-analytics.eastus.kusto.windows.net').database('ace').users
-    | where isnotempty(dotcomid) and dotcomid != ""
-    | extend dotcom_id = tolong(dotcomid)
-    | where dotcom_id > 0
-    | distinct dotcom_id
-);
+// Uses dotcom_ids from the combined enriched set (not re-filtered to ace.users)
+let learner_ids = datatable(dotcom_id: long) [{dotcom_ids}];
 
 accounts_all
 | where account_type == "User"
@@ -432,15 +428,11 @@ accounts_all
 """
 
 # Query 5: Org Enrichment from relationships + account_hierarchy_dotcom + enterprise
-QUERY_5_ORG_ENRICHMENT = """
+# NOTE: Now parameterized with dotcom_ids from the combined learner set
+QUERY_5_ORG_ENRICHMENT_TEMPLATE = """
 // Get org enrichment for learners via relationships
-let learner_ids = materialize(
-    cluster('gh-analytics.eastus.kusto.windows.net').database('ace').users
-    | where isnotempty(dotcomid) and dotcomid != ""
-    | extend dotcom_id = tolong(dotcomid)
-    | where dotcom_id > 0
-    | distinct dotcom_id
-);
+// Uses dotcom_ids from the combined enriched set (not re-filtered to ace.users)
+let learner_ids = datatable(dotcom_id: long) [{dotcom_ids}];
 
 // Get user-to-org relationships
 let user_orgs = relationships_all
@@ -459,8 +451,9 @@ let enterprise_names = account_hierarchy_enterprise_all
 | project enterprise_account_id, enterprise_customer_name = customer_name;
 
 // Join user-org relationships with org details and enterprise names
+// NOTE: Using leftouter to preserve users whose orgs may not be in account_hierarchy
 user_orgs
-| join kind=inner org_details on $left.parent_dotcom_id == $right.dotcom_id
+| join kind=leftouter org_details on $left.parent_dotcom_id == $right.dotcom_id
 | join kind=leftouter enterprise_names on enterprise_account_id
 | summarize
     // Take the "best" org (prefer paid, then largest)
@@ -488,15 +481,11 @@ by child_dotcom_id
 # Query 6 removed - enterprise_customer_name now obtained in Query 5 via org's enterprise_account_id
 
 # Query 7: Product Usage from user_daily_activity_per_product (90-day window)
-QUERY_7_PRODUCT_USAGE = """
+# NOTE: Now parameterized with dotcom_ids from the combined learner set
+QUERY_7_PRODUCT_USAGE_TEMPLATE = """
 // Get product usage for learners (last 90 days to avoid timeout)
-let learner_ids = materialize(
-    cluster('gh-analytics.eastus.kusto.windows.net').database('ace').users
-    | where isnotempty(dotcomid) and dotcomid != ""
-    | extend dotcom_id = tolong(dotcomid)
-    | where dotcom_id > 0
-    | distinct dotcom_id
-);
+// Uses dotcom_ids from the combined enriched set (not re-filtered to ace.users)
+let learner_ids = datatable(dotcom_id: long) [{dotcom_ids}];
 
 user_daily_activity_per_product
 | where day >= ago(90d)
@@ -643,8 +632,12 @@ def main():
         log("DRY RUN MODE - Showing queries only", "warning")
         print("\n=== Query 1: ACE Learners ===")
         print(QUERY_1_ACE_LEARNERS[:500] + "...")
-        print("\n=== Query 4: User Demographics ===")
-        print(QUERY_4_USER_DEMOGRAPHICS[:500] + "...")
+        print("\n=== Query 4: User Demographics (template) ===")
+        print(QUERY_4_USER_DEMOGRAPHICS_TEMPLATE[:500] + "...")
+        print("\n=== Query 5: Org Enrichment (template) ===")
+        print(QUERY_5_ORG_ENRICHMENT_TEMPLATE[:500] + "...")
+        print("\n=== Query 7: Product Usage (template) ===")
+        print(QUERY_7_PRODUCT_USAGE_TEMPLATE[:500] + "...")
         return
 
     # Initialize clients
@@ -675,6 +668,11 @@ def main():
     learner_ids = df_ace[df_ace["dotcom_id"] > 0]["dotcom_id"].unique().tolist()
     log(f"Found {len(learner_ids):,} learners with dotcom_id", "info")
 
+    # Build dotcom_ids string for parameterized query templates
+    # Kusto datatable format: each row is just the value
+    dotcom_ids_str = ",\n".join(str(int(did)) for did in learner_ids)
+    log(f"Built dotcom_ids parameter ({len(dotcom_ids_str):,} chars)", "info")
+
     # Query 2: Skills/Learn Activity
     log("Query 2: Skills/Learn Activity...", "start")
     df_skills = execute_query(gh_client, "hydro", QUERY_2_SKILLS_LEARN, "Skills/Learn")
@@ -697,18 +695,20 @@ def main():
         log("CSE client not available, skipping partner credentials", "warning")
         df_partner = pd.DataFrame()
 
-    # Query 4: User Demographics
+    # Query 4: User Demographics (parameterized with learner dotcom_ids)
     log("Query 4: User Demographics...", "start")
-    df_demographics = execute_query(gh_client, "canonical", QUERY_4_USER_DEMOGRAPHICS, "Demographics")
+    query_4 = QUERY_4_USER_DEMOGRAPHICS_TEMPLATE.format(dotcom_ids=dotcom_ids_str)
+    df_demographics = execute_query(gh_client, "canonical", query_4, "Demographics")
     if df_demographics is not None:
         update_sync_status("demographics", "success", len(df_demographics))
     else:
         df_demographics = pd.DataFrame()
         update_sync_status("demographics", "failed", 0, "Query failed")
 
-    # Query 5: Org Enrichment
+    # Query 5: Org Enrichment (parameterized with learner dotcom_ids)
     log("Query 5: Org Enrichment...", "start")
-    df_org = execute_query(gh_client, "canonical", QUERY_5_ORG_ENRICHMENT, "Org Enrichment")
+    query_5 = QUERY_5_ORG_ENRICHMENT_TEMPLATE.format(dotcom_ids=dotcom_ids_str)
+    df_org = execute_query(gh_client, "canonical", query_5, "Org Enrichment")
     if df_org is not None:
         update_sync_status("org_enrichment", "success", len(df_org))
     else:
@@ -717,9 +717,10 @@ def main():
 
     # Query 6: Removed - enterprise_customer_name now in Query 5
 
-    # Query 7: Product Usage
+    # Query 7: Product Usage (parameterized with learner dotcom_ids)
     log("Query 7: Product Usage (90-day window)...", "start")
-    df_usage = execute_query(gh_client, "canonical", QUERY_7_PRODUCT_USAGE, "Product Usage")
+    query_7 = QUERY_7_PRODUCT_USAGE_TEMPLATE.format(dotcom_ids=dotcom_ids_str)
+    df_usage = execute_query(gh_client, "canonical", query_7, "Product Usage")
     if df_usage is not None:
         update_sync_status("product_usage", "success", len(df_usage))
     else:

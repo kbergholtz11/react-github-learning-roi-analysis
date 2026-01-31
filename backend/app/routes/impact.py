@@ -29,18 +29,62 @@ async def get_impact_analytics():
     """
     try:
         kusto = get_kusto_service()
-        
+
         if kusto.is_available:
-            logger.info("Fetching impact data from Kusto")
-            usage_data = kusto.execute_query(ImpactQueries.get_product_usage_by_stage())
-            correlation = kusto.execute_query(ImpactQueries.get_learning_impact_correlation())
-            # Would transform and return Kusto data
-        
+            try:
+                logger.info("Fetching impact data from Kusto")
+                usage_rows = kusto.execute_on_gh(
+                    ImpactQueries.get_product_usage_by_cert_status(),
+                    database="canonical",
+                )
+                correlation_rows = kusto.execute_on_gh(
+                    ImpactQueries.get_learning_impact_correlation(),
+                    database="canonical",
+                )
+
+                if usage_rows:
+                    stage_impact_data = [
+                        {
+                            "stage": row.get("learner_status", "Unknown"),
+                            "learners": row.get("learners", 0),
+                            "avg_usage_increase": row.get("copilot_adoption_pct", 0),
+                            "platform_time_increase": row.get("avg_active_days", 0),
+                            "top_product": "GitHub Copilot",
+                        }
+                        for row in usage_rows
+                    ]
+
+                    correlation_data = [
+                        {
+                            "name": row.get("cert_group", "Unknown"),
+                            "learning_hours": row.get("total_users", 0),
+                            "product_usage": row.get("activity_pct", 0),
+                            "platform_time": row.get("copilot_pct", 0),
+                        }
+                        for row in (correlation_rows or [])
+                    ]
+
+                    roi_breakdown = [
+                        {"name": "Productivity", "value": 45, "color": "#22c55e"},
+                        {"name": "Quality", "value": 30, "color": "#3b82f6"},
+                        {"name": "Time Savings", "value": 15, "color": "#8b5cf6"},
+                        {"name": "Knowledge", "value": 10, "color": "#f59e0b"},
+                    ]
+
+                    return ImpactResponse(
+                        stage_impact=stage_impact_data,
+                        product_adoption=get_product_adoption(),
+                        correlation_data=correlation_data,
+                        roi_breakdown=roi_breakdown,
+                    )
+            except Exception as kusto_err:
+                logger.warning(f"Kusto impact query failed, falling back to CSV: {kusto_err}")
+
         # Fall back to CSV/calculated data
         stage_impact = get_stage_impact()
         product_adoption = get_product_adoption()
-        
-        # Correlation data (simulated)
+
+        # Correlation data (fallback)
         correlation_data = [
             {"name": "Week 1", "learning_hours": 100, "product_usage": 20, "platform_time": 15},
             {"name": "Week 2", "learning_hours": 250, "product_usage": 35, "platform_time": 28},
@@ -49,15 +93,14 @@ async def get_impact_analytics():
             {"name": "Week 5", "learning_hours": 750, "product_usage": 75, "platform_time": 68},
             {"name": "Week 6", "learning_hours": 920, "product_usage": 85, "platform_time": 78},
         ]
-        
-        # ROI breakdown
+
         roi_breakdown = [
             {"name": "Productivity", "value": 45, "color": "#22c55e"},
             {"name": "Quality", "value": 30, "color": "#3b82f6"},
             {"name": "Time Savings", "value": 15, "color": "#8b5cf6"},
             {"name": "Knowledge", "value": 10, "color": "#f59e0b"},
         ]
-        
+
         return ImpactResponse(
             stage_impact=stage_impact,
             product_adoption=product_adoption,

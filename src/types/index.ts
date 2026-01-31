@@ -29,13 +29,14 @@ export interface Learner {
   days_since_last_activity: number;
 }
 
-export type JourneyStage = 
-  | "New Learner"
-  | "Active Learner"
-  | "Engaged"
-  | "Certified"
-  | "Power User"
-  | "Champion";
+export type JourneyStage =
+  | "Stage 2: Registered"
+  | "Stage 3: Engaged"
+  | "Stage 4: Learning"
+  | "Stage 6: Certified"
+  | "Stage 9: Power User"
+  | "Stage 10: Specialist"
+  | "Stage 11: Champion";
 
 export type EngagementLevel = "Low" | "Medium" | "Heavy" | "Power";
 
@@ -52,13 +53,14 @@ export type ProductFocus =
   | "Advanced Security"
   | "Admin & Platform";
 
-export type LearnerStatus = 
-  | "New"
-  | "Active"
-  | "Certified"
+export type LearnerStatus =
+  | "Champion"
   | "Specialist"
   | "Multi-Certified"
-  | "Champion";
+  | "Certified"
+  | "Learning"
+  | "Engaged"
+  | "Registered";
 
 export type AdoptionStatus = "Not Started" | "Trial" | "Active" | "Power User";
 

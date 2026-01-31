@@ -235,6 +235,8 @@ export default function LearnerExplorerPage() {
               <option value="Multi-Certified">Multi-Certified</option>
               <option value="Certified">Certified</option>
               <option value="Learning">Learning</option>
+              <option value="Engaged">Engaged</option>
+              <option value="Registered">Registered</option>
             </select>
             {hasActiveFilters && (
               <Button variant="ghost" onClick={clearParams} className="gap-2">

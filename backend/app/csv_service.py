@@ -368,6 +368,8 @@ def get_journey_funnel() -> List[JourneyFunnelStage]:
     """Get journey funnel data."""
     breakdown = get_status_breakdown()
     colors = {
+        LearnerStatus.REGISTERED: "#94a3b8",
+        LearnerStatus.ENGAGED: "#6366f1",
         LearnerStatus.LEARNING: "#3b82f6",
         LearnerStatus.CERTIFIED: "#22c55e",
         LearnerStatus.MULTI_CERTIFIED: "#8b5cf6",
@@ -396,7 +398,7 @@ def get_drop_off_analysis() -> List[DropOffAnalysis]:
     funnel = get_journey_funnel()
     result = []
 
-    stages_order = ["Learning", "Certified", "Multi-Certified", "Specialist", "Champion"]
+    stages_order = ["Registered", "Engaged", "Learning", "Certified", "Multi-Certified", "Specialist", "Champion"]
     stage_counts = {s.stage: s.count for s in funnel}
 
     for i, stage in enumerate(stages_order):
@@ -462,6 +464,8 @@ def get_stage_impact() -> List[StageImpact]:
 
     # Simulated impact data (would come from Kusto in production)
     impact_factors = {
+        LearnerStatus.REGISTERED: (0, 0, "None"),
+        LearnerStatus.ENGAGED: (5, 3, "GitHub Copilot"),
         LearnerStatus.LEARNING: (15, 10, "GitHub Copilot"),
         LearnerStatus.CERTIFIED: (35, 25, "GitHub Copilot"),
         LearnerStatus.MULTI_CERTIFIED: (55, 40, "GitHub Actions"),

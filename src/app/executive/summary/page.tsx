@@ -38,7 +38,7 @@ export default function ExecutiveSummaryPage() {
   const programHealthData = [
     { name: "Certified+", value: certifiedTotal, color: "#22c55e" },
     { name: "Learning", value: metrics?.learningUsers || 0, color: "#3b82f6" },
-    { name: "Prospect", value: metrics?.prospectUsers || 0, color: "#f59e0b" },
+    { name: "Engaged/Registered", value: metrics?.prospectUsers || 0, color: "#6366f1" },
   ];
 
   // Impact metrics from real data

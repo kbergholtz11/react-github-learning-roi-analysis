@@ -213,55 +213,120 @@ class KustoService:
 
 
 class LearnerQueries:
-    """Pre-built queries for learner data."""
+    """Pre-built queries for learner data.
+
+    These query real Kusto tables:
+    - ace database: exam_results, certifications, users (on gh-analytics)
+    - ACE database: pearson_exam_results (on cse-analytics)
+
+    For enriched learner queries, use database.py LearnerQueries (DuckDB).
+    """
+
+    # Cluster/database hints for callers
+    CLUSTER = CLUSTER_GH
+    DATABASE = "ace"
 
     @staticmethod
     def get_learners_by_status(status: Optional[str] = None, limit: int = 100) -> str:
-        """Query learners optionally filtered by status."""
-        base = """
-        CertifiedUsers
-        | project email, user_handle, learner_status, journey_stage, 
-                  total_certs, first_cert_date, latest_cert_date, cert_titles
-        """
+        """Query learners from ace.exam_results with certification status."""
+        status_filter = ""
         if status:
-            base += f"| where learner_status == '{status}'\n"
-        base += f"| take {limit}"
-        return base
+            status_map = {
+                "Champion": "exams_passed >= 4",
+                "Specialist": "exams_passed >= 3 and exams_passed < 4",
+                "Multi-Certified": "exams_passed >= 2 and exams_passed < 3",
+                "Certified": "exams_passed == 1",
+                "Learning": "total_exams > 0 and exams_passed == 0",
+            }
+            if status in status_map:
+                status_filter = f"| where {status_map[status]}"
+        return f"""
+        exam_results
+        | where passed == true
+        | summarize
+            exams_passed = count(),
+            total_exams = count(),
+            cert_names = make_set(examname, 10),
+            first_cert = min(endtime),
+            last_cert = max(endtime)
+          by email = tolower(email), userhandle
+        | extend learner_status = case(
+            exams_passed >= 4, "Champion",
+            exams_passed >= 3, "Specialist",
+            exams_passed >= 2, "Multi-Certified",
+            exams_passed == 1, "Certified",
+            "Learning"
+          )
+        {status_filter}
+        | project email, userhandle, learner_status, exams_passed, cert_names, first_cert, last_cert
+        | take {limit}
+        """
 
     @staticmethod
     def get_learner_by_email(email: str) -> str:
-        """Query a specific learner by email."""
+        """Query a specific learner by email from ace.exam_results."""
+        safe_email = email.lower().replace("'", "''")
         return f"""
-        CertifiedUsers
-        | where email == '{email}'
-        | project email, user_handle, learner_status, journey_stage,
-                  total_certs, first_cert_date, latest_cert_date, cert_titles,
-                  exam_codes, days_since_cert, cert_product_focus
+        exam_results
+        | where tolower(email) == '{safe_email}'
+        | summarize
+            total_exams = count(),
+            exams_passed = countif(passed),
+            cert_names = make_set_if(examname, passed, 10),
+            exam_codes = make_set(examcode, 20),
+            first_exam = min(endtime),
+            last_exam = max(endtime)
+          by email = tolower(email), userhandle
+        | extend learner_status = case(
+            exams_passed >= 4, "Champion",
+            exams_passed >= 3, "Specialist",
+            exams_passed >= 2, "Multi-Certified",
+            exams_passed == 1, "Certified",
+            total_exams > 0, "Learning",
+            "Registered"
+          )
+        | project email, userhandle, learner_status,
+                  total_exams, exams_passed, cert_names, exam_codes,
+                  first_exam, last_exam
         """
 
     @staticmethod
     def search_learners(search_term: str, limit: int = 50) -> str:
-        """Search learners by email or handle."""
+        """Search learners by email or handle from ace.exam_results."""
+        safe_term = search_term.replace("'", "''")
         return f"""
-        CertifiedUsers
-        | where email contains '{search_term}' or user_handle contains '{search_term}'
-        | project email, user_handle, learner_status, journey_stage, total_certs
+        exam_results
+        | where tolower(email) contains '{safe_term}' or tolower(userhandle) contains '{safe_term}'
+        | summarize
+            exams_passed = countif(passed),
+            total_exams = count()
+          by email = tolower(email), userhandle
+        | extend learner_status = case(
+            exams_passed >= 4, "Champion",
+            exams_passed >= 3, "Specialist",
+            exams_passed >= 2, "Multi-Certified",
+            exams_passed == 1, "Certified",
+            "Learning"
+          )
+        | project email, userhandle, learner_status, exams_passed, total_exams
         | take {limit}
         """
 
     @staticmethod
     def get_certification_stats() -> str:
-        """Get certification statistics."""
+        """Get certification statistics from ace.exam_results."""
         return """
-        CertifiedUsers
-        | summarize 
+        exam_results
+        | where passed == true
+        | summarize exams_passed = count() by email = tolower(email)
+        | summarize
             total_certified = count(),
-            total_certs = sum(total_certs),
-            avg_certs_per_user = avg(total_certs),
-            champions = countif(learner_status == 'Champion'),
-            specialists = countif(learner_status == 'Specialist'),
-            multi_certified = countif(learner_status == 'Multi-Certified'),
-            certified = countif(learner_status == 'Certified')
+            total_certs = sum(exams_passed),
+            avg_certs_per_user = round(avg(exams_passed), 2),
+            champions = countif(exams_passed >= 4),
+            specialists = countif(exams_passed == 3),
+            multi_certified = countif(exams_passed == 2),
+            certified = countif(exams_passed == 1)
         """
 
     @staticmethod
@@ -372,169 +437,337 @@ class LearnerQueries:
 
 
 class JourneyQueries:
-    """Pre-built queries for journey analytics."""
+    """Pre-built queries for journey analytics.
+
+    Uses ace.exam_results and ace.users on gh-analytics cluster.
+    """
+
+    CLUSTER = CLUSTER_GH
+    DATABASE = "ace"
 
     @staticmethod
     def get_funnel_counts() -> str:
-        """Get learner counts by journey stage."""
+        """Get learner counts by journey stage from ace.exam_results + ace.users."""
         return """
-        UnifiedUsers
+        // Combine exam takers with all registered users
+        let exam_users = exam_results
+            | summarize
+                exams_passed = countif(passed),
+                total_exams = count()
+              by email = tolower(email)
+            | extend learner_status = case(
+                exams_passed >= 4, "Champion",
+                exams_passed >= 3, "Specialist",
+                exams_passed >= 2, "Multi-Certified",
+                exams_passed == 1, "Certified",
+                total_exams > 0, "Learning",
+                "Registered"
+              );
+        let all_users = users
+            | summarize count() by email = tolower(email)
+            | extend learner_status = "Registered";
+        // Use exam_users as base, add registered-only users
+        let combined = union
+            (exam_users | project email, learner_status),
+            (all_users | where email !in (exam_users | project email) | project email, learner_status);
+        combined
         | summarize count() by learner_status
         | order by count_ desc
         """
 
     @staticmethod
     def get_monthly_progression(months: int = 6) -> str:
-        """Get monthly progression data."""
+        """Get monthly certification progression from ace.exam_results."""
         return f"""
-        CertifiedUsers
-        | where first_cert_date != ''
-        | extend cert_month = startofmonth(todatetime(first_cert_date))
+        exam_results
+        | where passed == true
+        | extend cert_month = startofmonth(endtime)
         | where cert_month >= ago({months * 30}d)
-        | summarize 
-            certified = count(),
-            multi_cert = countif(total_certs > 1)
+        | summarize
+            certified_exams = count(),
+            unique_certifiers = dcount(tolower(email))
           by cert_month
         | order by cert_month asc
         """
 
     @staticmethod
     def get_time_to_certification() -> str:
-        """Get average time to certification by stage."""
+        """Get time between first and subsequent certifications."""
         return """
-        JourneyUsers
-        | where time_to_certification > 0
-        | summarize 
-            avg_days = avg(time_to_certification),
-            median_days = percentile(time_to_certification, 50),
-            p90_days = percentile(time_to_certification, 90)
-          by journey_stage
+        exam_results
+        | where passed == true
+        | extend email_lower = tolower(email)
+        | summarize
+            first_cert = min(endtime),
+            last_cert = max(endtime),
+            exams_passed = count()
+          by email_lower
+        | where exams_passed > 1
+        | extend days_between = datetime_diff('day', last_cert, first_cert)
+        | extend learner_status = case(
+            exams_passed >= 4, "Champion",
+            exams_passed >= 3, "Specialist",
+            exams_passed >= 2, "Multi-Certified",
+            "Certified"
+          )
+        | summarize
+            avg_days = round(avg(days_between), 1),
+            median_days = round(percentile(days_between, 50), 1),
+            p90_days = round(percentile(days_between, 90), 1),
+            learner_count = count()
+          by learner_status
         | order by avg_days asc
         """
 
 
 class ImpactQueries:
-    """Pre-built queries for impact analytics."""
+    """Pre-built queries for impact analytics.
+
+    Cross-references ace.exam_results with canonical.user_daily_activity_per_product
+    to measure correlation between learning and product adoption.
+    """
+
+    CLUSTER = CLUSTER_GH
 
     @staticmethod
-    def get_product_usage_by_stage() -> str:
-        """Get product usage metrics by journey stage."""
+    def get_product_usage_by_cert_status() -> str:
+        """Get product usage metrics grouped by certification status.
+
+        Runs on canonical database, cross-references ace for cert data.
+        """
         return """
-        JourneyUsers
-        | join kind=inner (
-            ProductUsage
-            | project dotcom_id = dotcom_id, 
-                      copilot_events, actions_events, security_events,
-                      product_usage_hours
-        ) on $left.user_id == $right.dotcom_id
-        | summarize 
+        // Get certified user dotcom_ids from ace
+        let cert_data = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').exam_results
+            | where passed == true
+            | summarize exams_passed = count() by email = tolower(email)
+            | join kind=inner (
+                cluster('gh-analytics.eastus.kusto.windows.net').database('ace').users
+                | where dotcomid > 0
+                | project email = tolower(email), dotcom_id = tolong(dotcomid)
+            ) on email
+            | extend learner_status = case(
+                exams_passed >= 4, "Champion",
+                exams_passed >= 3, "Specialist",
+                exams_passed >= 2, "Multi-Certified",
+                exams_passed == 1, "Certified",
+                "Learning"
+              )
+            | project dotcom_id, learner_status, exams_passed;
+        // Get product usage for these users (last 90 days)
+        let usage = user_daily_activity_per_product
+            | where day >= ago(90d)
+            | where user_id in (cert_data | project dotcom_id)
+            | summarize
+                copilot_events = sumif(num_engagement_events, product has "Copilot"),
+                actions_events = sumif(num_engagement_events, product == "Actions"),
+                security_events = sumif(num_engagement_events, product has_any ("Security", "Dependabot", "CodeQL")),
+                total_active_days = dcount(day)
+              by user_id;
+        // Join and aggregate
+        cert_data
+        | join kind=leftouter usage on $left.dotcom_id == $right.user_id
+        | summarize
             learners = count(),
-            avg_copilot = avg(copilot_events),
-            avg_actions = avg(actions_events),
-            avg_security = avg(security_events),
-            avg_usage_hours = avg(product_usage_hours)
-          by journey_stage
-        | order by avg_usage_hours desc
+            avg_copilot_events = round(avg(coalesce(copilot_events, 0)), 1),
+            avg_actions_events = round(avg(coalesce(actions_events, 0)), 1),
+            avg_security_events = round(avg(coalesce(security_events, 0)), 1),
+            avg_active_days = round(avg(coalesce(total_active_days, 0)), 1),
+            copilot_adoption_pct = round(100.0 * countif(copilot_events > 0) / count(), 1)
+          by learner_status
+        | order by learners desc
         """
 
     @staticmethod
     def get_learning_impact_correlation() -> str:
-        """Get correlation between learning hours and product usage."""
+        """Compare product adoption rates: certified vs non-certified learners."""
         return """
-        JourneyUsers
-        | where learning_hours > 0 and product_usage_hours > 0
-        | summarize 
-            count = count(),
-            avg_learning = avg(learning_hours),
-            avg_usage = avg(product_usage_hours),
-            correlation = round(stdev(learning_hours * product_usage_hours) / 
-                               (stdev(learning_hours) * stdev(product_usage_hours)), 2)
+        // Get all ACE users with cert status
+        let ace_users = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').users
+            | where dotcomid > 0
+            | project dotcom_id = tolong(dotcomid), email = tolower(email);
+        let cert_counts = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').exam_results
+            | where passed == true
+            | summarize exams_passed = count() by email = tolower(email);
+        let users_with_certs = ace_users
+            | join kind=leftouter cert_counts on email
+            | extend
+                is_certified = coalesce(exams_passed, 0) > 0,
+                cert_group = case(
+                    coalesce(exams_passed, 0) >= 2, "Multi-Certified",
+                    coalesce(exams_passed, 0) == 1, "Certified",
+                    "Not Certified"
+                );
+        // Get product usage
+        let usage = user_daily_activity_per_product
+            | where day >= ago(90d)
+            | where user_id in (users_with_certs | project dotcom_id)
+            | summarize
+                total_events = sum(num_engagement_events),
+                active_days = dcount(day),
+                uses_copilot = dcountif(day, product has "Copilot") > 0
+              by user_id;
+        users_with_certs
+        | join kind=leftouter usage on $left.dotcom_id == $right.user_id
+        | summarize
+            total_users = count(),
+            with_activity = countif(total_events > 0),
+            with_copilot = countif(uses_copilot),
+            avg_events = round(avg(coalesce(total_events, 0)), 1),
+            avg_active_days = round(avg(coalesce(active_days, 0)), 1)
+          by cert_group
+        | extend
+            activity_pct = round(100.0 * with_activity / total_users, 1),
+            copilot_pct = round(100.0 * with_copilot / total_users, 1)
+        | order by cert_group asc
         """
 
 
 class CopilotQueries:
-    """Pre-built queries for Copilot analytics (GH copilot database)."""
+    """Pre-built queries for Copilot analytics.
+
+    Uses copilot.copilot_unified_engagement on gh-analytics cluster.
+    Schema: user_dotcom_id (long), copilot_product_pillar, copilot_product_feature,
+            editor, language_id, num_events, day
+    """
+
+    CLUSTER = CLUSTER_GH
+    DATABASE = "copilot"
 
     @staticmethod
     def get_copilot_adoption_stats() -> str:
-        """Get Copilot adoption statistics."""
+        """Get Copilot adoption statistics from copilot_unified_engagement."""
         return """
-        CopilotUsage
-        | summarize 
-            total_users = dcount(user_id),
-            active_users = dcountif(user_id, last_active > ago(30d)),
-            total_suggestions = sum(suggestions_accepted),
-            total_completions = sum(completions),
-            avg_acceptance_rate = avg(acceptance_rate)
+        copilot_unified_engagement
+        | summarize
+            total_users = dcount(user_dotcom_id),
+            active_30d = dcountif(user_dotcom_id, day >= ago(30d)),
+            active_7d = dcountif(user_dotcom_id, day >= ago(7d)),
+            total_events = sum(num_events),
+            total_days_tracked = dcount(day)
         """
 
     @staticmethod
     def get_copilot_usage_by_language() -> str:
         """Get Copilot usage broken down by programming language."""
         return """
-        CopilotUsage
-        | where language != ''
-        | summarize 
-            users = dcount(user_id),
-            suggestions = sum(suggestions_accepted),
-            completions = sum(completions),
-            avg_acceptance = avg(acceptance_rate)
-          by language
-        | top 10 by completions desc
+        copilot_unified_engagement
+        | where isnotempty(language_id)
+        | summarize
+            users = dcount(user_dotcom_id),
+            events = sum(num_events),
+            active_days = dcount(day)
+          by language_id
+        | top 15 by events desc
         """
 
     @staticmethod
     def get_copilot_trend(days: int = 30) -> str:
         """Get Copilot usage trend over time."""
         return f"""
-        CopilotUsage
-        | where timestamp > ago({days}d)
-        | summarize 
-            active_users = dcount(user_id),
-            completions = sum(completions),
-            acceptance_rate = avg(acceptance_rate)
-          by bin(timestamp, 1d)
-        | order by timestamp asc
+        copilot_unified_engagement
+        | where day >= ago({days}d)
+        | summarize
+            active_users = dcount(user_dotcom_id),
+            total_events = sum(num_events)
+          by day
+        | order by day asc
+        """
+
+    @staticmethod
+    def get_copilot_by_product_pillar() -> str:
+        """Get Copilot usage broken down by product pillar and feature."""
+        return """
+        copilot_unified_engagement
+        | where day >= ago(30d)
+        | summarize
+            users = dcount(user_dotcom_id),
+            events = sum(num_events)
+          by copilot_product_pillar, copilot_product_feature
+        | order by events desc
+        """
+
+    @staticmethod
+    def get_copilot_by_editor() -> str:
+        """Get Copilot usage broken down by editor."""
+        return """
+        copilot_unified_engagement
+        | where day >= ago(30d) and isnotempty(editor)
+        | summarize
+            users = dcount(user_dotcom_id),
+            events = sum(num_events)
+          by editor
+        | order by users desc
         """
 
     @staticmethod
     def get_copilot_impact_by_learner_status() -> str:
-        """Get Copilot usage correlated with learning status."""
+        """Get Copilot usage correlated with learning/certification status."""
         return """
-        CopilotUsage
-        | join kind=leftouter (
-            UnifiedUsers
-            | project user_id, learner_status, journey_stage
-        ) on user_id
-        | summarize 
-            users = dcount(user_id),
-            avg_completions = avg(completions),
-            avg_acceptance = avg(acceptance_rate)
+        // Get cert status for ACE users
+        let cert_data = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').exam_results
+            | where passed == true
+            | summarize exams_passed = count() by email = tolower(email);
+        let ace_users = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').users
+            | where dotcomid > 0
+            | project email = tolower(email), dotcom_id = tolong(dotcomid);
+        let users_with_status = ace_users
+            | join kind=leftouter cert_data on email
+            | extend learner_status = case(
+                coalesce(exams_passed, 0) >= 4, "Champion",
+                coalesce(exams_passed, 0) >= 3, "Specialist",
+                coalesce(exams_passed, 0) >= 2, "Multi-Certified",
+                coalesce(exams_passed, 0) == 1, "Certified",
+                "Not Certified"
+              )
+            | project dotcom_id, learner_status;
+        // Join with Copilot engagement
+        copilot_unified_engagement
+        | where day >= ago(90d)
+        | where user_dotcom_id in (users_with_status | project dotcom_id)
+        | summarize
+            total_events = sum(num_events),
+            active_days = dcount(day)
+          by user_dotcom_id
+        | join kind=inner users_with_status on $left.user_dotcom_id == $right.dotcom_id
+        | summarize
+            users = count(),
+            avg_events = round(avg(total_events), 1),
+            avg_active_days = round(avg(active_days), 1)
           by learner_status
-        | order by avg_completions desc
+        | order by avg_events desc
         """
 
 
 class HydroQueries:
-    """Pre-built queries for Hydro analytics (telemetry/events)."""
+    """Pre-built queries for Hydro analytics.
+
+    Uses hydro.analytics_v0_page_view on gh-analytics cluster.
+    """
+
+    CLUSTER = CLUSTER_GH
+    DATABASE = "hydro"
 
     @staticmethod
-    def get_event_counts_by_type(days: int = 7) -> str:
-        """Get event counts by type."""
+    def get_page_view_stats(days: int = 7) -> str:
+        """Get page view statistics from analytics_v0_page_view."""
         return f"""
-        Events
+        analytics_v0_page_view
         | where timestamp > ago({days}d)
-        | summarize count = count() by event_type
-        | top 20 by count desc
+        | summarize
+            total_views = count(),
+            unique_users = dcount(actor_id)
+          by page_category = extract("github\\\\.com/([^/]+)", 1, page)
+        | where isnotempty(page_category)
+        | top 20 by total_views desc
         """
 
     @staticmethod
     def get_daily_active_users(days: int = 30) -> str:
-        """Get daily active user counts."""
+        """Get daily active user counts from page views."""
         return f"""
-        Events
+        analytics_v0_page_view
         | where timestamp > ago({days}d)
-        | summarize dau = dcount(user_id) by bin(timestamp, 1d)
+        | summarize dau = dcount(actor_id) by bin(timestamp, 1d)
         | order by timestamp asc
         """
 

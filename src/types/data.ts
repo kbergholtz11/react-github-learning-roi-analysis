@@ -115,23 +115,21 @@ export interface JourneyUser {
   product_adoption_status: string;
 }
 
-// Learner Status enum
-export type LearnerStatus = 
+// Learner Status enum - matches enrichment pipeline output
+export type LearnerStatus =
   | "Champion"
   | "Specialist"
   | "Multi-Certified"
   | "Certified"
-  | "Learning";
+  | "Learning"
+  | "Engaged"
+  | "Registered";
 
-// Journey Stage enum
-export type JourneyStage = 
-  | "Stage 1: Exploring"
-  | "Stage 2: Active Learner"
-  | "Stage 3: Learning"
-  | "Stage 4: Certified"
-  | "Stage 5: Multi-Certified"
-  | "Stage 6: Specialist"
-  | "Stage 7: Champion"
+// Journey Stage enum - matches enrichment pipeline output
+export type JourneyStage =
+  | "Stage 2: Registered"
+  | "Stage 3: Engaged"
+  | "Stage 4: Learning"
   | "Stage 6: Certified"
   | "Stage 9: Power User"
   | "Stage 10: Specialist"
