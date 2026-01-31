@@ -12,13 +12,50 @@ function getAggregatedData(filename: string) {
   return JSON.parse(readFileSync(filepath, "utf-8"));
 }
 
+// Transform snake_case to camelCase for stage impact data
+interface BackendStageImpact {
+  stage: string;
+  learners: number;
+  avg_usage_increase: number;
+  platform_time_increase: number;
+  top_product: string;
+  adoption_rate?: number;
+}
+
+interface BackendCorrelationData {
+  name: string;
+  learning_hours: number;
+  product_usage: number;
+  platform_time: number;
+}
+
 export async function GET() {
   try {
     // Try FastAPI backend first (real Kusto data with product usage)
-    const backendData = await proxyToBackend(backendEndpoints.impact);
+    const backendData = await proxyToBackend<Record<string, unknown>>(backendEndpoints.impact);
     if (backendData) {
+      // Transform snake_case backend response to camelCase for frontend
+      const stageImpact = (backendData.stage_impact as BackendStageImpact[] || []).map(s => ({
+        stage: s.stage,
+        learners: s.learners,
+        avgUsageIncrease: s.avg_usage_increase,
+        platformTimeIncrease: s.platform_time_increase,
+        topProduct: s.top_product,
+        adoptionRate: s.adoption_rate,
+      }));
+      
+      const correlationData = (backendData.correlation_data as BackendCorrelationData[] || []).map(c => ({
+        name: c.name,
+        learningHours: c.learning_hours,
+        productUsage: c.product_usage,
+        platformTime: c.platform_time,
+      }));
+      
       return NextResponse.json({
-        ...backendData,
+        stageImpact,
+        productAdoption: backendData.product_adoption,
+        correlationData,
+        roiBreakdown: backendData.roi_breakdown,
         source: "kusto",
       });
     }

@@ -226,6 +226,7 @@ class StageImpact(BaseModel):
     avg_usage_increase: float
     platform_time_increase: float
     top_product: str
+    adoption_rate: Optional[float] = None  # Product adoption percentage for this stage
 
 
 class ProductAdoption(BaseModel):

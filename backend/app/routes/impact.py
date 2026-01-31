@@ -68,6 +68,7 @@ async def get_impact_analytics():
                     "avg_usage_increase": s.get("avgUsageIncrease", 0),
                     "platform_time_increase": s.get("platformTimeIncrease", 0),
                     "top_product": s.get("topProduct", "Unknown"),
+                    "adoption_rate": s.get("adoptionRate"),
                 }
                 for s in aggregated.get("stageImpact", [])
             ]

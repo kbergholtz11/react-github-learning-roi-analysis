@@ -83,10 +83,30 @@ export async function GET() {
     }
 
     // Try FastAPI backend journey endpoint
-    const backendData = await proxyToBackend(backendEndpoints.journey);
+    const backendData = await proxyToBackend<Record<string, unknown>>(backendEndpoints.journey);
     if (backendData) {
+      // Transform snake_case backend response to camelCase for frontend
+      interface BackendDropOff {
+        stage: string;
+        count: number;
+        drop_off_rate: number;
+        next_stage: string | null;
+      }
+      
+      const dropOffAnalysis = (backendData.drop_off_analysis as BackendDropOff[] || []).map(d => ({
+        stage: d.stage,
+        count: d.count,
+        dropOffRate: d.drop_off_rate,
+        nextStage: d.next_stage,
+      }));
+      
       return NextResponse.json({
-        ...backendData,
+        funnel: backendData.funnel,
+        avgTimeToCompletion: backendData.avg_time_to_completion,
+        stageVelocity: backendData.stage_velocity,
+        dropOffAnalysis,
+        monthlyProgression: backendData.monthly_progression,
+        totalJourneyUsers: backendData.total_journey_users,
         source: "kusto",
       });
     }
