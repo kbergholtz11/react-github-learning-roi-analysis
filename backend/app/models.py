@@ -38,19 +38,8 @@ class JourneyStatus(str, Enum):
     EXPLORER = "Explorer"         # Registered/minimal engagement
 
 
-class JourneyStage(str, Enum):
-    """Learner journey stages.
-
-    Matches the enrichment pipeline output (sync-enriched-learners.py).
-    """
-
-    REGISTERED = "Stage 2: Registered"
-    ENGAGED = "Stage 3: Engaged"
-    LEARNING = "Stage 4: Learning"
-    CERTIFIED = "Stage 6: Certified"
-    POWER_USER = "Stage 9: Power User"
-    SPECIALIST = "Stage 10: Specialist"
-    CHAMPION = "Stage 11: Champion"
+# NOTE: JourneyStage enum removed - journey_status now uses string values
+# from the enrichment pipeline (sync-enriched-learners.py)
 
 
 # =============================================================================

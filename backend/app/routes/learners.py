@@ -5,7 +5,6 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
-from app.config import get_settings
 from app.csv_service import get_certified_users, get_learners, get_unified_users
 from app.kusto import get_kusto_service, LearnerQueries
 from app.models import (
@@ -50,19 +49,9 @@ async def list_learners(
             page_size=page_size,
         )
         
-        kusto = get_kusto_service()
+        # NOTE: Kusto search was removed - not fully implemented.
+        # Search uses CSV/enriched data. For live queries, use /api/query.
         
-        if kusto.is_available and search:
-            # Try Kusto for search (faster on large datasets)
-            try:
-                logger.info(f"Searching learners via Kusto: {search}")
-                rows = kusto.execute_query(LearnerQueries.search_learners(search, limit=page_size))
-                # Transform Kusto results to model
-                # This would need mapping to actual schema
-            except Exception as kusto_err:
-                logger.warning(f"Kusto search failed, falling back to CSV: {kusto_err}")
-        
-        # Use CSV data (or fallback)
         result = get_learners(filters)
         
         return LearnersResponse(**result)
@@ -133,19 +122,8 @@ async def get_learner_profile(email: str):
     - Product usage data
     """
     try:
-        kusto = get_kusto_service()
-        
-        if kusto.is_available:
-            try:
-                rows = kusto.execute_query(
-                    LearnerQueries.get_learner_by_email(email)
-                )
-                if rows:
-                    row = rows[0]
-                    # Map Kusto response to UserProfile
-                    # This would need actual schema mapping
-            except Exception as kusto_err:
-                logger.warning(f"Kusto profile query failed, falling back to CSV: {kusto_err}")
+        # NOTE: Kusto profile query was removed - schema mapping was incomplete.
+        # Profile data comes from CSV/enriched data.
         
         # Find in CSV data
         certified = get_certified_users()

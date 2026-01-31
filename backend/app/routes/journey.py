@@ -35,16 +35,10 @@ async def get_journey_analytics():
     - Monthly progression trends
     """
     try:
-        kusto = get_kusto_service()
+        # NOTE: Kusto integration was removed as it wasn't being used.
+        # Journey data comes from enriched Parquet data via csv_service.
+        # For live Kusto queries, see /api/query endpoint.
         
-        if kusto.is_available:
-            # Use live Kusto queries for journey data
-            logger.info("Fetching journey data from Kusto")
-            funnel_data = kusto.execute_query(JourneyQueries.get_funnel_counts())
-            time_data = kusto.execute_query(JourneyQueries.get_time_to_certification())
-            # Would transform and return Kusto data
-        
-        # Fall back to CSV data
         funnel = get_journey_funnel()
         drop_off = get_drop_off_analysis()
         monthly = get_monthly_progression()

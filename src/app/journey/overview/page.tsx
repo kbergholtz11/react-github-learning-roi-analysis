@@ -65,21 +65,18 @@ export default function JourneyOverviewPage() {
           title="Total Learners"
           value={skillData?.totalLearners?.toLocaleString() || "0"}
           description="Across all skill levels"
-          trend={{ value: 8.3, isPositive: true }}
           icon={<Users className="h-4 w-4" />}
         />
         <MetricCard
           title="Avg Skill Score"
           value={skillData?.avgSkillScore?.toFixed(1) || "0"}
           description="Out of 100 points"
-          trend={{ value: 5.2, isPositive: true }}
           icon={<Target className="h-4 w-4" />}
         />
         <MetricCard
           title="Active Learners"
           value={growthMetrics?.active_30_days?.toLocaleString() || "0"}
           description={`${growthMetrics?.active_percentage?.toFixed(1) || 0}% active in 30 days`}
-          trend={{ value: 12.1, isPositive: true }}
           icon={<TrendingUp className="h-4 w-4" />}
         />
         <MetricCard

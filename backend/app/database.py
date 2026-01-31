@@ -7,7 +7,7 @@ Query latency: <20ms for most operations.
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 import duckdb
 import pandas as pd

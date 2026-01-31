@@ -4,7 +4,7 @@ Provides Copilot usage insights for enrolled learners from enriched data.
 """
 
 import logging
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel

@@ -10,7 +10,7 @@ This module implements a skill-focused learner progression model that considers:
 The model produces a Skill Score (0-100) and maps to Skill Levels.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional, Tuple
 from pydantic import BaseModel, Field

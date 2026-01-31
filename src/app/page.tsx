@@ -22,7 +22,7 @@ import {
   AlertCircle,
   Shield
 } from "lucide-react";
-import { useMetrics } from "@/hooks/use-data";
+import { useMetrics, useSkillsCourses } from "@/hooks/use-data";
 import { useCopilotTrend, useEnrichedStats } from "@/hooks/use-unified-data";
 
 // Quick Navigation Cards - defined outside component to avoid recreation
@@ -113,6 +113,7 @@ export default function DashboardPage() {
   const { data, isLoading, error } = useMetrics();
   const { data: copilotTrend } = useCopilotTrend(30);
   const { data: enrichedStats } = useEnrichedStats();
+  const { data: skillsData } = useSkillsCourses();
 
   // Memoize expensive data transformations
   const { metrics, funnel, statusBreakdown } = useMemo(() => {
@@ -138,8 +139,8 @@ export default function DashboardPage() {
   }, [data]);
 
   // Memoize derived chart data
-  const { journeyStages, impactSummary, activityTrend, topPaths } = useMemo(() => {
-    if (!metrics) return { journeyStages: [], impactSummary: [], activityTrend: [], topPaths: [] };
+  const { journeyStages, impactSummary } = useMemo(() => {
+    if (!metrics) return { journeyStages: [], impactSummary: [] };
     
     // Transform funnel data for display
     const maxCount = funnel.length > 0 ? Math.max(...funnel.map((f: { count: number }) => f.count)) : 0;
@@ -157,46 +158,35 @@ export default function DashboardPage() {
       color: stageColors[s.status] || "#94a3b8"
     }));
 
-    // Activity trend (simulated monthly data based on current metrics)
-    const activityTrend = [
-      { name: "Aug", completions: Math.round(metrics.certifiedUsers * 0.6), usage: 45 },
-      { name: "Sep", completions: Math.round(metrics.certifiedUsers * 0.7), usage: 52 },
-      { name: "Oct", completions: Math.round(metrics.certifiedUsers * 0.8), usage: 58 },
-      { name: "Nov", completions: Math.round(metrics.certifiedUsers * 0.9), usage: 65 },
-      { name: "Dec", completions: Math.round(metrics.certifiedUsers * 0.95), usage: 71 },
-      { name: "Jan", completions: metrics.certifiedUsers, usage: 78 },
-    ];
-
-    // Top learning paths (derived from status breakdown)
-    const topPaths = [
-      { 
-        name: "GitHub Copilot Mastery", 
-        learners: Math.round(metrics.certifiedUsers * 0.3), 
-        impact: 89, 
-        adoption: "+55%" 
-      },
-      { 
-        name: "Actions & Automation", 
-        learners: Math.round(metrics.certifiedUsers * 0.25), 
-        impact: 82, 
-        adoption: "+48%" 
-      },
-      { 
-        name: "Security Fundamentals", 
-        learners: Math.round(metrics.certifiedUsers * 0.18), 
-        impact: 76, 
-        adoption: "+42%" 
-      },
-      { 
-        name: "Code Review Excellence", 
-        learners: Math.round(metrics.certifiedUsers * 0.15), 
-        impact: 71, 
-        adoption: "+38%" 
-      },
-    ];
-
-    return { journeyStages, impactSummary, activityTrend, topPaths };
+    return { journeyStages, impactSummary };
   }, [metrics, funnel, statusBreakdown]);
+
+  // Get real certification pass rates by certification for activity trend
+  const certificationTrend = useMemo(() => {
+    const passRates = data?.certificationAnalytics?.certificationPassRates;
+    if (!passRates || passRates.length === 0) return [];
+    
+    return passRates.slice(0, 6).map((cert: { certification: string; passed: number; passRate: number }) => ({
+      name: cert.certification.replace("GitHub ", ""),
+      completions: cert.passed,
+      usage: Math.round(cert.passRate)
+    }));
+  }, [data]);
+
+  // Get real skills data for top paths
+  const topPaths = useMemo(() => {
+    if (!skillsData?.byCategory) return [];
+    
+    return skillsData.byCategory
+      .sort((a, b) => b.knownLearners - a.knownLearners)
+      .slice(0, 4)
+      .map((cat) => ({
+        name: `${cat.category} Track`,
+        learners: cat.knownLearners,
+        impact: Math.round(cat.completionRate),
+        adoption: `${cat.courses} courses`
+      }));
+  }, [skillsData]);
 
   // Early returns after all hooks
   if (isLoading) return <LoadingSkeleton />;
@@ -225,28 +215,25 @@ export default function DashboardPage() {
           title="Active Learners"
           value={metrics.totalLearners.toLocaleString()}
           description="In learning journey"
-          trend={{ value: 18.2, isPositive: true }}
           icon={<Users className="h-4 w-4" />}
         />
         <MetricCard
           title="Certified Users"
           value={metrics.certifiedUsers.toLocaleString()}
           description="Passed certifications"
-          trend={{ value: 12.5, isPositive: true }}
           icon={<Award className="h-4 w-4" />}
         />
         <MetricCard
-          title="Avg. Usage Increase"
-          value={`+${metrics.avgUsageIncrease}%`}
+          title="Avg. Usage Change"
+          value={`${metrics.avgUsageIncrease >= 0 ? '+' : ''}${metrics.avgUsageIncrease}%`}
           description="After learning completion"
-          trend={{ value: 8.3, isPositive: true }}
+          trend={metrics.avgUsageIncrease >= 0 ? { value: Math.abs(metrics.avgUsageIncrease), isPositive: true } : { value: Math.abs(metrics.avgUsageIncrease), isPositive: false }}
           icon={<TrendingUp className="h-4 w-4" />}
         />
         <MetricCard
           title="Products Adopted"
           value={metrics.avgProductsAdopted.toString()}
           description="Avg per learner"
-          trend={{ value: 15.1, isPositive: true }}
           icon={<Zap className="h-4 w-4" />}
         />
       </div>
@@ -297,31 +284,39 @@ export default function DashboardPage() {
 
       {/* Charts Row */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        {/* Activity & Impact Trend */}
+        {/* Certification Pass Rates by Exam */}
         <Card className="col-span-4">
           <CardHeader>
-            <CardTitle>Learning Activity & Platform Usage</CardTitle>
-            <CardDescription>Correlation between learning and engagement over time</CardDescription>
+            <CardTitle>Certification Performance by Exam</CardTitle>
+            <CardDescription>Pass count and success rate across certifications</CardDescription>
           </CardHeader>
           <CardContent>
-            <SimpleAreaChart 
-              data={activityTrend}
-              dataKey="completions"
-              secondaryDataKey="usage"
-              color="#22c55e"
-              secondaryColor="#3b82f6"
-              useSecondaryAxis={true}
-            />
-            <div className="flex justify-center gap-6 mt-4 text-sm">
-              <div className="flex items-center gap-2">
-                <div className="h-3 w-3 rounded-full bg-green-500" />
-                <span className="text-muted-foreground">Certifications</span>
+            {certificationTrend.length > 0 ? (
+              <>
+                <SimpleAreaChart 
+                  data={certificationTrend}
+                  dataKey="completions"
+                  secondaryDataKey="usage"
+                  color="#22c55e"
+                  secondaryColor="#3b82f6"
+                  useSecondaryAxis={true}
+                />
+                <div className="flex justify-center gap-6 mt-4 text-sm">
+                  <div className="flex items-center gap-2">
+                    <div className="h-3 w-3 rounded-full bg-green-500" />
+                    <span className="text-muted-foreground">Passed Count</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-3 w-3 rounded-full bg-blue-500" />
+                    <span className="text-muted-foreground">Pass Rate %</span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="h-[200px] flex items-center justify-center text-muted-foreground">
+                <p>Loading certification data...</p>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="h-3 w-3 rounded-full bg-blue-500" />
-                <span className="text-muted-foreground">Usage Score %</span>
-              </div>
-            </div>
+            )}
           </CardContent>
         </Card>
 
@@ -450,37 +445,43 @@ export default function DashboardPage() {
       {/* Top Learning Paths by Impact */}
       <Card>
         <CardHeader>
-          <CardTitle>Top Learning Paths by Impact</CardTitle>
-          <CardDescription>Courses driving the most behavior change and adoption</CardDescription>
+          <CardTitle>Top Skills Tracks by Activity</CardTitle>
+          <CardDescription>Real skills course categories with highest learner engagement</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {topPaths.map((path, index) => (
-              <div key={path.name} className="flex items-center gap-4 p-4 rounded-lg bg-muted/50">
-                <div className="flex items-center justify-center h-10 w-10 rounded-full bg-primary/10 text-primary font-bold">
-                  {index + 1}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-semibold">{path.name}</span>
-                    <Badge variant="secondary" className="text-green-600 dark:text-green-400">
-                      {path.adoption} adoption
-                    </Badge>
+          {topPaths.length > 0 ? (
+            <div className="space-y-4">
+              {topPaths.map((path, index) => (
+                <div key={path.name} className="flex items-center gap-4 p-4 rounded-lg bg-muted/50">
+                  <div className="flex items-center justify-center h-10 w-10 rounded-full bg-primary/10 text-primary font-bold">
+                    {index + 1}
                   </div>
-                  <div className="flex items-center gap-4">
-                    <span className="text-sm text-muted-foreground">
-                      {path.learners.toLocaleString()} learners
-                    </span>
-                    <div className="flex-1 flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">Impact:</span>
-                      <Progress value={path.impact} className="h-2 flex-1" />
-                      <span className="text-sm font-medium">{path.impact}%</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-semibold">{path.name}</span>
+                      <Badge variant="secondary" className="text-blue-600 dark:text-blue-400">
+                        {path.adoption}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <span className="text-sm text-muted-foreground">
+                        {path.learners.toLocaleString()} known learners
+                      </span>
+                      <div className="flex-1 flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Completion:</span>
+                        <Progress value={path.impact} className="h-2 flex-1" />
+                        <span className="text-sm font-medium">{path.impact}%</span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="h-[200px] flex items-center justify-center text-muted-foreground">
+              <p>Run <code className="bg-muted px-1 rounded">npm run fetch:skills</code> to load skills data</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 

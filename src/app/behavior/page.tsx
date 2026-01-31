@@ -121,28 +121,25 @@ export default function BehaviorChangePage() {
           title="Avg Usage Change"
           value={`${avgUsageIncrease > 0 ? '+' : ''}${metrics?.avgUsageIncrease}%`}
           description="Post-learning platform usage"
-          trend={{ value: 12.3, isPositive: avgUsageIncrease > 0 }}
+          trend={{ value: Math.abs(avgUsageIncrease), isPositive: avgUsageIncrease > 0 }}
           icon={<Activity className="h-4 w-4" />}
         />
         <MetricCard
           title="Time to Certification"
           value={`${journeyData?.avgTimeToCompletion || 45} days`}
           description="Avg journey completion"
-          trend={{ value: 5.2, isPositive: false }}
           icon={<Clock className="h-4 w-4" />}
         />
         <MetricCard
           title="Impact Score"
           value={`${metrics?.impactScore}/100`}
           description="Overall learning impact"
-          trend={{ value: 8.1, isPositive: true }}
           icon={<TrendingUp className="h-4 w-4" />}
         />
         <MetricCard
           title="Certified Users"
           value={metrics?.certifiedUsers?.toLocaleString() || "0"}
           description="Completed learning journey"
-          trend={{ value: 15.4, isPositive: true }}
           icon={<Users className="h-4 w-4" />}
         />
       </div>

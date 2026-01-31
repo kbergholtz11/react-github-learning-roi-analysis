@@ -12,7 +12,6 @@ from app.csv_service import (
     get_status_breakdown,
 )
 from app.database import get_database, LearnerQueries
-from app.kusto import get_kusto_service, LearnerQueries as KustoLearnerQueries
 from app.models import MetricsResponse
 
 logger = logging.getLogger(__name__)
@@ -92,23 +91,11 @@ async def get_metrics():
             except Exception as db_err:
                 logger.warning(f"DuckDB query failed, falling back to CSV: {db_err}")
         
-        kusto = get_kusto_service()
+        # NOTE: Kusto metrics integration was removed - data was fetched but unused.
+        # Metrics come from DuckDB (primary) or CSV (fallback).
+        # For live Kusto queries, use /api/query endpoint.
         
-        if kusto.is_available:
-            # Try to use live Kusto queries
-            try:
-                logger.info("Fetching metrics from Kusto")
-                stats = kusto.execute_query(KustoLearnerQueries.get_certification_stats())
-                
-                if stats:
-                    row = stats[0]
-                    # Build metrics from Kusto response
-                    # This would need to be adapted to actual Kusto schema
-                    pass
-            except Exception as kusto_err:
-                logger.warning(f"Kusto query failed, falling back to CSV: {kusto_err}")
-        
-        # Fall back to CSV data (or if Kusto not available)
+        # Fall back to CSV data
         metrics = get_dashboard_metrics()
         status_breakdown = get_journey_status_breakdown()
         funnel = get_journey_funnel()

@@ -126,9 +126,9 @@ export default function LearningImpactPage() {
                 Product Adoption
               </div>
               <div className="text-3xl font-bold text-green-600 dark:text-green-400">
-                +{impactFlow.productAdoption}%
+                {impactFlow.productAdoption >= 0 ? '+' : ''}{impactFlow.productAdoption}%
               </div>
-              <div className="text-sm text-muted-foreground">usage increase</div>
+              <div className="text-sm text-muted-foreground">usage change</div>
               <ArrowRight className="absolute right-[-20px] top-1/2 -translate-y-1/2 h-6 w-6 text-muted-foreground z-10" />
             </div>
 
@@ -138,7 +138,7 @@ export default function LearningImpactPage() {
                 Platform Engagement
               </div>
               <div className="text-3xl font-bold text-amber-600 dark:text-amber-400">
-                +{impactFlow.timeOnPlatform}%
+                {impactFlow.timeOnPlatform >= 0 ? '+' : ''}{impactFlow.timeOnPlatform}%
               </div>
               <div className="text-sm text-muted-foreground">time on platform</div>
             </div>
@@ -152,28 +152,25 @@ export default function LearningImpactPage() {
           title="Active Learners"
           value={metrics.activeLearners.toLocaleString()}
           description="Enrolled in learning paths"
-          trend={{ value: 18.2, isPositive: true }}
           icon={<Users className="h-4 w-4" />}
         />
         <MetricCard
-          title="Avg Usage Increase"
-          value={`+${metrics.avgUsageIncrease}%`}
+          title="Avg Usage Change"
+          value={`${metrics.avgUsageIncrease >= 0 ? '+' : ''}${metrics.avgUsageIncrease}%`}
           description="After completing courses"
-          trend={{ value: 12.5, isPositive: true }}
+          trend={metrics.avgUsageIncrease >= 0 ? { value: Math.abs(metrics.avgUsageIncrease), isPositive: true } : { value: Math.abs(metrics.avgUsageIncrease), isPositive: false }}
           icon={<TrendingUp className="h-4 w-4" />}
         />
         <MetricCard
           title="Features Adopted"
           value={metrics.featuresAdopted.toString()}
           description="New features per learner"
-          trend={{ value: 8.3, isPositive: true }}
           icon={<Zap className="h-4 w-4" />}
         />
         <MetricCard
           title="Time to Value"
           value={`${metrics.timeToValue}%`}
           description="Faster onboarding"
-          trend={{ value: 15.1, isPositive: true }}
           icon={<Clock className="h-4 w-4" />}
         />
       </div>

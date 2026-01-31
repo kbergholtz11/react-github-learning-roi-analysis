@@ -137,28 +137,24 @@ export default function ExecutiveSummaryPage() {
           title="Total Learners"
           value={metrics?.totalLearners?.toLocaleString() || "0"}
           description="In learning journey"
-          trend={{ value: 15.2, isPositive: true }}
           icon={<Users className="h-4 w-4" />}
         />
         <MetricCard
           title="Certified Users"
           value={metrics?.certifiedUsers?.toLocaleString() || "0"}
           description={`${certificationRate}% certification rate`}
-          trend={{ value: 12.5, isPositive: true }}
           icon={<Award className="h-4 w-4" />}
         />
         <MetricCard
           title="Impact Score"
           value={`${metrics?.impactScore || 0}/100`}
           description="Overall program impact"
-          trend={{ value: 8.5, isPositive: true }}
           icon={<Target className="h-4 w-4" />}
         />
         <MetricCard
           title="Learning Hours"
           value={metrics?.totalLearningHours?.toLocaleString() || "0"}
           description="Total invested"
-          trend={{ value: 18.0, isPositive: true }}
           icon={<Zap className="h-4 w-4" />}
         />
       </div>

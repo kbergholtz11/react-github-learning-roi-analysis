@@ -5,7 +5,7 @@ Uses slowapi for request rate limiting with configurable limits per endpoint.
 """
 
 import logging
-from typing import Callable, Optional
+from typing import Callable
 
 from fastapi import Request, Response
 from slowapi import Limiter
@@ -109,30 +109,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             )
 
 
-def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
-    """Handler for rate limit exceeded exceptions."""
-    logger.warning(
-        f"Rate limit exceeded: {request.url.path}",
-        extra={
-            "path": request.url.path,
-            "method": request.method,
-            "client": get_rate_limit_key(request),
-        }
-    )
-    
-    return JSONResponse(
-        status_code=429,
-        content={
-            "error": "rate_limit_exceeded",
-            "message": str(exc.detail),
-            "retry_after": 60,
-        },
-        headers={"Retry-After": "60"}
-    )
-
-
 def get_endpoint_limit(path: str) -> str:
-    """Get rate limit for a specific endpoint path."""
+    """Get rate limit string for a specific endpoint path.
+    
+    Used for determining appropriate rate limits based on endpoint type.
+    """
     if "/health" in path:
         return RATE_LIMITS["health"]
     if "/query" in path:

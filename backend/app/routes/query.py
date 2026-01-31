@@ -1,10 +1,9 @@
 """Custom Kusto query endpoint for advanced analytics."""
 
 import logging
-import re
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.kusto import get_kusto_service

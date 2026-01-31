@@ -74,28 +74,25 @@ export default function CertificationROIPage() {
           title="Total Certified"
           value={certifiedUsers.toLocaleString()}
           description="All-time certifications"
-          trend={{ value: 23.1, isPositive: true }}
           icon={<Award className="h-4 w-4" />}
         />
         <MetricCard
           title="Total Certs Earned"
           value={totalCerts.toLocaleString()}
           description="Certifications achieved"
-          trend={{ value: 14.3, isPositive: true }}
           icon={<Calendar className="h-4 w-4" />}
         />
         <MetricCard
           title="Exam Attempts"
           value={(examSummary?.totalExamAttempts || 0).toLocaleString()}
           description={`${examSummary?.totalPassed?.toLocaleString() || 0} passed, ${examSummary?.totalFailed?.toLocaleString() || 0} failed`}
-          trend={{ value: examSummary?.overallPassRate || 0, isPositive: true }}
           icon={<Target className="h-4 w-4" />}
         />
         <MetricCard
           title="Pass Rate"
           value={`${examSummary?.overallPassRate || 0}%`}
           description="Overall success rate"
-          trend={{ value: 3.2, isPositive: true }}
+          trend={{ value: examSummary?.overallPassRate || 0, isPositive: (examSummary?.overallPassRate || 0) >= 70 }}
           icon={<CheckCircle2 className="h-4 w-4" />}
         />
       </div>

@@ -148,8 +148,8 @@ export default function ProgressionTrackingPage() {
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="font-medium text-green-600">
-                      +{stage.avgUsageIncrease}% usage
+                    <p className={`font-medium ${stage.avgUsageIncrease >= 0 ? 'text-green-600' : 'text-amber-600'}`}>
+                      {stage.avgUsageIncrease >= 0 ? '+' : ''}{stage.avgUsageIncrease}% usage
                     </p>
                     <p className="text-sm text-muted-foreground">
                       {stage.topProduct}

@@ -15,6 +15,24 @@ from app.models import ImpactResponse
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/impact", tags=["impact"])
 
+# Constant for ROI breakdown (used in multiple places)
+ROI_BREAKDOWN = [
+    {"name": "Productivity", "value": 45, "color": "#22c55e"},
+    {"name": "Quality", "value": 30, "color": "#3b82f6"},
+    {"name": "Time Savings", "value": 15, "color": "#8b5cf6"},
+    {"name": "Knowledge", "value": 10, "color": "#f59e0b"},
+]
+
+# Fallback correlation data when Kusto is unavailable
+FALLBACK_CORRELATION_DATA = [
+    {"name": "Week 1", "learning_hours": 100, "product_usage": 20, "platform_time": 15},
+    {"name": "Week 2", "learning_hours": 250, "product_usage": 35, "platform_time": 28},
+    {"name": "Week 3", "learning_hours": 420, "product_usage": 48, "platform_time": 42},
+    {"name": "Week 4", "learning_hours": 580, "product_usage": 62, "platform_time": 55},
+    {"name": "Week 5", "learning_hours": 750, "product_usage": 75, "platform_time": 68},
+    {"name": "Week 6", "learning_hours": 920, "product_usage": 85, "platform_time": 78},
+]
+
 
 @router.get("", response_model=ImpactResponse)
 async def get_impact_analytics():
@@ -64,18 +82,11 @@ async def get_impact_analytics():
                         for row in (correlation_rows or [])
                     ]
 
-                    roi_breakdown = [
-                        {"name": "Productivity", "value": 45, "color": "#22c55e"},
-                        {"name": "Quality", "value": 30, "color": "#3b82f6"},
-                        {"name": "Time Savings", "value": 15, "color": "#8b5cf6"},
-                        {"name": "Knowledge", "value": 10, "color": "#f59e0b"},
-                    ]
-
                     return ImpactResponse(
                         stage_impact=stage_impact_data,
                         product_adoption=get_product_adoption(),
                         correlation_data=correlation_data,
-                        roi_breakdown=roi_breakdown,
+                        roi_breakdown=ROI_BREAKDOWN,
                     )
             except Exception as kusto_err:
                 logger.warning(f"Kusto impact query failed, falling back to CSV: {kusto_err}")
@@ -84,28 +95,11 @@ async def get_impact_analytics():
         stage_impact = get_stage_impact()
         product_adoption = get_product_adoption()
 
-        # Correlation data (fallback)
-        correlation_data = [
-            {"name": "Week 1", "learning_hours": 100, "product_usage": 20, "platform_time": 15},
-            {"name": "Week 2", "learning_hours": 250, "product_usage": 35, "platform_time": 28},
-            {"name": "Week 3", "learning_hours": 420, "product_usage": 48, "platform_time": 42},
-            {"name": "Week 4", "learning_hours": 580, "product_usage": 62, "platform_time": 55},
-            {"name": "Week 5", "learning_hours": 750, "product_usage": 75, "platform_time": 68},
-            {"name": "Week 6", "learning_hours": 920, "product_usage": 85, "platform_time": 78},
-        ]
-
-        roi_breakdown = [
-            {"name": "Productivity", "value": 45, "color": "#22c55e"},
-            {"name": "Quality", "value": 30, "color": "#3b82f6"},
-            {"name": "Time Savings", "value": 15, "color": "#8b5cf6"},
-            {"name": "Knowledge", "value": 10, "color": "#f59e0b"},
-        ]
-
         return ImpactResponse(
             stage_impact=stage_impact,
             product_adoption=product_adoption,
-            correlation_data=correlation_data,
-            roi_breakdown=roi_breakdown,
+            correlation_data=FALLBACK_CORRELATION_DATA,
+            roi_breakdown=ROI_BREAKDOWN,
         )
         
     except Exception as e:
