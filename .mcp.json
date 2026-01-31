@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "fabric-rti-kusto": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["microsoft-fabric-rti-mcp==0.3.0"],
+      "env": {
+        "KUSTO_SERVICE_URI": "https://gh-analytics.eastus.kusto.windows.net",
+        "KUSTO_SERVICE_DEFAULT_DB": "canonical"
+      }
+    }
+  }
+}

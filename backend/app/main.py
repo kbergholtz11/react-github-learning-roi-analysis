@@ -16,7 +16,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from app.config import get_settings
-from app.routes import metrics, learners, journey, impact, query, copilot
+from app.routes import metrics, learners, journey, impact, query, copilot, enriched
 from app.middleware.rate_limit import limiter, RateLimitMiddleware
 from app.middleware.logging import LoggingMiddleware, setup_logging, ErrorTracker
 
@@ -180,6 +180,7 @@ app.include_router(journey.router, prefix="/api")
 app.include_router(impact.router, prefix="/api")
 app.include_router(query.router, prefix="/api")
 app.include_router(copilot.router, prefix="/api")
+app.include_router(enriched.router, prefix="/api")
 
 
 if __name__ == "__main__":
