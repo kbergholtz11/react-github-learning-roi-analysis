@@ -105,6 +105,7 @@ interface LearnersResponse {
 
 interface EnrichedLearnersResponse {
   learners: EnrichedLearner[];
+  total_count: number;
   count: number;
   limit: number;
   offset: number;
@@ -259,17 +260,51 @@ export function useLearnerStats() {
 }
 
 /**
+ * Segment counts for Talent Intelligence dashboard
+ * Returns accurate counts across all 367K learners
+ */
+export interface SegmentCounts {
+  all: number;
+  at_risk: number;
+  rising_stars: number;
+  ready_to_advance: number;
+  inactive: number;
+  high_value: number;
+}
+
+export function useSegmentCounts() {
+  return useQuery<SegmentCounts>({
+    queryKey: ["segment-counts"],
+    queryFn: async () => {
+      try {
+        const res = await fetch("http://localhost:8000/api/enriched/stats/segments");
+        if (res.ok) {
+          return res.json();
+        }
+      } catch {
+        // Backend not available
+      }
+      // Return zeros as fallback
+      return { all: 0, at_risk: 0, rising_stars: 0, ready_to_advance: 0, inactive: 0, high_value: 0 };
+    },
+    staleTime: 1000 * 60 * 5, // 5 minutes - segments don't change often
+  });
+}
+
+/**
  * Enriched Learners from FastAPI backend (DuckDB/Parquet)
  * Includes full enrichment: company, certifications, Copilot usage, data quality
  */
 export function useEnrichedLearners(options: {
   search?: string;
+  segment?: string;
   limit?: number;
   offset?: number;
   minQuality?: number;
 } = {}) {
   const params = new URLSearchParams();
   if (options.search) params.set("search", options.search);
+  if (options.segment && options.segment !== "all") params.set("segment", options.segment);
   if (options.limit) params.set("limit", String(options.limit));
   if (options.offset) params.set("offset", String(options.offset));
   if (options.minQuality) params.set("min_quality", String(options.minQuality));

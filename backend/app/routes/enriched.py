@@ -25,6 +25,7 @@ router = APIRouter(prefix="/enriched", tags=["enriched"])
 async def get_enriched_learners(
     search: Optional[str] = Query(None, description="Search by email, username, or name"),
     status: Optional[str] = Query(None, description="Filter by learner_status"),
+    segment: Optional[str] = Query(None, description="Filter by insight segment (at-risk, rising-stars, ready-to-advance, inactive, high-value)"),
     company: Optional[str] = Query(None, description="Filter by company name (partial match)"),
     country: Optional[str] = Query(None, description="Filter by country code"),
     region: Optional[str] = Query(None, description="Filter by region (AMER, EMEA, APAC)"),
@@ -58,6 +59,7 @@ async def get_enriched_learners(
         total_count = LearnerQueries.get_total_count(
             search=search,
             status=status,
+            segment=segment,
             company=company,
             country=country,
             region=region,
@@ -68,6 +70,7 @@ async def get_enriched_learners(
         learners = LearnerQueries.get_learners(
             search=search,
             status=status,
+            segment=segment,
             company=company,
             country=country,
             region=region,
@@ -214,6 +217,83 @@ async def get_growth_metrics() -> Dict[str, Any]:
         return LearnerQueries.get_growth_metrics()
     except Exception as e:
         logger.error(f"Error getting growth metrics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/stats/segments")
+async def get_segment_counts() -> Dict[str, Any]:
+    """
+    Get insight segment counts for the Talent Intelligence dashboard.
+    
+    Returns counts for:
+        - all: Total learners
+        - at_risk: Failed exams >= 2 OR (total_exams >= 2 AND exams_passed = 0) OR low quality
+        - rising_stars: Multi-certified (2+) or Champion/Specialist status
+        - ready_to_advance: 1 cert + product usage, or learning with high Copilot days
+        - inactive: No activity in 90+ days
+        - high_value: Champion/Specialist/Partner Certified with product usage
+    """
+    try:
+        db = get_database()
+        
+        # Execute segment count queries
+        result = db.query("""
+            SELECT 
+                COUNT(*) as total,
+                
+                -- At Risk: Failed exams >= 2 OR (total >= 2 AND passed = 0) OR low quality
+                SUM(CASE WHEN 
+                    (COALESCE(total_exams, 0) - COALESCE(exams_passed, 0) >= 2) OR 
+                    (COALESCE(total_exams, 0) >= 2 AND COALESCE(exams_passed, 0) = 0) OR
+                    (data_quality_level = 'low' AND COALESCE(total_exams, 0) > 0)
+                THEN 1 ELSE 0 END) as at_risk,
+                
+                -- Rising Stars: Multi-certified (2+) or Champion/Specialist
+                SUM(CASE WHEN 
+                    COALESCE(exams_passed, 0) >= 2 OR 
+                    learner_status IN ('Multi-Certified', 'Specialist', 'Champion')
+                THEN 1 ELSE 0 END) as rising_stars,
+                
+                -- Ready to Advance: 1 cert + product usage, or Learning/Engaged with high Copilot
+                SUM(CASE WHEN 
+                    (COALESCE(exams_passed, 0) = 1 AND (COALESCE(uses_copilot, false) = true OR COALESCE(uses_actions, false) = true)) OR
+                    (learner_status = 'Certified' AND COALESCE(copilot_days, 0) > 30) OR
+                    (learner_status IN ('Learning', 'Engaged') AND COALESCE(copilot_days, 0) > 60)
+                THEN 1 ELSE 0 END) as ready_to_advance,
+                
+                -- Inactive: No activity in 90+ days (using last_activity column)
+                SUM(CASE WHEN 
+                    last_activity IS NULL OR
+                    TRY_CAST(last_activity AS DATE) < CURRENT_DATE - INTERVAL '90 days'
+                THEN 1 ELSE 0 END) as inactive,
+                
+                -- High Value: Champion/Specialist/Partner Certified with product usage
+                SUM(CASE WHEN 
+                    learner_status IN ('Champion', 'Specialist', 'Partner Certified') AND
+                    (COALESCE(uses_copilot, false) = true OR COALESCE(uses_actions, false) = true)
+                THEN 1 ELSE 0 END) as high_value
+                
+            FROM learners_enriched
+        """)
+        
+        if result:
+            row = result[0]
+            return {
+                "all": int(row.get("total", 0) or 0),
+                "at_risk": int(row.get("at_risk", 0) or 0),
+                "rising_stars": int(row.get("rising_stars", 0) or 0),
+                "ready_to_advance": int(row.get("ready_to_advance", 0) or 0),
+                "inactive": int(row.get("inactive", 0) or 0),
+                "high_value": int(row.get("high_value", 0) or 0),
+            }
+        
+        return {
+            "all": 0, "at_risk": 0, "rising_stars": 0,
+            "ready_to_advance": 0, "inactive": 0, "high_value": 0
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting segment counts: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

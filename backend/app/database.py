@@ -210,9 +210,39 @@ class LearnerQueries:
     """Pre-built queries for common learner operations."""
 
     @staticmethod
+    def _get_segment_condition(segment: str) -> str:
+        """Get SQL condition for insight segments."""
+        segment_conditions = {
+            "at-risk": """(
+                (COALESCE(total_exams, 0) - COALESCE(exams_passed, 0) >= 2) OR 
+                (COALESCE(total_exams, 0) >= 2 AND COALESCE(exams_passed, 0) = 0) OR
+                (data_quality_level = 'low' AND COALESCE(total_exams, 0) > 0)
+            )""",
+            "rising-stars": """(
+                COALESCE(exams_passed, 0) >= 2 OR 
+                learner_status IN ('Multi-Certified', 'Specialist', 'Champion')
+            )""",
+            "ready-to-advance": """(
+                (COALESCE(exams_passed, 0) = 1 AND (COALESCE(uses_copilot, false) = true OR COALESCE(uses_actions, false) = true)) OR
+                (learner_status = 'Certified' AND COALESCE(copilot_days, 0) > 30) OR
+                (learner_status IN ('Learning', 'Engaged') AND COALESCE(copilot_days, 0) > 60)
+            )""",
+            "inactive": """(
+                last_activity IS NULL OR
+                TRY_CAST(last_activity AS DATE) < CURRENT_DATE - INTERVAL '90 days'
+            )""",
+            "high-value": """(
+                learner_status IN ('Champion', 'Specialist', 'Partner Certified') AND
+                (COALESCE(uses_copilot, false) = true OR COALESCE(uses_actions, false) = true)
+            )""",
+        }
+        return segment_conditions.get(segment, "1=1")
+
+    @staticmethod
     def get_total_count(
         search: Optional[str] = None,
         status: Optional[str] = None,
+        segment: Optional[str] = None,
         company: Optional[str] = None,
         country: Optional[str] = None,
         region: Optional[str] = None,
@@ -230,6 +260,8 @@ class LearnerQueries:
         if status:
             safe_status = db.sanitize_string(status)
             conditions.append(f"learner_status = '{safe_status}'")
+        if segment:
+            conditions.append(LearnerQueries._get_segment_condition(segment))
         if company:
             safe_company = db.sanitize_string(company)
             conditions.append(f"company_name ILIKE '%{safe_company}%'")
@@ -256,6 +288,7 @@ class LearnerQueries:
     def get_learners(
         search: Optional[str] = None,
         status: Optional[str] = None,
+        segment: Optional[str] = None,
         company: Optional[str] = None,
         country: Optional[str] = None,
         region: Optional[str] = None,
@@ -294,6 +327,8 @@ class LearnerQueries:
         if status:
             safe_status = db.sanitize_string(status)
             conditions.append(f"learner_status = '{safe_status}'")
+        if segment:
+            conditions.append(LearnerQueries._get_segment_condition(segment))
         if company:
             safe_company = db.sanitize_string(company)
             conditions.append(f"company_name ILIKE '%{safe_company}%'")

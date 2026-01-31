@@ -15,7 +15,7 @@ import {
   Clock, Calendar, Zap, GraduationCap, Trophy
 } from "lucide-react";
 import { useUrlParams } from "@/hooks/use-url-params";
-import { useEnrichedLearners } from "@/hooks/use-unified-data";
+import { useEnrichedLearners, useSegmentCounts } from "@/hooks/use-unified-data";
 import type { LearnerStatus, EnrichedLearner, DataQualityLevel } from "@/types/data";
 
 type SortField = "handle" | "status" | "certs" | "company" | "region" | "quality" | "lastActivity";
@@ -521,12 +521,16 @@ export default function LearnerExplorerPage() {
   // Use server-side pagination - pass offset based on current page
   const offset = (currentPage - 1) * pageSize;
   
-  // Use enriched learners API with server-side pagination
+  // Use enriched learners API with server-side pagination AND segment filtering
   const { data, isLoading, error, isFetching } = useEnrichedLearners({
     search: searchTerm || undefined,
+    segment: segmentFilter,
     limit: pageSize,
     offset: offset,
   });
+
+  // Fetch accurate segment counts from server (computed across all 367K learners)
+  const { data: serverSegmentCounts } = useSegmentCounts();
 
   const allLearners = (data?.learners || []) as EnrichedLearner[];
   const totalCount = data?.total_count || data?.count || 0;
@@ -537,32 +541,31 @@ export default function LearnerExplorerPage() {
     return allLearners.filter(l => l.learner_status === statusFilter);
   }, [allLearners, statusFilter]);
 
-  // Compute segment counts from status-filtered data
+  // Use server-side segment counts (accurate across all learners)
   const segmentCounts = useMemo(() => {
-    return {
-      all: statusFilteredLearners.length,
-      "at-risk": statusFilteredLearners.filter(isAtRisk).length,
-      "rising-stars": statusFilteredLearners.filter(isRisingStar).length,
-      "ready-to-advance": statusFilteredLearners.filter(isReadyToAdvance).length,
-      inactive: statusFilteredLearners.filter(isInactive).length,
-      "high-value": statusFilteredLearners.filter(isHighValue).length,
-    };
-  }, [statusFilteredLearners]);
-
-  // Filter by segment
-  const segmentedLearners = useMemo(() => {
-    switch (segmentFilter) {
-      case "at-risk": return statusFilteredLearners.filter(isAtRisk);
-      case "rising-stars": return statusFilteredLearners.filter(isRisingStar);
-      case "ready-to-advance": return statusFilteredLearners.filter(isReadyToAdvance);
-      case "inactive": return statusFilteredLearners.filter(isInactive);
-      case "high-value": return statusFilteredLearners.filter(isHighValue);
-      default: return statusFilteredLearners;
+    if (serverSegmentCounts) {
+      return {
+        all: serverSegmentCounts.all,
+        "at-risk": serverSegmentCounts.at_risk,
+        "rising-stars": serverSegmentCounts.rising_stars,
+        "ready-to-advance": serverSegmentCounts.ready_to_advance,
+        inactive: serverSegmentCounts.inactive,
+        "high-value": serverSegmentCounts.high_value,
+      };
     }
-  }, [statusFilteredLearners, segmentFilter]);
+    // Fallback to totalCount for "all" while loading
+    return {
+      all: totalCount,
+      "at-risk": 0,
+      "rising-stars": 0,
+      "ready-to-advance": 0,
+      inactive: 0,
+      "high-value": 0,
+    };
+  }, [serverSegmentCounts, totalCount]);
 
-  // Server-side pagination - use data directly (no client-side slicing)
-  const displayLearners = segmentedLearners;
+  // Segment filtering now done server-side, just use the returned data
+  const displayLearners = statusFilteredLearners;
 
   // Calculate total pages from server total_count
   const totalPages = Math.ceil(totalCount / pageSize);
@@ -640,7 +643,7 @@ export default function LearnerExplorerPage() {
     try {
       const headers = ["Handle", "Email", "Status", "Certs", "Company", "Region", "Job Role", "Copilot Days", "Last Activity", "Quality"];
       
-      const rows = segmentedLearners.map(learner => [
+      const rows = displayLearners.map(learner => [
         getHandle(learner),
         getEmail(learner),
         learner.learner_status || "",
@@ -670,7 +673,7 @@ export default function LearnerExplorerPage() {
     } finally {
       setIsExporting(false);
     }
-  }, [segmentedLearners, segmentFilter]);
+  }, [displayLearners, segmentFilter]);
 
   // Early returns AFTER all hooks
   if (isLoading && !data) return <LoadingSkeleton />;
@@ -686,7 +689,7 @@ export default function LearnerExplorerPage() {
             Discover insights and take action on {totalCount.toLocaleString()} learners
           </p>
         </div>
-        <Button variant="outline" className="gap-2" onClick={handleExport} disabled={isExporting || segmentedLearners.length === 0}>
+        <Button variant="outline" className="gap-2" onClick={handleExport} disabled={isExporting || displayLearners.length === 0}>
           {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
           Export {segmentFilter !== "all" ? insightSegmentConfig[segmentFilter].label : "All"}
         </Button>
@@ -769,10 +772,10 @@ export default function LearnerExplorerPage() {
                         {insightSegmentConfig[segmentFilter].label}
                       </Badge>
                     )}
-                    {segmentedLearners.length.toLocaleString()} Learners
+                    {(segmentFilter === "all" ? totalCount : segmentCounts[segmentFilter]).toLocaleString()} Learners
                   </CardTitle>
                   <CardDescription>
-                    Click any row to view full learner profile
+                    Showing {displayLearners.length} of {(segmentFilter === "all" ? totalCount : segmentCounts[segmentFilter]).toLocaleString()} • Click any row to view full profile
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -932,8 +935,8 @@ export default function LearnerExplorerPage() {
 
             <TabsContent value="analytics" className="mt-4">
               <div className="grid gap-4 md:grid-cols-2">
-                <CompanyBreakdown learners={segmentedLearners} />
-                <RegionBreakdown learners={segmentedLearners} />
+                <CompanyBreakdown learners={displayLearners} />
+                <RegionBreakdown learners={displayLearners} />
               </div>
             </TabsContent>
           </Tabs>
@@ -958,8 +961,8 @@ export default function LearnerExplorerPage() {
                   Avg. Certifications
                 </span>
                 <span className="font-semibold">
-                  {segmentedLearners.length > 0 
-                    ? (segmentedLearners.reduce((sum, l) => sum + getCerts(l), 0) / segmentedLearners.length).toFixed(1)
+                  {displayLearners.length > 0 
+                    ? (displayLearners.reduce((sum, l) => sum + getCerts(l), 0) / displayLearners.length).toFixed(1)
                     : "0"}
                 </span>
               </div>
@@ -969,8 +972,8 @@ export default function LearnerExplorerPage() {
                   Copilot Adoption
                 </span>
                 <span className="font-semibold">
-                  {segmentedLearners.length > 0 
-                    ? Math.round((segmentedLearners.filter(usesCopilot).length / segmentedLearners.length) * 100)
+                  {displayLearners.length > 0 
+                    ? Math.round((displayLearners.filter(usesCopilot).length / displayLearners.length) * 100)
                     : 0}%
                 </span>
               </div>
@@ -980,8 +983,8 @@ export default function LearnerExplorerPage() {
                   Actions Adoption
                 </span>
                 <span className="font-semibold">
-                  {segmentedLearners.length > 0 
-                    ? Math.round((segmentedLearners.filter(usesActions).length / segmentedLearners.length) * 100)
+                  {displayLearners.length > 0 
+                    ? Math.round((displayLearners.filter(usesActions).length / displayLearners.length) * 100)
                     : 0}%
                 </span>
               </div>
@@ -991,7 +994,7 @@ export default function LearnerExplorerPage() {
                   Companies
                 </span>
                 <span className="font-semibold">
-                  {new Set(segmentedLearners.map(getCompany).filter(Boolean)).size}
+                  {new Set(displayLearners.map(getCompany).filter(Boolean)).size}
                 </span>
               </div>
               <div className="flex justify-between items-center">
@@ -1000,7 +1003,7 @@ export default function LearnerExplorerPage() {
                   Regions
                 </span>
                 <span className="font-semibold">
-                  {new Set(segmentedLearners.map(getRegion).filter(Boolean)).size}
+                  {new Set(displayLearners.map(getRegion).filter(Boolean)).size}
                 </span>
               </div>
             </CardContent>
@@ -1014,7 +1017,7 @@ export default function LearnerExplorerPage() {
             <CardContent>
               <div className="space-y-2">
                 {Object.entries(
-                  segmentedLearners.reduce((acc, l) => {
+                  displayLearners.reduce((acc, l) => {
                     const status = l.learner_status || "Unknown";
                     acc[status] = (acc[status] || 0) + 1;
                     return acc;
