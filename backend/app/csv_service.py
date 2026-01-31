@@ -364,25 +364,56 @@ def get_status_breakdown() -> List[StatusBreakdown]:
     ]
 
 
+def get_journey_status_breakdown() -> List[StatusBreakdown]:
+    """Get journey-based status breakdown from enriched data.
+    
+    Returns a holistic view of learner progress combining:
+    - Learning touchpoints (exams passed)
+    - Product adoption (Copilot, Actions, Security)
+    - Engagement levels (activity events)
+    """
+    from app.database import LearnerQueries
+    
+    try:
+        journey_data = LearnerQueries.get_journey_breakdown()
+        if journey_data:
+            return [
+                StatusBreakdown(
+                    status=row["journey_status"],
+                    count=row["count"],
+                    percentage=float(row["percentage"]),
+                )
+                for row in journey_data
+            ]
+    except Exception as e:
+        logger.warning(f"Failed to get journey breakdown from database: {e}")
+    
+    # Fall back to legacy status breakdown
+    return get_status_breakdown()
+
+
 def get_journey_funnel() -> List[JourneyFunnelStage]:
-    """Get journey funnel data."""
-    breakdown = get_status_breakdown()
-    colors = {
-        LearnerStatus.REGISTERED: "#94a3b8",
-        LearnerStatus.ENGAGED: "#6366f1",
-        LearnerStatus.LEARNING: "#3b82f6",
-        LearnerStatus.CERTIFIED: "#22c55e",
-        LearnerStatus.MULTI_CERTIFIED: "#8b5cf6",
-        LearnerStatus.SPECIALIST: "#f59e0b",
-        LearnerStatus.CHAMPION: "#ef4444",
+    """Get journey funnel data using journey-based breakdown."""
+    breakdown = get_journey_status_breakdown()
+    
+    # Journey status colors (progression from exploration to mastery)
+    journey_colors = {
+        "Mastery": "#ef4444",        # Red - highest achievement
+        "Power User": "#f59e0b",     # Amber - advanced
+        "Practitioner": "#22c55e",   # Green - actively practicing
+        "Active Learner": "#3b82f6", # Blue - learning
+        "Explorer": "#94a3b8",       # Slate - just starting
     }
 
     return [
         JourneyFunnelStage(
-            stage=item.status.value,
+            stage=item.status if isinstance(item.status, str) else item.status.value,
             count=item.count,
             percentage=item.percentage,
-            color=colors.get(item.status, "#94a3b8"),
+            color=journey_colors.get(
+                item.status if isinstance(item.status, str) else item.status.value, 
+                "#94a3b8"
+            ),
         )
         for item in breakdown
     ]

@@ -363,6 +363,55 @@ class LearnerQueries:
         """)
 
     @staticmethod
+    def get_journey_breakdown() -> List[Dict]:
+        """Get journey status breakdown based on learning + product adoption + engagement.
+        
+        This provides a holistic view of learner progress combining:
+        - Learning touchpoints (exams passed)
+        - Product adoption (Copilot, Actions, Security)
+        - Engagement levels (activity events)
+        """
+        db = get_database()
+        return db.query("""
+            SELECT 
+                CASE 
+                    -- Mastery: 3+ certs + 2+ products + high engagement
+                    WHEN exams_passed >= 3 
+                        AND (CAST(uses_copilot AS INT) + CAST(uses_actions AS INT) + CAST(uses_security AS INT)) >= 2 
+                        AND total_engagement_events >= 100 
+                    THEN 'Mastery'
+                    -- Power User: Certified + active product user with good engagement
+                    WHEN exams_passed >= 1 
+                        AND (uses_copilot OR uses_actions) 
+                        AND total_engagement_events >= 50 
+                    THEN 'Power User'
+                    -- Practitioner: Certified or actively using products with engagement
+                    WHEN exams_passed >= 1 
+                        OR (uses_copilot AND total_engagement_events >= 30) 
+                    THEN 'Practitioner'
+                    -- Active Learner: Engaged with learning but not yet certified
+                    WHEN total_engagement_events >= 10 
+                        OR uses_copilot 
+                        OR uses_actions 
+                    THEN 'Active Learner'
+                    -- Explorer: Registered/minimal engagement
+                    ELSE 'Explorer'
+                END as journey_status,
+                COUNT(*) as count,
+                ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1) as percentage
+            FROM learners_enriched
+            GROUP BY 1
+            ORDER BY 
+                CASE journey_status
+                    WHEN 'Mastery' THEN 1
+                    WHEN 'Power User' THEN 2
+                    WHEN 'Practitioner' THEN 3
+                    WHEN 'Active Learner' THEN 4
+                    WHEN 'Explorer' THEN 5
+                END
+        """)
+
+    @staticmethod
     def get_top_companies(limit: int = 20) -> List[Dict]:
         """Get top companies by learner count (sanitized limit)."""
         db = get_database()

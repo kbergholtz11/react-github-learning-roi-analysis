@@ -22,6 +22,22 @@ class LearnerStatus(str, Enum):
     REGISTERED = "Registered"
 
 
+class JourneyStatus(str, Enum):
+    """Learner journey status based on learning + product adoption + engagement.
+    
+    This is a holistic view combining:
+    - Learning touchpoints (events, exams)
+    - Product adoption (Copilot, Actions, Security)
+    - Engagement levels (activity events)
+    """
+    
+    MASTERY = "Mastery"           # Certified + Multi-product + High engagement
+    POWER_USER = "Power User"     # Certified + Active product user
+    PRACTITIONER = "Practitioner" # Certified or actively using products
+    ACTIVE_LEARNER = "Active Learner"  # Engaged with learning
+    EXPLORER = "Explorer"         # Registered/minimal engagement
+
+
 class JourneyStage(str, Enum):
     """Learner journey stages.
 
@@ -146,7 +162,7 @@ class DashboardMetrics(BaseModel):
 class StatusBreakdown(BaseModel):
     """Breakdown of learners by status."""
 
-    status: LearnerStatus
+    status: str  # Supports both LearnerStatus and JourneyStatus values
     count: int
     percentage: float
 

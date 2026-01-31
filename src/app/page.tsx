@@ -55,8 +55,15 @@ const quickNavCards = [
   },
 ];
 
-// Stage colors for the funnel
+// Stage colors for the funnel - includes both legacy and journey-based statuses
 const stageColors: Record<string, string> = {
+  // Journey-based statuses (new holistic view)
+  "Mastery": "#ef4444",        // Red - highest achievement
+  "Power User": "#f59e0b",     // Amber - advanced
+  "Practitioner": "#22c55e",   // Green - actively practicing
+  "Active Learner": "#3b82f6", // Blue - learning
+  "Explorer": "#94a3b8",       // Slate - just starting
+  // Legacy certification-based statuses (for backward compatibility)
   Learning: "#3b82f6",
   Certified: "#22c55e",
   "Multi-Certified": "#8b5cf6",
@@ -303,8 +310,8 @@ export default function DashboardPage() {
         {/* Status Distribution */}
         <Card className="col-span-3">
           <CardHeader>
-            <CardTitle>Learner Status Distribution</CardTitle>
-            <CardDescription>Breakdown by certification level</CardDescription>
+            <CardTitle>Learner Journey Distribution</CardTitle>
+            <CardDescription>Learning + Product Adoption + Engagement</CardDescription>
           </CardHeader>
           <CardContent>
             <DonutChart data={impactSummary} />
