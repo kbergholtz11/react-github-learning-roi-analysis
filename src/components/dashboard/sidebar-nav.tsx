@@ -66,6 +66,7 @@ const navItems = [
     items: [
       { title: "Progression", href: "/progression", icon: LineChart },
       { title: "Skills Analysis", href: "/skills", icon: Zap },
+      { title: "Skills Analytics", href: "/skills/analytics", icon: BarChart2 },
       { title: "Certifications", href: "/analytics/certification", icon: Award },
     ],
   },

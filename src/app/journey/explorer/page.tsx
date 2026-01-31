@@ -7,16 +7,27 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Download, ChevronLeft, ChevronRight, X, AlertCircle, Users, Loader2, ArrowUpDown, ArrowUp, ArrowDown, Sparkles, Shield, FileDown } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { 
+  Search, ChevronLeft, ChevronRight, X, AlertCircle, Users, Loader2, 
+  ArrowUpDown, ArrowUp, ArrowDown, Sparkles, Shield, FileDown,
+  TrendingUp, AlertTriangle, Target, Award, Building2, Globe2,
+  Clock, Calendar, Zap, GraduationCap, Trophy
+} from "lucide-react";
 import { useUrlParams } from "@/hooks/use-url-params";
-import { useLearners } from "@/hooks/use-data";
-import { DataQualityBadge, DataQualityDot } from "@/components/ui/data-quality-badge";
-import type { LearnerStatus, CertifiedUser, UnifiedUser, DataQualityLevel } from "@/types/data";
+import { useEnrichedLearners } from "@/hooks/use-unified-data";
+import type { LearnerStatus, EnrichedLearner, DataQualityLevel } from "@/types/data";
 
-type SortField = "handle" | "status" | "certs" | "focus" | "id" | "quality";
+type SortField = "handle" | "status" | "certs" | "company" | "region" | "quality" | "lastActivity";
 type SortOrder = "asc" | "desc";
+type InsightSegment = "all" | "at-risk" | "rising-stars" | "ready-to-advance" | "inactive" | "high-value";
 
 const statusColors: Record<string, string> = {
+  Mastery: "bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-300",
+  "Power User": "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300",
+  Practitioner: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
+  "Active Learner": "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
+  Explorer: "bg-slate-100 text-slate-800 dark:bg-slate-900 dark:text-slate-300",
   Champion: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
   Specialist: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300",
   "Multi-Certified": "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
@@ -24,15 +35,62 @@ const statusColors: Record<string, string> = {
   Learning: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300",
 };
 
+const insightSegmentConfig: Record<InsightSegment, { 
+  label: string; 
+  icon: typeof Users; 
+  color: string;
+  description: string;
+}> = {
+  all: { 
+    label: "All Learners", 
+    icon: Users, 
+    color: "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200",
+    description: "Everyone in the learning ecosystem"
+  },
+  "at-risk": { 
+    label: "At Risk", 
+    icon: AlertTriangle, 
+    color: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+    description: "Failed exams, stalled progress, or declining engagement"
+  },
+  "rising-stars": { 
+    label: "Rising Stars", 
+    icon: TrendingUp, 
+    color: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200",
+    description: "Fast progressors with multiple recent certifications"
+  },
+  "ready-to-advance": { 
+    label: "Ready to Advance", 
+    icon: Target, 
+    color: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+    description: "Strong candidates for next certification level"
+  },
+  inactive: { 
+    label: "Inactive", 
+    icon: Clock, 
+    color: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+    description: "No activity in last 90 days"
+  },
+  "high-value": { 
+    label: "High Value", 
+    icon: Trophy, 
+    color: "bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200",
+    description: "Champions and specialists driving adoption"
+  },
+};
+
 function LoadingSkeleton() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <Skeleton className="h-8 w-48 mb-2" />
-          <Skeleton className="h-4 w-80" />
+          <Skeleton className="h-8 w-64 mb-2" />
+          <Skeleton className="h-4 w-96" />
         </div>
         <Skeleton className="h-10 w-32" />
+      </div>
+      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
+        {[1, 2, 3, 4, 5, 6].map((i) => <Skeleton key={i} className="h-24" />)}
       </div>
       <Skeleton className="h-16" />
       <div className="space-y-2">
@@ -55,26 +113,392 @@ function ErrorState({ error }: { error: Error }) {
   );
 }
 
+// Insight segment card component
+function InsightCard({ 
+  segment, 
+  count, 
+  isActive, 
+  onClick 
+}: { 
+  segment: InsightSegment; 
+  count: number; 
+  isActive: boolean;
+  onClick: () => void;
+}) {
+  const config = insightSegmentConfig[segment];
+  const Icon = config.icon;
+  
+  return (
+    <Card 
+      className={`cursor-pointer transition-all hover:scale-[1.02] hover:shadow-md ${
+        isActive ? "ring-2 ring-primary shadow-md" : ""
+      }`}
+      onClick={onClick}
+    >
+      <CardContent className="pt-4 pb-4">
+        <div className="flex items-center gap-2 mb-2">
+          <div className={`p-1.5 rounded-md ${config.color}`}>
+            <Icon className="h-4 w-4" />
+          </div>
+          <span className="font-medium text-sm">{config.label}</span>
+        </div>
+        <div className="text-2xl font-bold">{count.toLocaleString()}</div>
+        <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{config.description}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Helper functions for EnrichedLearner
+function getEmail(user: EnrichedLearner): string {
+  return user.email || "";
+}
+
+function getHandle(user: EnrichedLearner): string {
+  return user.userhandle || "";
+}
+
+function getCerts(user: EnrichedLearner): number {
+  return user.exams_passed || 0;
+}
+
+function getCompany(user: EnrichedLearner): string {
+  return user.exam_company || user.company_name || "";
+}
+
+function getRegion(user: EnrichedLearner): string {
+  return user.region || user.exam_region || "";
+}
+
+function getJobRole(user: EnrichedLearner): string {
+  return user.job_role || "";
+}
+
+function getLastActivity(user: EnrichedLearner): string {
+  return user.last_activity || user.last_exam || "";
+}
+
+function getTotalExams(user: EnrichedLearner): number {
+  return user.total_exams || 0;
+}
+
+function getCopilotDays(user: EnrichedLearner): number {
+  return user.copilot_days || 0;
+}
+
+function usesCopilot(user: EnrichedLearner): boolean {
+  return user.uses_copilot || false;
+}
+
+function usesActions(user: EnrichedLearner): boolean {
+  return user.uses_actions || false;
+}
+
+function getDataQuality(user: EnrichedLearner): { score: number; level: DataQualityLevel } {
+  return {
+    score: user.data_quality_score || 0,
+    level: user.data_quality_level || "low",
+  };
+}
+
+// Determine if learner is "at risk"
+function isAtRisk(user: EnrichedLearner): boolean {
+  const totalExams = getTotalExams(user);
+  const certs = getCerts(user);
+  const failedExams = totalExams - certs;
+  
+  if (failedExams >= 2) return true;
+  if (totalExams >= 2 && certs === 0) return true;
+  if (getDataQuality(user).level === "low" && totalExams > 0) return true;
+  
+  return false;
+}
+
+// Determine if learner is a "rising star"
+function isRisingStar(user: EnrichedLearner): boolean {
+  const certs = getCerts(user);
+  const status = user.learner_status || "";
+  
+  if (certs >= 2) return true;
+  if (["Multi-Certified", "Specialist", "Champion"].includes(status)) return true;
+  
+  return false;
+}
+
+// Determine if learner is "ready to advance"
+function isReadyToAdvance(user: EnrichedLearner): boolean {
+  const certs = getCerts(user);
+  const copilotDays = getCopilotDays(user);
+  const status = user.learner_status || "";
+  
+  // Ready to advance: single cert with product adoption, or Learning/Engaged with high Copilot
+  if (certs === 1 && (usesCopilot(user) || usesActions(user))) return true;
+  if (status === "Certified" && copilotDays > 30) return true;
+  if ((status === "Learning" || status === "Engaged") && copilotDays > 60) return true;
+  
+  return false;
+}
+
+// Determine if learner is inactive
+function isInactive(user: EnrichedLearner): boolean {
+  const lastActivity = getLastActivity(user);
+  if (!lastActivity) return true;
+  
+  try {
+    const lastDate = new Date(lastActivity);
+    const daysSinceActivity = Math.floor((Date.now() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+    return daysSinceActivity > 90;
+  } catch {
+    return false;
+  }
+}
+
+// Determine if learner is high-value
+function isHighValue(user: EnrichedLearner): boolean {
+  const status = user.learner_status || "";
+  const certs = getCerts(user);
+  
+  if (["Champion", "Specialist", "Mastery"].includes(status)) return true;
+  if (certs >= 3) return true;
+  
+  return false;
+}
+
+// Company breakdown component  
+function CompanyBreakdown({ learners }: { learners: EnrichedLearner[] }) {
+  const companyData = useMemo(() => {
+    const companies: Record<string, { count: number; certified: number; copilotUsers: number }> = {};
+    
+    learners.forEach(learner => {
+      const company = getCompany(learner) || "Unknown";
+      if (!companies[company]) {
+        companies[company] = { count: 0, certified: 0, copilotUsers: 0 };
+      }
+      companies[company].count++;
+      if (getCerts(learner) > 0) companies[company].certified++;
+      if (usesCopilot(learner)) companies[company].copilotUsers++;
+    });
+    
+    return Object.entries(companies)
+      .map(([name, data]) => ({
+        name,
+        ...data,
+        certRate: data.count > 0 ? Math.round((data.certified / data.count) * 100) : 0,
+        copilotRate: data.count > 0 ? Math.round((data.copilotUsers / data.count) * 100) : 0,
+      }))
+      .filter(c => c.name !== "Unknown" && c.count > 2)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+  }, [learners]);
+
+  if (companyData.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Building2 className="h-4 w-4" />
+          Top Companies
+        </CardTitle>
+        <CardDescription>Certification and adoption by organization</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-3">
+          {companyData.map((company) => (
+            <div key={company.name} className="flex items-center justify-between">
+              <div className="flex-1 min-w-0">
+                <p className="font-medium truncate">{company.name}</p>
+                <p className="text-xs text-muted-foreground">{company.count} learners</p>
+              </div>
+              <div className="flex gap-3 text-sm">
+                <div className="text-right">
+                  <span className="font-semibold text-green-600 dark:text-green-400">{company.certRate}%</span>
+                  <p className="text-xs text-muted-foreground">certified</p>
+                </div>
+                <div className="text-right">
+                  <span className="font-semibold text-violet-600 dark:text-violet-400">{company.copilotRate}%</span>
+                  <p className="text-xs text-muted-foreground">Copilot</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Region breakdown component
+function RegionBreakdown({ learners }: { learners: EnrichedLearner[] }) {
+  const regionData = useMemo(() => {
+    const regions: Record<string, { count: number; certified: number }> = {};
+    
+    learners.forEach(learner => {
+      const region = getRegion(learner) || "Unknown";
+      if (!regions[region]) {
+        regions[region] = { count: 0, certified: 0 };
+      }
+      regions[region].count++;
+      if (getCerts(learner) > 0) regions[region].certified++;
+    });
+    
+    return Object.entries(regions)
+      .map(([name, data]) => ({
+        name,
+        ...data,
+        certRate: data.count > 0 ? Math.round((data.certified / data.count) * 100) : 0,
+      }))
+      .filter(r => r.name !== "Unknown")
+      .sort((a, b) => b.count - a.count);
+  }, [learners]);
+
+  if (regionData.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Globe2 className="h-4 w-4" />
+          By Region
+        </CardTitle>
+        <CardDescription>Geographic distribution</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-2">
+          {regionData.map((region) => (
+            <div key={region.name} className="flex items-center gap-3">
+              <div className="flex-1">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-medium">{region.name}</span>
+                  <span className="text-xs text-muted-foreground">{region.count.toLocaleString()}</span>
+                </div>
+                <div className="w-full bg-muted rounded-full h-1.5">
+                  <div 
+                    className="bg-primary rounded-full h-1.5 transition-all"
+                    style={{ width: `${region.certRate}%` }}
+                  />
+                </div>
+              </div>
+              <span className="text-sm font-semibold w-12 text-right">{region.certRate}%</span>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Quick Actions panel
+function QuickActions({ segment, count }: { segment: InsightSegment; count: number }) {
+  const actions: Record<InsightSegment, { label: string; description: string; action: () => void }[]> = {
+    all: [],
+    "at-risk": [
+      { 
+        label: "Send re-engagement email", 
+        description: `Target ${count} learners with support resources`,
+        action: () => alert("Email campaign feature coming soon!") 
+      },
+      { 
+        label: "Assign mentors", 
+        description: "Pair struggling learners with champions",
+        action: () => alert("Mentor matching feature coming soon!") 
+      },
+    ],
+    "rising-stars": [
+      { 
+        label: "Invite to Champion program", 
+        description: `${count} learners qualify for advancement`,
+        action: () => alert("Champion invitation feature coming soon!") 
+      },
+      { 
+        label: "Feature in newsletter", 
+        description: "Celebrate achievements publicly",
+        action: () => alert("Newsletter feature coming soon!") 
+      },
+    ],
+    "ready-to-advance": [
+      { 
+        label: "Send certification vouchers", 
+        description: `Provide exam vouchers to ${count} ready learners`,
+        action: () => alert("Voucher distribution feature coming soon!") 
+      },
+      { 
+        label: "Schedule study groups", 
+        description: "Organize group preparation sessions",
+        action: () => alert("Study group feature coming soon!") 
+      },
+    ],
+    inactive: [
+      { 
+        label: "Win-back campaign", 
+        description: `Re-engage ${count} dormant learners`,
+        action: () => alert("Win-back feature coming soon!") 
+      },
+    ],
+    "high-value": [
+      { 
+        label: "Request testimonials", 
+        description: "Gather success stories from top performers",
+        action: () => alert("Testimonial feature coming soon!") 
+      },
+      { 
+        label: "Invite to events", 
+        description: "Engage champions as speakers or mentors",
+        action: () => alert("Event invitation feature coming soon!") 
+      },
+    ],
+  };
+
+  const segmentActions = actions[segment];
+  if (!segmentActions || segmentActions.length === 0) return null;
+
+  return (
+    <Card className="border-dashed border-primary/30 bg-primary/5">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Zap className="h-4 w-4 text-primary" />
+          Quick Actions
+        </CardTitle>
+        <CardDescription>Recommended actions for this segment</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-2">
+          {segmentActions.map((action, idx) => (
+            <Button 
+              key={idx}
+              variant="outline" 
+              className="w-full justify-start h-auto py-3 px-4"
+              onClick={action.action}
+            >
+              <div className="text-left">
+                <p className="font-medium">{action.label}</p>
+                <p className="text-xs text-muted-foreground">{action.description}</p>
+              </div>
+            </Button>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function LearnerExplorerPage() {
   const router = useRouter();
   
-  // Use URL params for filter persistence - shareable links!
   const { params, setParams, hasActiveFilters, clearParams } = useUrlParams({
     search: "",
     page: 1,
     status: "" as LearnerStatus | "",
-    copilot: "" as "true" | "false" | "",
+    segment: "all" as InsightSegment,
   });
 
-  // Sorting state
   const [sortField, setSortField] = useState<SortField>("handle");
   const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
   const [isExporting, setIsExporting] = useState(false);
-
-  // Local state for immediate input feedback
   const [localSearch, setLocalSearch] = useState(params.search);
+  const [activeTab, setActiveTab] = useState<"table" | "analytics">("table");
   
-  // Debounce search - update URL params after user stops typing
+  // Debounce search
   useEffect(() => {
     const timer = setTimeout(() => {
       if (localSearch !== params.search) {
@@ -84,7 +508,6 @@ export default function LearnerExplorerPage() {
     return () => clearTimeout(timer);
   }, [localSearch, params.search, setParams]);
 
-  // Sync local state when URL params change externally
   useEffect(() => {
     setLocalSearch(params.search);
   }, [params.search]);
@@ -92,68 +515,62 @@ export default function LearnerExplorerPage() {
   const searchTerm = params.search;
   const currentPage = params.page;
   const statusFilter = params.status;
-  const copilotFilter = params.copilot;
-  const pageSize = 25;
+  const segmentFilter = (params.segment as InsightSegment) || "all";
+  const pageSize = 50;
 
-  const { data, isLoading, error, isFetching } = useLearners({
+  // Use server-side pagination - pass offset based on current page
+  const offset = (currentPage - 1) * pageSize;
+  
+  // Use enriched learners API with server-side pagination
+  const { data, isLoading, error, isFetching } = useEnrichedLearners({
     search: searchTerm || undefined,
-    learnerStatus: statusFilter ? (statusFilter as LearnerStatus) : "all",
-    page: currentPage,
-    pageSize,
+    limit: pageSize,
+    offset: offset,
   });
 
-  const learners = data?.learners || [];
-  const total = data?.total || 0;
-  const page = data?.page || currentPage;
-  const totalPages = Math.ceil(total / pageSize);
+  const allLearners = (data?.learners || []) as EnrichedLearner[];
+  const totalCount = data?.total_count || data?.count || 0;
+
+  // Apply status filter client-side (enriched API doesn't have status filter)
+  const statusFilteredLearners = useMemo(() => {
+    if (!statusFilter) return allLearners;
+    return allLearners.filter(l => l.learner_status === statusFilter);
+  }, [allLearners, statusFilter]);
+
+  // Compute segment counts from status-filtered data
+  const segmentCounts = useMemo(() => {
+    return {
+      all: statusFilteredLearners.length,
+      "at-risk": statusFilteredLearners.filter(isAtRisk).length,
+      "rising-stars": statusFilteredLearners.filter(isRisingStar).length,
+      "ready-to-advance": statusFilteredLearners.filter(isReadyToAdvance).length,
+      inactive: statusFilteredLearners.filter(isInactive).length,
+      "high-value": statusFilteredLearners.filter(isHighValue).length,
+    };
+  }, [statusFilteredLearners]);
+
+  // Filter by segment
+  const segmentedLearners = useMemo(() => {
+    switch (segmentFilter) {
+      case "at-risk": return statusFilteredLearners.filter(isAtRisk);
+      case "rising-stars": return statusFilteredLearners.filter(isRisingStar);
+      case "ready-to-advance": return statusFilteredLearners.filter(isReadyToAdvance);
+      case "inactive": return statusFilteredLearners.filter(isInactive);
+      case "high-value": return statusFilteredLearners.filter(isHighValue);
+      default: return statusFilteredLearners;
+    }
+  }, [statusFilteredLearners, segmentFilter]);
+
+  // Server-side pagination - use data directly (no client-side slicing)
+  const displayLearners = segmentedLearners;
+
+  // Calculate total pages from server total_count
+  const totalPages = Math.ceil(totalCount / pageSize);
 
   const getStatusColor = (status: string) => {
     return statusColors[status] || "bg-gray-100 text-gray-800";
   };
 
-  // Helper to get email from either user type
-  const getEmail = (user: CertifiedUser | UnifiedUser): string => {
-    return user.email || "";
-  };
-
-  const getHandle = (user: CertifiedUser | UnifiedUser): string => {
-    return user.user_handle || "";
-  };
-
-  const getCerts = (user: CertifiedUser | UnifiedUser): number => {
-    if ("total_certs" in user) return user.total_certs;
-    if ("total_passed" in user) return user.total_passed;
-    return 0;
-  };
-
-  const getProductFocus = (user: CertifiedUser | UnifiedUser): string => {
-    return "cert_product_focus" in user ? user.cert_product_focus || "" : "";
-  };
-
-  // Get data quality from enriched learner (if available)
-  const getDataQuality = (user: CertifiedUser | UnifiedUser): { score: number; level: DataQualityLevel } => {
-    // Check if user has enriched data quality fields
-    if ("data_quality_score" in user && "data_quality_level" in user) {
-      return {
-        score: (user as unknown as { data_quality_score: number }).data_quality_score,
-        level: (user as unknown as { data_quality_level: DataQualityLevel }).data_quality_level,
-      };
-    }
-    // Default for non-enriched users
-    return { score: 0, level: "low" };
-  };
-
-  // Check if user uses Copilot
-  const usesCopilot = (user: CertifiedUser | UnifiedUser): boolean => {
-    return "uses_copilot" in user && (user as unknown as { uses_copilot: boolean }).uses_copilot;
-  };
-
-  // Check if user uses Actions
-  const usesActions = (user: CertifiedUser | UnifiedUser): boolean => {
-    return "uses_actions" in user && (user as unknown as { uses_actions: boolean }).uses_actions;
-  };
-
-  // Toggle sort
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortOrder(sortOrder === "asc" ? "desc" : "asc");
@@ -163,7 +580,6 @@ export default function LearnerExplorerPage() {
     }
   };
 
-  // Sort icon component
   const SortIcon = ({ field }: { field: SortField }) => {
     if (sortField !== field) {
       return <ArrowUpDown className="h-4 w-4 ml-1 opacity-50" />;
@@ -173,9 +589,9 @@ export default function LearnerExplorerPage() {
       : <ArrowDown className="h-4 w-4 ml-1" />;
   };
 
-  // Sort learners - must be called before any returns!
+  // Sort learners
   const sortedLearners = useMemo(() => {
-    return [...learners].sort((a, b) => {
+    return [...displayLearners].sort((a, b) => {
       let aVal: string | number;
       let bVal: string | number;
       
@@ -192,17 +608,21 @@ export default function LearnerExplorerPage() {
           aVal = getCerts(a);
           bVal = getCerts(b);
           break;
-        case "focus":
-          aVal = getProductFocus(a).toLowerCase();
-          bVal = getProductFocus(b).toLowerCase();
+        case "company":
+          aVal = getCompany(a).toLowerCase();
+          bVal = getCompany(b).toLowerCase();
           break;
-        case "id":
-          aVal = a.dotcom_id || 0;
-          bVal = b.dotcom_id || 0;
+        case "region":
+          aVal = getRegion(a).toLowerCase();
+          bVal = getRegion(b).toLowerCase();
           break;
         case "quality":
           aVal = getDataQuality(a).score;
           bVal = getDataQuality(b).score;
+          break;
+        case "lastActivity":
+          aVal = getLastActivity(a);
+          bVal = getLastActivity(b);
           break;
         default:
           return 0;
@@ -212,41 +632,37 @@ export default function LearnerExplorerPage() {
       if (aVal > bVal) return sortOrder === "asc" ? 1 : -1;
       return 0;
     });
-  }, [learners, sortField, sortOrder]);
+  }, [displayLearners, sortField, sortOrder]);
 
   // Export to CSV
   const handleExport = useCallback(async () => {
     setIsExporting(true);
     try {
-      // Build CSV header
-      const headers = ["Handle", "Email", "Status", "Certifications", "Focus", "Copilot", "Actions", "Quality Score", "Quality Level", "Dotcom ID"];
+      const headers = ["Handle", "Email", "Status", "Certs", "Company", "Region", "Job Role", "Copilot Days", "Last Activity", "Quality"];
       
-      // Build CSV rows from current sorted learners
-      const rows = sortedLearners.map(learner => [
+      const rows = segmentedLearners.map(learner => [
         getHandle(learner),
         getEmail(learner),
         learner.learner_status || "",
         getCerts(learner).toString(),
-        getProductFocus(learner),
-        usesCopilot(learner) ? "Yes" : "No",
-        usesActions(learner) ? "Yes" : "No",
-        getDataQuality(learner).score.toString(),
+        getCompany(learner),
+        getRegion(learner),
+        getJobRole(learner),
+        getCopilotDays(learner).toString(),
+        getLastActivity(learner),
         getDataQuality(learner).level,
-        learner.dotcom_id?.toString() || ""
       ]);
       
-      // Create CSV content
       const csvContent = [
         headers.join(","),
         ...rows.map(row => row.map(cell => `"${(cell || "").replace(/"/g, '""')}"`).join(","))
       ].join("\n");
       
-      // Download file
       const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.setAttribute("href", url);
-      link.setAttribute("download", `learners-export-${new Date().toISOString().split("T")[0]}.csv`);
+      link.setAttribute("download", `learners-${segmentFilter}-${new Date().toISOString().split("T")[0]}.csv`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -254,7 +670,7 @@ export default function LearnerExplorerPage() {
     } finally {
       setIsExporting(false);
     }
-  }, [sortedLearners]);
+  }, [segmentedLearners, segmentFilter]);
 
   // Early returns AFTER all hooks
   if (isLoading && !data) return <LoadingSkeleton />;
@@ -265,236 +681,357 @@ export default function LearnerExplorerPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Learner Explorer</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Talent Intelligence</h1>
           <p className="text-muted-foreground">
-            Search and analyze {total.toLocaleString()} learners
+            Discover insights and take action on {totalCount.toLocaleString()} learners
           </p>
         </div>
-        <Button variant="outline" className="gap-2" onClick={handleExport} disabled={isExporting || learners.length === 0}>
+        <Button variant="outline" className="gap-2" onClick={handleExport} disabled={isExporting || segmentedLearners.length === 0}>
           {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
-          Export Data
+          Export {segmentFilter !== "all" ? insightSegmentConfig[segmentFilter].label : "All"}
         </Button>
       </div>
 
-      {/* Search and Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex gap-4 flex-wrap">
-            <div className="relative flex-1 min-w-[200px]">
-              <Search
-                className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                aria-hidden="true"
-              />
-              <Input
-                placeholder="Search by email, username, or company..."
-                className="pl-10 pr-10"
-                value={localSearch}
-                onChange={(e) => setLocalSearch(e.target.value)}
-                aria-label="Search learners"
-              />
-              {isFetching && (
-                <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground animate-spin" />
-              )}
-            </div>
-            <select
-              value={statusFilter}
-              onChange={(e) => setParams({ status: e.target.value as LearnerStatus | "", page: 1 })}
-              className="px-3 py-2 rounded-md border border-input bg-background"
-              aria-label="Filter by status"
-            >
-              <option value="">All Statuses</option>
-              <option value="Champion">Champion</option>
-              <option value="Specialist">Specialist</option>
-              <option value="Multi-Certified">Multi-Certified</option>
-              <option value="Certified">Certified</option>
-              <option value="Learning">Learning</option>
-              <option value="Engaged">Engaged</option>
-              <option value="Registered">Registered</option>
-            </select>
-            <select
-              value={copilotFilter}
-              onChange={(e) => setParams({ copilot: e.target.value as "true" | "false" | "", page: 1 })}
-              className="px-3 py-2 rounded-md border border-input bg-background"
-              aria-label="Filter by Copilot usage"
-            >
-              <option value="">All Products</option>
-              <option value="true">✨ Copilot Users</option>
-              <option value="false">Non-Copilot</option>
-            </select>
-            {hasActiveFilters && (
-              <Button variant="ghost" onClick={clearParams} className="gap-2">
-                <X className="h-4 w-4" />
-                Clear Filters
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      {/* Insight Segment Cards */}
+      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
+        {(Object.keys(insightSegmentConfig) as InsightSegment[]).map((segment) => (
+          <InsightCard
+            key={segment}
+            segment={segment}
+            count={segment === "all" ? totalCount : segmentCounts[segment]}
+            isActive={segmentFilter === segment}
+            onClick={() => setParams({ segment, page: 1 })}
+          />
+        ))}
+      </div>
 
-      {/* Results Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            Learners
-          </CardTitle>
-          <CardDescription>
-            Showing {learners.length} of {total.toLocaleString()} learners
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {learners.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>No learners found matching your criteria</p>
-            </div>
-          ) : (
-            <div className="rounded-md border">
-              <div className="grid grid-cols-12 gap-4 p-4 bg-muted/50 text-sm font-medium border-b">
-                <button 
-                  className="col-span-2 flex items-center hover:text-foreground transition-colors text-left"
-                  onClick={() => handleSort("handle")}
-                >
-                  Handle <SortIcon field="handle" />
-                </button>
-                <button 
-                  className="col-span-2 flex items-center hover:text-foreground transition-colors text-left"
-                  onClick={() => handleSort("status")}
-                >
-                  Status <SortIcon field="status" />
-                </button>
-                <button 
-                  className="col-span-1 flex items-center hover:text-foreground transition-colors text-left"
-                  onClick={() => handleSort("certs")}
-                >
-                  Certs <SortIcon field="certs" />
-                </button>
-                <div className="col-span-2 flex items-center text-left">
-                  Products
+      {/* Main Content Area */}
+      <div className="grid gap-6 lg:grid-cols-4">
+        {/* Left Column - Table/Analytics */}
+        <div className="lg:col-span-3 space-y-4">
+          {/* Search and Filters */}
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex gap-4 flex-wrap">
+                <div className="relative flex-1 min-w-[200px]">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="Search by name, email, company, or region..."
+                    className="pl-10 pr-10"
+                    value={localSearch}
+                    onChange={(e) => setLocalSearch(e.target.value)}
+                  />
+                  {isFetching && (
+                    <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground animate-spin" />
+                  )}
                 </div>
-                <button 
-                  className="col-span-2 flex items-center hover:text-foreground transition-colors text-left"
-                  onClick={() => handleSort("focus")}
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setParams({ status: e.target.value as LearnerStatus | "", page: 1 })}
+                  className="px-3 py-2 rounded-md border border-input bg-background"
                 >
-                  Focus <SortIcon field="focus" />
-                </button>
-                <button 
-                  className="col-span-2 flex items-center hover:text-foreground transition-colors text-left"
-                  onClick={() => handleSort("quality")}
-                >
-                  Quality <SortIcon field="quality" />
-                </button>
-                <button 
-                  className="col-span-1 flex items-center hover:text-foreground transition-colors text-left"
-                  onClick={() => handleSort("id")}
-                >
-                  ID <SortIcon field="id" />
-                </button>
+                  <option value="">All Statuses</option>
+                  <option value="Champion">Champion</option>
+                  <option value="Specialist">Specialist</option>
+                  <option value="Multi-Certified">Multi-Certified</option>
+                  <option value="Certified">Certified</option>
+                  <option value="Learning">Learning</option>
+                </select>
+                {hasActiveFilters && (
+                  <Button variant="ghost" onClick={clearParams} className="gap-2">
+                    <X className="h-4 w-4" />
+                    Clear
+                  </Button>
+                )}
               </div>
-              {sortedLearners.map((learner, idx) => (
-                <div
-                  key={`${getHandle(learner) || getEmail(learner)}-${idx}`}
-                  className="grid grid-cols-12 gap-4 p-4 items-center border-b last:border-0 hover:bg-muted/30 transition-colors cursor-pointer"
-                  onClick={() => router.push(`/journey/profile?email=${encodeURIComponent(getEmail(learner))}`)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => e.key === 'Enter' && router.push(`/journey/profile?email=${encodeURIComponent(getEmail(learner))}`)}
-                >
-                  <div className="col-span-2 truncate">
-                    <span className="font-medium">{getHandle(learner) || "—"}</span>
-                  </div>
-                  <div className="col-span-2">
-                    <Badge className={getStatusColor(learner.learner_status)}>
-                      {learner.learner_status}
-                    </Badge>
-                  </div>
-                  <div className="col-span-1">
-                    <span className="font-semibold">{getCerts(learner)}</span>
-                  </div>
-                  <div className="col-span-2 flex gap-1">
-                    {usesCopilot(learner) && (
-                      <Badge variant="outline" className="text-xs gap-1 bg-violet-50 dark:bg-violet-950 text-violet-700 dark:text-violet-300 border-violet-200">
-                        <Sparkles className="h-3 w-3" />
-                        Copilot
+            </CardContent>
+          </Card>
+
+          {/* Tabs for Table vs Analytics */}
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "table" | "analytics")}>
+            <TabsList className="grid w-full grid-cols-2 max-w-[400px]">
+              <TabsTrigger value="table" className="gap-2">
+                <Users className="h-4 w-4" />
+                Learner List
+              </TabsTrigger>
+              <TabsTrigger value="analytics" className="gap-2">
+                <TrendingUp className="h-4 w-4" />
+                Analytics
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="table" className="mt-4">
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2">
+                    {segmentFilter !== "all" && (
+                      <Badge className={insightSegmentConfig[segmentFilter].color}>
+                        {insightSegmentConfig[segmentFilter].label}
                       </Badge>
                     )}
-                    {usesActions(learner) && (
-                      <Badge variant="outline" className="text-xs gap-1 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-200">
-                        <Shield className="h-3 w-3" />
-                        Actions
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="col-span-2 truncate text-sm text-muted-foreground">
-                    {getProductFocus(learner) || "—"}
-                  </div>
-                  <div className="col-span-2">
-                    <DataQualityBadge 
-                      score={getDataQuality(learner).score} 
-                      level={getDataQuality(learner).level} 
-                    />
-                  </div>
-                  <div className="col-span-1 text-sm text-muted-foreground">
-                    {learner.dotcom_id > 0 ? learner.dotcom_id : "—"}
-                  </div>
-                </div>
-              ))}
-            </div>
+                    {segmentedLearners.length.toLocaleString()} Learners
+                  </CardTitle>
+                  <CardDescription>
+                    Click any row to view full learner profile
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {sortedLearners.length === 0 ? (
+                    <div className="text-center py-12 text-muted-foreground">
+                      <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p>No learners found in this segment</p>
+                    </div>
+                  ) : (
+                    <div className="rounded-md border">
+                      <div className="grid grid-cols-12 gap-2 p-3 bg-muted/50 text-xs font-medium border-b">
+                        <button 
+                          className="col-span-2 flex items-center hover:text-foreground text-left"
+                          onClick={() => handleSort("handle")}
+                        >
+                          Learner <SortIcon field="handle" />
+                        </button>
+                        <button 
+                          className="col-span-2 flex items-center hover:text-foreground text-left"
+                          onClick={() => handleSort("status")}
+                        >
+                          Status <SortIcon field="status" />
+                        </button>
+                        <button 
+                          className="col-span-1 flex items-center hover:text-foreground text-left"
+                          onClick={() => handleSort("certs")}
+                        >
+                          Certs <SortIcon field="certs" />
+                        </button>
+                        <button 
+                          className="col-span-2 flex items-center hover:text-foreground text-left"
+                          onClick={() => handleSort("company")}
+                        >
+                          Company <SortIcon field="company" />
+                        </button>
+                        <button 
+                          className="col-span-1 flex items-center hover:text-foreground text-left"
+                          onClick={() => handleSort("region")}
+                        >
+                          Region <SortIcon field="region" />
+                        </button>
+                        <div className="col-span-2">Products</div>
+                        <button 
+                          className="col-span-2 flex items-center hover:text-foreground text-left"
+                          onClick={() => handleSort("lastActivity")}
+                        >
+                          Last Active <SortIcon field="lastActivity" />
+                        </button>
+                      </div>
+                      {sortedLearners.map((learner, idx) => {
+                        const lastActivity = getLastActivity(learner);
+                        let activityDisplay = "—";
+                        if (lastActivity) {
+                          try {
+                            const date = new Date(lastActivity);
+                            const days = Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
+                            if (days === 0) activityDisplay = "Today";
+                            else if (days === 1) activityDisplay = "Yesterday";
+                            else if (days < 30) activityDisplay = `${days}d ago`;
+                            else if (days < 365) activityDisplay = `${Math.floor(days / 30)}mo ago`;
+                            else activityDisplay = `${Math.floor(days / 365)}y ago`;
+                          } catch {
+                            activityDisplay = "—";
+                          }
+                        }
+                        
+                        return (
+                          <div
+                            key={`${getHandle(learner) || getEmail(learner)}-${idx}`}
+                            className="grid grid-cols-12 gap-2 p-3 items-center border-b last:border-0 hover:bg-muted/30 transition-colors cursor-pointer text-sm"
+                            onClick={() => router.push(`/journey/profile?email=${encodeURIComponent(getEmail(learner))}`)}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => e.key === 'Enter' && router.push(`/journey/profile?email=${encodeURIComponent(getEmail(learner))}`)}
+                          >
+                            <div className="col-span-2">
+                              <p className="font-medium truncate">{getHandle(learner) || "—"}</p>
+                              <p className="text-xs text-muted-foreground truncate">{getJobRole(learner) || getEmail(learner)}</p>
+                            </div>
+                            <div className="col-span-2">
+                              <Badge className={`${getStatusColor(learner.learner_status)} text-xs`}>
+                                {learner.learner_status}
+                              </Badge>
+                            </div>
+                            <div className="col-span-1">
+                              <div className="flex items-center gap-1">
+                                <Award className="h-3 w-3 text-amber-500" />
+                                <span className="font-semibold">{getCerts(learner)}</span>
+                              </div>
+                            </div>
+                            <div className="col-span-2 truncate text-muted-foreground">
+                              {getCompany(learner) || "—"}
+                            </div>
+                            <div className="col-span-1 truncate text-muted-foreground">
+                              {getRegion(learner) || "—"}
+                            </div>
+                            <div className="col-span-2 flex gap-1 flex-wrap">
+                              {usesCopilot(learner) && (
+                                <Badge variant="outline" className="text-xs gap-1 bg-violet-50 dark:bg-violet-950 text-violet-700 dark:text-violet-300 border-violet-200 px-1.5 py-0">
+                                  <Sparkles className="h-2.5 w-2.5" />
+                                  Copilot
+                                </Badge>
+                              )}
+                              {usesActions(learner) && (
+                                <Badge variant="outline" className="text-xs gap-1 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-200 px-1.5 py-0">
+                                  <Shield className="h-2.5 w-2.5" />
+                                  Actions
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="col-span-2 flex items-center gap-1 text-xs text-muted-foreground">
+                              <Calendar className="h-3 w-3" />
+                              {activityDisplay}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Pagination */}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between mt-4">
+                      <div className="text-sm text-muted-foreground">
+                        Showing {((currentPage - 1) * pageSize) + 1}-{Math.min(currentPage * pageSize, totalCount)} of {totalCount.toLocaleString()} learners
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="text-sm text-muted-foreground">
+                          Page {currentPage} of {totalPages.toLocaleString()}
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setParams({ page: Math.max(1, currentPage - 1) })}
+                            disabled={currentPage <= 1}
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                            Previous
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setParams({ page: Math.min(totalPages, currentPage + 1) })}
+                            disabled={currentPage >= totalPages}
+                          >
+                            Next
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="analytics" className="mt-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <CompanyBreakdown learners={segmentedLearners} />
+                <RegionBreakdown learners={segmentedLearners} />
+              </div>
+            </TabsContent>
+          </Tabs>
+        </div>
+
+        {/* Right Column - Quick Actions & Stats */}
+        <div className="space-y-4">
+          {/* Segment-specific actions */}
+          {segmentFilter !== "all" && (
+            <QuickActions segment={segmentFilter} count={segmentCounts[segmentFilter]} />
           )}
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between mt-4">
-              <div className="text-sm text-muted-foreground">
-                Page {page} of {totalPages}
+          {/* Summary Stats for selected segment */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Segment Summary</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground flex items-center gap-2">
+                  <GraduationCap className="h-4 w-4" />
+                  Avg. Certifications
+                </span>
+                <span className="font-semibold">
+                  {segmentedLearners.length > 0 
+                    ? (segmentedLearners.reduce((sum, l) => sum + getCerts(l), 0) / segmentedLearners.length).toFixed(1)
+                    : "0"}
+                </span>
               </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setParams({ page: Math.max(1, page - 1) })}
-                  disabled={page <= 1}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                  Previous
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setParams({ page: Math.min(totalPages, page + 1) })}
-                  disabled={page >= totalPages}
-                >
-                  Next
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground flex items-center gap-2">
+                  <Sparkles className="h-4 w-4" />
+                  Copilot Adoption
+                </span>
+                <span className="font-semibold">
+                  {segmentedLearners.length > 0 
+                    ? Math.round((segmentedLearners.filter(usesCopilot).length / segmentedLearners.length) * 100)
+                    : 0}%
+                </span>
               </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground flex items-center gap-2">
+                  <Shield className="h-4 w-4" />
+                  Actions Adoption
+                </span>
+                <span className="font-semibold">
+                  {segmentedLearners.length > 0 
+                    ? Math.round((segmentedLearners.filter(usesActions).length / segmentedLearners.length) * 100)
+                    : 0}%
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground flex items-center gap-2">
+                  <Building2 className="h-4 w-4" />
+                  Companies
+                </span>
+                <span className="font-semibold">
+                  {new Set(segmentedLearners.map(getCompany).filter(Boolean)).size}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground flex items-center gap-2">
+                  <Globe2 className="h-4 w-4" />
+                  Regions
+                </span>
+                <span className="font-semibold">
+                  {new Set(segmentedLearners.map(getRegion).filter(Boolean)).size}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
 
-      {/* Quick Stats */}
-      <div className="grid gap-4 md:grid-cols-5">
-        {Object.entries(statusColors).map(([status, color]) => {
-          const count =
-            status === statusFilter
-              ? total
-              : Math.round(total * (status === "Learning" ? 0.7 : status === "Certified" ? 0.15 : 0.05));
-          return (
-            <Card
-              key={status}
-              className={`cursor-pointer transition-all hover:scale-105 ${
-                statusFilter === status ? "ring-2 ring-primary" : ""
-              }`}
-              onClick={() => setParams({ status: statusFilter === status ? "" : status as LearnerStatus, page: 1 })}
-            >
-              <CardContent className="pt-4 pb-4">
-                <Badge className={color}>{status}</Badge>
-                <div className="text-2xl font-bold mt-2">{count.toLocaleString()}</div>
-              </CardContent>
-            </Card>
-          );
-        })}
+          {/* Status Distribution */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Status Breakdown</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {Object.entries(
+                  segmentedLearners.reduce((acc, l) => {
+                    const status = l.learner_status || "Unknown";
+                    acc[status] = (acc[status] || 0) + 1;
+                    return acc;
+                  }, {} as Record<string, number>)
+                )
+                  .sort((a, b) => b[1] - a[1])
+                  .slice(0, 6)
+                  .map(([status, count]) => (
+                    <div key={status} className="flex items-center justify-between">
+                      <Badge className={`${getStatusColor(status)} text-xs`}>{status}</Badge>
+                      <span className="text-sm font-medium">{count}</span>
+                    </div>
+                  ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

@@ -52,6 +52,7 @@ const searchItems = [
   { title: "Insights & ROI", href: "/analytics/insights", icon: TrendingUp, category: "Analytics" },
   { title: "Certifications", href: "/analytics/certification", icon: Award, category: "Analytics" },
   { title: "Skills Dashboard", href: "/skills", icon: Zap, category: "Analytics" },
+  { title: "Skills Analytics", href: "/skills/analytics", icon: BarChart2, category: "Analytics" },
   { title: "Product Alignment", href: "/alignment", icon: Package, category: "Analytics" },
   { title: "Compare", href: "/compare", icon: BarChart2, category: "Analytics" },
   

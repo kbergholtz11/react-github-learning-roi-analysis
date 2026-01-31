@@ -256,12 +256,44 @@ export interface DashboardMetrics {
   totalCertsEarned: number;
 }
 
-// Journey funnel data
+// Journey funnel data (progression-based)
 export interface JourneyFunnelData {
   stage: string;
   count: number;
   percentage: number;
   color: string;
+  description?: string;
+  conversionToNext?: number | null;
+}
+
+// Journey progression analysis
+export interface JourneyProgressionAnalysis {
+  stage: string;
+  count: number;
+  description?: string;
+  conversionRate: number;
+  dropOffRate: number;
+  nextStage: string | null;
+  avgDaysInStage?: number;
+}
+
+// Journey milestones
+export interface JourneyMilestones {
+  firstTouchUsers: number;
+  exploringUsers: number;
+  engagedUsers: number;
+  learningUsers: number;
+  certifiedUsers: number;
+  powerUsers: number;
+  champions: number;
+}
+
+// Data source counts
+export interface JourneyDataSourceCounts {
+  githubLearn: number;
+  githubActivity: number;
+  skillsEnrollments: number;
+  certifiedUsers: number;
 }
 
 // Learner status breakdown

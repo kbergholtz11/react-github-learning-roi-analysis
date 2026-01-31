@@ -26,8 +26,8 @@ import {
 // Helper to format large numbers
 function formatNumber(value: number): string {
   if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
-  if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
-  return value.toString();
+  if (value >= 1000) return `${(value / 1000).toFixed(0)}K`;
+  return Math.round(value).toString();
 }
 
 // Helper to format percentage
@@ -296,6 +296,7 @@ interface AreaChartProps {
   secondaryDataKey?: string;
   color?: string;
   secondaryColor?: string;
+  useSecondaryAxis?: boolean;
 }
 
 export function SimpleAreaChart({
@@ -304,26 +305,40 @@ export function SimpleAreaChart({
   secondaryDataKey,
   color = "#3b82f6",
   secondaryColor = "#22c55e",
+  useSecondaryAxis = false,
 }: AreaChartProps) {
   const colors = useChartColors();
   
   return (
     <div className="h-[280px] w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+        <AreaChart data={data} margin={{ top: 10, right: useSecondaryAxis ? 55 : 10, left: -5, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
           <XAxis
             dataKey="name"
-            tick={{ fill: colors.text, fontSize: 12 }}
+            tick={{ fill: colors.text, fontSize: 13, fontWeight: 500 }}
             axisLine={{ stroke: colors.grid }}
             tickLine={{ stroke: colors.grid }}
           />
           <YAxis
-            tick={{ fill: colors.text, fontSize: 12 }}
+            yAxisId="left"
+            tick={{ fill: colors.text, fontSize: 13, fontWeight: 500 }}
             axisLine={{ stroke: colors.grid }}
             tickLine={{ stroke: colors.grid }}
             tickFormatter={formatNumber}
           />
+          {useSecondaryAxis && secondaryDataKey && (
+            <YAxis
+              yAxisId="right"
+              orientation="right"
+              width={50}
+              tick={{ fill: secondaryColor, fontSize: 13, fontWeight: 500 }}
+              axisLine={{ stroke: secondaryColor }}
+              tickLine={{ stroke: secondaryColor }}
+              tickFormatter={(value) => `${value}%`}
+              domain={[0, 100]}
+            />
+          )}
           <Tooltip
             content={<CustomTooltip colors={colors} />}
           />
@@ -345,6 +360,7 @@ export function SimpleAreaChart({
             stroke={color}
             fill={`url(#gradient-${dataKey})`}
             strokeWidth={2}
+            yAxisId="left"
           />
           {secondaryDataKey && (
             <Area
@@ -353,6 +369,7 @@ export function SimpleAreaChart({
               stroke={secondaryColor}
               fill={`url(#gradient-${secondaryDataKey})`}
               strokeWidth={2}
+              yAxisId={useSecondaryAxis ? "right" : "left"}
             />
           )}
         </AreaChart>

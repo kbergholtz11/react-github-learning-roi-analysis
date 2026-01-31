@@ -40,7 +40,8 @@ async def get_enriched_learners(
     
     Returns:
         - learners: List of enriched learner records
-        - total: Total matching records
+        - total_count: Total matching records (for pagination)
+        - count: Number of records returned
         - limit: Requested limit
         - offset: Requested offset
     """
@@ -52,6 +53,17 @@ async def get_enriched_learners(
                 status_code=503,
                 detail="Learner database not available. Run sync-enriched-learners.py first."
             )
+        
+        # Get total count for pagination
+        total_count = LearnerQueries.get_total_count(
+            search=search,
+            status=status,
+            company=company,
+            country=country,
+            region=region,
+            uses_copilot=uses_copilot,
+            is_certified=is_certified,
+        )
         
         learners = LearnerQueries.get_learners(
             search=search,
@@ -67,6 +79,7 @@ async def get_enriched_learners(
         
         return {
             "learners": learners,
+            "total_count": total_count,
             "count": len(learners),
             "limit": limit,
             "offset": offset,
@@ -182,6 +195,25 @@ async def get_stats_by_status() -> List[Dict[str, Any]]:
         return LearnerQueries.get_stats_by_status()
     except Exception as e:
         logger.error(f"Error getting status stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/stats/growth")
+async def get_growth_metrics() -> Dict[str, Any]:
+    """Get growth and activity metrics for journey dashboard.
+    
+    Returns:
+        - total_learners: Total number of learners
+        - active_learners: Learners with any activity
+        - engaged_learners: Learners with 10+ engagement events
+        - highly_engaged: Learners with 100+ engagement events
+        - product_users: Learners using any GitHub product
+        - with_certifications: Learners with certifications
+    """
+    try:
+        return LearnerQueries.get_growth_metrics()
+    except Exception as e:
+        logger.error(f"Error getting growth metrics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

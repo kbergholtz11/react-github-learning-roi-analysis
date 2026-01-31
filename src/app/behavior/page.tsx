@@ -270,7 +270,7 @@ export default function BehaviorChangePage() {
                 <span className="font-semibold">Champion Growth</span>
               </div>
               <p className="text-sm text-muted-foreground">
-                Champions show {stageImpact.find(s => s.stage === "Champion")?.avgUsageIncrease || 95}% higher engagement than baseline.
+                Champion users show {stageImpact.find(s => s.stage === "Champion")?.avgUsageIncrease || 95}% higher engagement than baseline.
               </p>
             </div>
           </div>

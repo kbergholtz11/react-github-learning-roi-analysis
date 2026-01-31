@@ -135,21 +135,40 @@ interface CopilotTrend {
 
 interface JourneyResponse {
   funnel: JourneyFunnelData[];
+  legacyFunnel?: JourneyFunnelData[];
   avgTimeToCompletion?: number;
   stageVelocity?: Record<string, number>;
+  progressionAnalysis?: Array<{
+    stage: string;
+    count: number;
+    description?: string;
+    conversionRate: number;
+    dropOffRate: number;
+    nextStage: string | null;
+    avgDaysInStage?: number;
+  }>;
   dropOffAnalysis?: Array<{
     stage: string;
     count: number;
     dropOffRate: number;
     nextStage: string | null;
   }>;
+  milestones?: Record<string, number>;
   monthlyProgression?: Array<{
     name: string;
-    learning: number;
-    certified: number;
-    multiCert: number;
+    learning?: number;
+    certified?: number;
+    multiCert?: number;
+    discovered?: number;
   }>;
   totalJourneyUsers?: number;
+  dataSourceCounts?: {
+    githubLearn: number;
+    githubActivity: number;
+    skillsEnrollments: number;
+    certifiedUsers: number;
+    learnersEnriched?: number;
+  };
   source?: "kusto" | "aggregated";
 }
 
@@ -160,11 +179,15 @@ interface ImpactResponse {
     avgUsageIncrease: number;
     platformTimeIncrease: number;
     topProduct: string;
+    adoptionRate?: number;
   }>;
   productAdoption: Array<{
     name: string;
     before: number;
     after: number;
+    increase?: number;
+    learningCount?: number;
+    certifiedCount?: number;
   }>;
   correlationData: Array<{
     name: string;

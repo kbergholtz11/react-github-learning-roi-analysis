@@ -3,8 +3,10 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Zap, Award, TrendingUp, Target, Loader2 } from "lucide-react";
-import { useMetrics, useJourney, useImpact } from "@/hooks/use-data";
+import { Button } from "@/components/ui/button";
+import { Zap, Award, TrendingUp, Target, Loader2, BookOpen, ArrowRight, GitFork, Users, BarChart3 } from "lucide-react";
+import { useMetrics, useJourney, useImpact, useSkillsCourses } from "@/hooks/use-data";
+import Link from "next/link";
 
 function getCompetencyLevel(score: number): string {
   if (score >= 80) return "Expert";
@@ -26,8 +28,9 @@ export default function SkillsDashboardPage() {
   const { data: metrics, isLoading: metricsLoading } = useMetrics();
   const { data: journey, isLoading: journeyLoading } = useJourney();
   const { data: impact, isLoading: impactLoading } = useImpact();
+  const { data: skillsData, isLoading: skillsLoading } = useSkillsCourses();
   
-  const isLoading = metricsLoading || journeyLoading || impactLoading;
+  const isLoading = metricsLoading || journeyLoading || impactLoading || skillsLoading;
   
   if (isLoading) {
     return (
@@ -57,12 +60,83 @@ export default function SkillsDashboardPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Skills Development Dashboard</h1>
-        <p className="text-muted-foreground mt-1">
-          Comprehensive view of learner skills growth and product proficiency across the cohort
-        </p>
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Skills Development Dashboard</h1>
+          <p className="text-muted-foreground mt-1">
+            Comprehensive view of learner skills growth and product proficiency across the cohort
+          </p>
+        </div>
+        <Link href="/skills/analytics">
+          <Button variant="outline" className="gap-2">
+            <BarChart3 className="h-4 w-4" />
+            View Skills Analytics
+            <ArrowRight className="h-4 w-4" />
+          </Button>
+        </Link>
       </div>
+
+      {/* GitHub Skills Quick Stats */}
+      {skillsData && (
+        <Card className="border-l-4 border-l-purple-500">
+          <CardHeader>
+            <div className="flex justify-between items-center">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <BookOpen className="h-5 w-5" />
+                  GitHub Skills Courses
+                </CardTitle>
+                <CardDescription>Hands-on interactive learning from skills.github.com</CardDescription>
+              </div>
+              <Link href="/skills/analytics">
+                <Button size="sm" className="gap-1">
+                  Full Analytics
+                  <ArrowRight className="h-3 w-3" />
+                </Button>
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-5">
+              <div className="text-center p-3 bg-muted/50 rounded-lg">
+                <div className="text-2xl font-bold">{skillsData.totalCourses}</div>
+                <div className="text-xs text-muted-foreground">Courses</div>
+              </div>
+              <div className="text-center p-3 bg-muted/50 rounded-lg">
+                <div className="text-2xl font-bold">{(skillsData.uniqueLearners || 0).toLocaleString()}</div>
+                <div className="text-xs text-muted-foreground">Unique Learners</div>
+              </div>
+              <div className="text-center p-3 bg-muted/50 rounded-lg">
+                <div className="text-2xl font-bold text-green-600">{skillsData.completionRate}%</div>
+                <div className="text-xs text-muted-foreground">Completion Rate</div>
+              </div>
+              <div className="text-center p-3 bg-muted/50 rounded-lg">
+                <div className="text-2xl font-bold text-purple-600">{(skillsData.totalCommits || 0).toLocaleString()}</div>
+                <div className="text-xs text-muted-foreground">Total Commits</div>
+              </div>
+              <div className="text-center p-3 bg-muted/50 rounded-lg">
+                <div className="text-2xl font-bold">
+                  {(skillsData.byCategory?.reduce((sum, c) => sum + c.totalForks, 0) || 0).toLocaleString()}
+                </div>
+                <div className="text-xs text-muted-foreground">Total Forks</div>
+              </div>
+            </div>
+            
+            {/* Top Categories */}
+            <div className="mt-4 pt-4 border-t">
+              <div className="text-sm font-medium mb-2">Top Categories</div>
+              <div className="flex flex-wrap gap-2">
+                {(skillsData.byCategory || []).slice(0, 5).map((cat) => (
+                  <Badge key={cat.category} variant="secondary" className="gap-1">
+                    {cat.category}
+                    <span className="text-muted-foreground">({cat.knownLearners} learners)</span>
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Key Metrics */}
       <div className="grid gap-4 md:grid-cols-4">

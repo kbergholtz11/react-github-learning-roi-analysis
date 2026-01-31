@@ -3,13 +3,17 @@
 Comprehensive Learner Enrichment Sync Script
 
 Syncs ALL learner data with full enrichment from canonical tables:
-- Query 1: ACE Learners (users, certifications, exams, events)
+- Query 1: ACE Learners (users, certifications, exams, events) - BASE POPULATION
 - Query 2: Skills/Learn Activity (hydro page views)
+- Query 2B: Skills Users (skills/* repos) - ADDED TO BASE (62k+ new learners!)
 - Query 3: Partner Credentials (cse-analytics cluster)
 - Query 4: User Demographics (accounts_all)
 - Query 5: Org Enrichment (relationships → account_hierarchy_dotcom)
 - Query 6: Enterprise Enrichment (relationships → account_hierarchy_enterprise)
 - Query 7: Product Usage (user_daily_activity_per_product, 90-day window)
+
+Skills-only users (who engaged with skills/* repos but never registered for exams)
+are now included as first-class learners with full enrichment.
 
 Output: data/learners_enriched.parquet
 
@@ -378,6 +382,66 @@ github_learning_views
     last_learn_visit = datetime(null)
 """
 
+# Query 2B: Skills Users from Hydro - Users who engaged with skills/* repos but aren't in ACE
+# This captures users who only did Skills courses (62k+ users)
+QUERY_2B_SKILLS_USERS = """
+// GitHub Skills Users - authenticated users who viewed skills/* repos
+// These are potential learners who started with Skills courses
+let skills_users = analytics_v0_page_view
+    | where repository_nwo startswith "skills/"
+    | where isnotempty(actor_id)
+    | where timestamp >= datetime(2024-01-01)
+    | extend skill_name = tostring(split(repository_nwo, "/")[1])
+    | extend skill_category = case(
+        skill_name has "copilot" or skill_name has "mcp" or skill_name has "spark", "AI/Copilot",
+        skill_name has "action" or skill_name has "workflow", "Actions",
+        skill_name has "git" or skill_name has "pull-request" or skill_name has "merge" or skill_name has "github", "Git/GitHub Basics",
+        skill_name has "code" or skill_name has "codespace", "Development",
+        skill_name has "secure" or skill_name has "security" or skill_name has "codeql", "Security",
+        skill_name has "deploy" or skill_name has "azure" or skill_name has "release", "DevOps/Deployment",
+        skill_name has "markdown" or skill_name has "page", "Documentation",
+        "Other"
+    )
+    | summarize
+        skills_page_views = count(),
+        skills_sessions = dcount(client_id),
+        first_skills_visit = min(timestamp),
+        last_skills_visit = max(timestamp),
+        skills_completed = make_set(skill_name, 20),
+        skills_count = dcount(skill_name),
+        ai_skills_count = dcountif(skill_name, skill_category == "AI/Copilot"),
+        actions_skills_count = dcountif(skill_name, skill_category == "Actions"),
+        git_skills_count = dcountif(skill_name, skill_category == "Git/GitHub Basics"),
+        security_skills_count = dcountif(skill_name, skill_category == "Security")
+      by dotcom_id = actor_id
+    | where skills_page_views > 0;
+
+// Get user handles for skills users via user_events
+let skills_with_handles = skills_users
+    | join kind=leftouter (
+        github_v1_user_signup
+        | extend dotcom_id = tolong(actor.id), userhandle = tolower(tostring(actor.login))
+        | where dotcom_id > 0
+        | summarize userhandle = take_any(userhandle) by dotcom_id
+    ) on dotcom_id
+    | project-away dotcom_id1;
+
+skills_with_handles
+| project
+    dotcom_id,
+    userhandle = coalesce(userhandle, ""),
+    skills_page_views,
+    skills_sessions,
+    first_skills_visit,
+    last_skills_visit,
+    skills_completed,
+    skills_count,
+    ai_skills_count,
+    actions_skills_count,
+    git_skills_count,
+    security_skills_count
+"""
+
 # Query 3: Partner Credentials from CSE Analytics
 QUERY_3_PARTNER_CREDS = """
 // Get partner credentials - issued certifications through partners
@@ -395,14 +459,27 @@ by email
 """
 
 # Query 4: User Demographics from accounts_all
-# Uses cross-cluster join to ace.users to get learner dotcom_ids
+# Now includes both ACE learners AND Skills users for full coverage
 QUERY_4_USER_DEMOGRAPHICS = """
-// Get user demographics for ACE learners via cross-cluster join
-let learner_ids = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').users
+// Get user demographics for ALL learners (ACE + Skills users)
+// ACE learner IDs
+let ace_ids = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').users
     | where isnotempty(dotcomid) and dotcomid != ""
     | extend dotcom_id = tolong(dotcomid)
     | where dotcom_id > 0
     | distinct dotcom_id;
+
+// Skills user IDs (from hydro page views of skills/* repos)
+let skills_ids = cluster('gh-analytics.eastus.kusto.windows.net').database('hydro').analytics_v0_page_view
+    | where repository_nwo startswith "skills/"
+    | where isnotempty(actor_id)
+    | where timestamp >= datetime(2024-01-01)
+    | extend dotcom_id = actor_id
+    | where dotcom_id > 0
+    | distinct dotcom_id;
+
+// Union all learner IDs
+let learner_ids = union ace_ids, skills_ids | distinct dotcom_id;
 
 accounts_all
 | where account_type == "User"
@@ -430,14 +507,27 @@ accounts_all
 """
 
 # Query 5: Org Enrichment from relationships + account_hierarchy_dotcom + enterprise
-# Uses cross-cluster join to ace.users
+# Now includes both ACE learners AND Skills users
 QUERY_5_ORG_ENRICHMENT = """
-// Get org enrichment for learners via relationships
-let learner_ids = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').users
+// Get org enrichment for ALL learners (ACE + Skills users)
+// ACE learner IDs
+let ace_ids = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').users
     | where isnotempty(dotcomid) and dotcomid != ""
     | extend dotcom_id = tolong(dotcomid)
     | where dotcom_id > 0
     | distinct dotcom_id;
+
+// Skills user IDs
+let skills_ids = cluster('gh-analytics.eastus.kusto.windows.net').database('hydro').analytics_v0_page_view
+    | where repository_nwo startswith "skills/"
+    | where isnotempty(actor_id)
+    | where timestamp >= datetime(2024-01-01)
+    | extend dotcom_id = actor_id
+    | where dotcom_id > 0
+    | distinct dotcom_id;
+
+// Union all learner IDs
+let learner_ids = union ace_ids, skills_ids | distinct dotcom_id;
 
 // Get user-to-org relationships
 let user_orgs = relationships_all
@@ -486,14 +576,27 @@ by child_dotcom_id
 # Query 6 removed - enterprise_customer_name now obtained in Query 5 via org's enterprise_account_id
 
 # Query 7: Product Usage from user_daily_activity_per_product (90-day window)
-# Uses cross-cluster join to ace.users
+# Now includes both ACE learners AND Skills users
 QUERY_7_PRODUCT_USAGE = """
-// Get product usage for learners (last 90 days to avoid timeout)
-let learner_ids = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').users
+// Get product usage for ALL learners (ACE + Skills users)
+// ACE learner IDs
+let ace_ids = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').users
     | where isnotempty(dotcomid) and dotcomid != ""
     | extend dotcom_id = tolong(dotcomid)
     | where dotcom_id > 0
     | distinct dotcom_id;
+
+// Skills user IDs
+let skills_ids = cluster('gh-analytics.eastus.kusto.windows.net').database('hydro').analytics_v0_page_view
+    | where repository_nwo startswith "skills/"
+    | where isnotempty(actor_id)
+    | where timestamp >= datetime(2024-01-01)
+    | extend dotcom_id = actor_id
+    | where dotcom_id > 0
+    | distinct dotcom_id;
+
+// Union all learner IDs
+let learner_ids = union ace_ids, skills_ids | distinct dotcom_id;
 
 user_daily_activity_per_product
 | where day >= ago(90d)
@@ -640,6 +743,8 @@ def main():
         log("DRY RUN MODE - Showing queries only", "warning")
         print("\n=== Query 1: ACE Learners ===")
         print(QUERY_1_ACE_LEARNERS[:500] + "...")
+        print("\n=== Query 2B: Skills Users (for base population) ===")
+        print(QUERY_2B_SKILLS_USERS[:500] + "...")
         print("\n=== Query 4: User Demographics ===")
         print(QUERY_4_USER_DEMOGRAPHICS[:500] + "...")
         print("\n=== Query 5: Org Enrichment ===")
@@ -684,6 +789,16 @@ def main():
     else:
         df_skills = pd.DataFrame()
         update_sync_status("skills_learn", "failed", 0, "Query failed")
+
+    # Query 2B: Skills Users from Hydro - for adding Skills-only users to base
+    log("Query 2B: Skills Users (for base population)...", "start")
+    df_skills_users = execute_query(gh_client, "hydro", QUERY_2B_SKILLS_USERS, "Skills Users")
+    if df_skills_users is not None:
+        update_sync_status("skills_users", "success", len(df_skills_users))
+        log(f"Found {len(df_skills_users):,} users who engaged with Skills courses", "info")
+    else:
+        df_skills_users = pd.DataFrame()
+        update_sync_status("skills_users", "failed", 0, "Query failed")
 
     # Query 3: Partner Credentials (CSE cluster)
     log("Query 3: Partner Credentials...", "start")
@@ -736,14 +851,134 @@ def main():
     df = df_ace.copy()
     log(f"Base: {len(df):,} ACE learners", "info")
 
-    # Merge Skills/Learn (on dotcom_id)
+    # ==========================================================================
+    # Add Skills-only users to the base population
+    # These are users who engaged with Skills courses but aren't in ACE
+    # ==========================================================================
+    if not df_skills_users.empty:
+        # Find Skills users who are NOT already in ACE learners (by dotcom_id)
+        existing_ids = set(df["dotcom_id"].dropna().astype(int).tolist())
+        skills_only = df_skills_users[~df_skills_users["dotcom_id"].isin(existing_ids)].copy()
+        
+        if len(skills_only) > 0:
+            log(f"Adding {len(skills_only):,} Skills-only users to base population", "info")
+            
+            # Create ACE-compatible records for Skills-only users
+            skills_only_records = pd.DataFrame({
+                "email": "",  # Will be populated from demographics if available
+                "dotcom_id": skills_only["dotcom_id"].astype(int),
+                "userhandle": skills_only["userhandle"],
+                "first_name": "",
+                "last_name": "",
+                "job_role": "",
+                "exam_company": "",
+                "exam_company_type": "",
+                "ace_company": "",
+                "ace_company_type": "",
+                "exam_country": "",
+                "exam_region": "",
+                "ace_country": "",
+                "ace_region": "",
+                "registration_date": skills_only["first_skills_visit"],
+                "total_exams": 0,
+                "exams_passed": 0,
+                "first_exam": pd.NaT,
+                "last_exam": pd.NaT,
+                "cert_names": [[]]*len(skills_only),
+                "exam_codes": [[]]*len(skills_only),
+                "events_registered": 0,
+                "first_event": pd.NaT,
+                "last_event": pd.NaT,
+                "learner_status": "Skills Learner",
+                "journey_stage": "Stage 3: Engaged",
+                # Add Skills-specific fields
+                "skills_page_views": skills_only["skills_page_views"],
+                "skills_sessions": skills_only["skills_sessions"],
+                "first_skills_visit": skills_only["first_skills_visit"],
+                "last_skills_visit": skills_only["last_skills_visit"],
+                "skills_completed": skills_only["skills_completed"],
+                "skills_count": skills_only["skills_count"],
+                "ai_skills_count": skills_only["ai_skills_count"],
+                "actions_skills_count": skills_only["actions_skills_count"],
+                "git_skills_count": skills_only["git_skills_count"],
+                "security_skills_count": skills_only["security_skills_count"],
+            })
+            
+            # Concat Skills-only users to main dataframe
+            df = pd.concat([df, skills_only_records], ignore_index=True)
+            log(f"After adding Skills-only users: {len(df):,} total learners", "info")
+        else:
+            log("All Skills users already in ACE base", "info")
+
+    # ==========================================================================
+    # Add Partner-certified users to the base population
+    # These are users who got certified through partners but aren't in ACE portal
+    # ==========================================================================
+    if not df_partner.empty:
+        # Find partner-certified users who are NOT already in base (by email)
+        existing_emails = set(df["email"].dropna().str.lower().tolist())
+        partner_only = df_partner[~df_partner["email"].str.lower().isin(existing_emails)].copy()
+        
+        if len(partner_only) > 0:
+            log(f"Adding {len(partner_only):,} partner-certified users to base population", "info")
+            
+            # Create ACE-compatible records for partner-certified users
+            partner_only_records = pd.DataFrame({
+                "email": partner_only["email"],
+                "dotcom_id": 0,  # Will be populated from demographics if available
+                "userhandle": "",
+                "first_name": "",
+                "last_name": "",
+                "job_role": "",
+                "exam_company": "",
+                "exam_company_type": "",
+                "ace_company": "",
+                "ace_company_type": "",
+                "exam_country": "",
+                "exam_region": "",
+                "ace_country": "",
+                "ace_region": "",
+                "registration_date": partner_only["first_partner_cert"],
+                "total_exams": partner_only["partner_certs"],  # Count partner certs as exams
+                "exams_passed": partner_only["partner_certs"],  # Partner certs are passed
+                "first_exam": partner_only["first_partner_cert"],
+                "last_exam": partner_only["last_partner_cert"],
+                "cert_names": partner_only["partner_cert_names"],
+                "exam_codes": [[]]*len(partner_only),
+                "events_registered": 0,
+                "first_event": pd.NaT,
+                "last_event": pd.NaT,
+                "learner_status": "Partner Certified",
+                "journey_stage": "Stage 6: Certified",
+                # Add partner-specific fields directly
+                "partner_certs": partner_only["partner_certs"],
+                "partner_cert_names": partner_only["partner_cert_names"],
+                "partner_companies": partner_only["partner_companies"],
+                "first_partner_cert": partner_only["first_partner_cert"],
+                "last_partner_cert": partner_only["last_partner_cert"],
+            })
+            
+            # Concat partner-only users to main dataframe
+            df = pd.concat([df, partner_only_records], ignore_index=True)
+            log(f"After adding partner-certified users: {len(df):,} total learners", "info")
+        else:
+            log("All partner-certified users already in base", "info")
+
+    # Merge Skills/Learn (on dotcom_id) - for ACE learners who also used Skills
     if not df_skills.empty:
         df = df.merge(df_skills, on="dotcom_id", how="left")
         log(f"After Skills/Learn merge: {len(df):,} rows", "info")
 
     # Merge Partner Credentials (on email since partner_credentials doesn't have dotcom_id)
+    # This enriches existing learners who also have partner certs
     if not df_partner.empty:
-        df = df.merge(df_partner, on="email", how="left")
+        # Only merge for learners who don't already have partner_certs populated
+        df = df.merge(df_partner, on="email", how="left", suffixes=("", "_new"))
+        # Coalesce partner fields - prefer existing (from partner-only records) over new merge
+        for col in ["partner_certs", "partner_cert_names", "partner_companies", "first_partner_cert", "last_partner_cert"]:
+            if f"{col}_new" in df.columns:
+                df[col] = df[col].combine_first(df[f"{col}_new"])
+                df.drop(columns=[f"{col}_new"], inplace=True)
         log(f"After Partner merge: {len(df):,} rows", "info")
 
     # Merge Demographics (on dotcom_id)
@@ -897,6 +1132,22 @@ def main():
     for col in numeric_cols:
         if col in df.columns:
             df[col] = df[col].fillna(0)
+
+    # ==========================================================================
+    # Normalize date/datetime columns to avoid parquet serialization issues
+    # ==========================================================================
+    datetime_cols = [
+        "registration_date", "first_exam", "last_exam", "first_event", "last_event",
+        "first_skills_visit", "last_skills_visit", "first_learn_visit", "last_learn_visit",
+        "first_partner_cert", "last_partner_cert", "account_created_at",
+        "first_paid_date", "first_activity", "last_activity"
+    ]
+    for col in datetime_cols:
+        if col in df.columns:
+            # Convert to datetime, coercing errors to NaT, then remove timezone info
+            df[col] = pd.to_datetime(df[col], errors="coerce", utc=True)
+            if df[col].dt.tz is not None:
+                df[col] = df[col].dt.tz_localize(None)
 
     # ==========================================================================
     # Filter out excluded users

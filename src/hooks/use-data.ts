@@ -99,21 +99,40 @@ export function useLearners(filters: LearnerFilters = {}) {
 // Journey data hook
 interface JourneyResponse {
   funnel: JourneyFunnelData[];
+  legacyFunnel?: JourneyFunnelData[];
   avgTimeToCompletion: number;
   stageVelocity: Record<string, number>;
+  progressionAnalysis?: Array<{
+    stage: string;
+    count: number;
+    description?: string;
+    conversionRate: number;
+    dropOffRate: number;
+    nextStage: string | null;
+    avgDaysInStage?: number;
+  }>;
   dropOffAnalysis: Array<{
     stage: string;
     count: number;
     dropOffRate: number;
     nextStage: string | null;
   }>;
+  milestones?: Record<string, number>;
   monthlyProgression: Array<{
     name: string;
-    learning: number;
-    certified: number;
-    multiCert: number;
+    learning?: number;
+    certified?: number;
+    multiCert?: number;
+    discovered?: number;
   }>;
   totalJourneyUsers: number;
+  dataSourceCounts?: {
+    githubLearn: number;
+    githubActivity: number;
+    skillsEnrollments: number;
+    certifiedUsers: number;
+    learnersEnriched?: number;
+  };
 }
 
 /**
@@ -144,6 +163,9 @@ interface ImpactResponse {
     name: string;
     before: number;
     after: number;
+    increase?: number;
+    learningCount?: number;
+    certifiedCount?: number;
   }>;
   stageImpact: Array<{
     stage: string;
@@ -151,6 +173,7 @@ interface ImpactResponse {
     avgUsageIncrease: number;
     platformTimeIncrease: number;
     topProduct: string;
+    adoptionRate?: number;
   }>;
   correlationData: Array<{
     name: string;
@@ -340,16 +363,74 @@ export function useGitHubActivity() {
 
 // Skills courses
 interface SkillsCourseData {
+  // Total stats (all users worldwide)
   totalCourses: number;
-  totalEnrollments: number;
-  uniqueLearners: number;
+  totalEnrollments: number;  // All forks worldwide
+  totalUniqueLearners: number;  // Unique users from fetched data
+  
+  // Known learner stats (users in our system)
+  knownEnrollments: number;
+  uniqueKnownLearners: number;
   completedCourses: number;
+  totalCommits: number;
   completionRate: number;
+  knownLearnerRatio: number;  // % of total that are known
+  
   byCategory: Array<{
     category: string;
     courses: number;
     totalForks: number;
+    totalUsers: number;
     knownLearners: number;
+    uniqueKnownUsers: number;
+    activeUsers: number;
+    completedUsers: number;
+    totalCommits: number;
+    avgCommitsPerUser: number;
+    completionRate: number;
+    knownRatio: number;
+  }>;
+  byDifficulty: Array<{
+    difficulty: string;
+    courses: number;
+    totalForks: number;
+    totalEnrollments: number;
+    knownEnrollments: number;
+    completed: number;
+    avgCommits: number;
+  }>;
+  courseFunnels: Array<{
+    name: string;
+    category: string;
+    difficulty: string;
+    repo: string;
+    funnel: {
+      forked: number;
+      fetched: number;
+      knownLearners: number;
+      active: number;
+      completed: number;
+    };
+    rates: {
+      activityRate: number;
+      completionRate: number;
+      overallCompletionRate: number;
+      knownRatio: number;
+    };
+    avgCommits: number;
+  }>;
+  monthlyTrends: Array<{
+    month: string;
+    total: number;
+    known?: number;
+    completed?: number;
+    byCategory: Record<string, number>;
+  }>;
+  knownMonthlyTrends?: Array<{
+    month: string;
+    total: number;
+    completed: number;
+    byCategory: Record<string, number>;
   }>;
   popularCourses: Array<{
     name: string;
@@ -357,12 +438,16 @@ interface SkillsCourseData {
     difficulty: string;
     totalForks: number;
     knownLearners: number;
+    completionRate: number;
   }>;
   topSkillLearners: Array<{
     handle: string;
     coursesStarted: number;
     coursesCompleted: number;
+    totalCommits: number;
     categories: string[];
+    firstEnrollment: string | null;
+    lastEnrollment: string | null;
   }>;
   generatedAt: string;
 }

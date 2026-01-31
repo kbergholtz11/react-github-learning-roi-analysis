@@ -28,15 +28,15 @@ export default function ExecutiveSummaryPage() {
   const stageImpact = impactData?.stageImpact || [];
   const productAdoption = impactData?.productAdoption || [];
 
-  // Calculate certification rate
-  const learningCount = funnel.find(f => f.stage === "Learning")?.count || 1;
-  const certifiedTotal = funnel.filter(f => f.stage !== "Learning").reduce((sum, f) => sum + f.count, 0);
-  const certificationRate = ((certifiedTotal / learningCount) * 100).toFixed(0);
+  // Calculate certification rate: certified users / total learners
+  const totalLearners = metrics?.totalLearners || 1;
+  const certifiedUsers = metrics?.certifiedUsers || 0;
+  const certificationRate = ((certifiedUsers / totalLearners) * 100).toFixed(0);
 
   // Build program health from status breakdown
   const statusBreakdown = metricsData?.statusBreakdown || [];
   const programHealthData = [
-    { name: "Certified+", value: certifiedTotal, color: "#22c55e" },
+    { name: "Certified+", value: certifiedUsers, color: "#22c55e" },
     { name: "Learning", value: metrics?.learningUsers || 0, color: "#3b82f6" },
     { name: "Engaged/Registered", value: metrics?.prospectUsers || 0, color: "#6366f1" },
   ];
@@ -50,12 +50,28 @@ export default function ExecutiveSummaryPage() {
     { name: "Impact Score", before: 0, after: metrics?.impactScore || 0, unit: "/100" },
   ];
 
-  // Monthly data for chart
-  const quarterlyPerformanceData = monthlyProgression.slice(-4).map((m, i) => ({
-    name: `Month ${i + 1}`,
-    target: Math.round(m.certified * 0.9),
-    actual: m.certified,
-  }));
+  // Monthly data for chart - show certification trend with cumulative progress
+  // Use monthlyProgression if available, otherwise show stage breakdown from funnel
+  let chartData: Array<{ name: string; count: number }> = [];
+  
+  if (monthlyProgression.length > 0) {
+    let cumulativeCerts = 0;
+    chartData = monthlyProgression.slice(-6).map((m) => {
+      cumulativeCerts += m.certified || 0;
+      return {
+        name: m.name || m.month || "Unknown",
+        count: m.certified || 0,
+      };
+    });
+  } else {
+    // Use funnel stages as chart data when no monthly data available
+    chartData = funnel
+      .filter(s => s.stage !== "Engaged") // Exclude non-learning stage
+      .map(s => ({
+        name: s.stage,
+        count: s.count,
+      }));
+  }
 
   // Dynamic highlights from real data
   const highlights = [
@@ -204,16 +220,14 @@ export default function ExecutiveSummaryPage() {
 
         <Card className="col-span-4">
           <CardHeader>
-            <CardTitle>Monthly Performance</CardTitle>
-            <CardDescription>Target vs actual certifications</CardDescription>
+            <CardTitle>{monthlyProgression.length > 0 ? "Certification Trend" : "Learner Distribution"}</CardTitle>
+            <CardDescription>{monthlyProgression.length > 0 ? "Monthly certifications earned" : "Learners by journey stage"}</CardDescription>
           </CardHeader>
           <CardContent>
             <SimpleBarChart 
-              data={quarterlyPerformanceData} 
-              dataKey="target"
-              secondaryDataKey="actual"
-              color="#94a3b8"
-              secondaryColor="#22c55e"
+              data={chartData} 
+              dataKey="count"
+              color="#22c55e"
             />
           </CardContent>
         </Card>

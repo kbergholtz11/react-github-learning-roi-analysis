@@ -210,6 +210,49 @@ class LearnerQueries:
     """Pre-built queries for common learner operations."""
 
     @staticmethod
+    def get_total_count(
+        search: Optional[str] = None,
+        status: Optional[str] = None,
+        company: Optional[str] = None,
+        country: Optional[str] = None,
+        region: Optional[str] = None,
+        uses_copilot: Optional[bool] = None,
+        is_certified: Optional[bool] = None,
+    ) -> int:
+        """Get total count of learners matching filters."""
+        db = get_database()
+        
+        conditions = ["1=1"]
+        
+        if search:
+            safe_search = db.sanitize_string(search)
+            conditions.append(f"(email ILIKE '%{safe_search}%' OR userhandle ILIKE '%{safe_search}%')")
+        if status:
+            safe_status = db.sanitize_string(status)
+            conditions.append(f"learner_status = '{safe_status}'")
+        if company:
+            safe_company = db.sanitize_string(company)
+            conditions.append(f"company_name ILIKE '%{safe_company}%'")
+        if country:
+            safe_country = db.sanitize_string(country)
+            conditions.append(f"country = '{safe_country}'")
+        if region:
+            safe_region = db.sanitize_string(region)
+            conditions.append(f"region = '{safe_region}'")
+        if uses_copilot is not None:
+            conditions.append(f"uses_copilot = {bool(uses_copilot)}")
+        if is_certified is not None:
+            if is_certified:
+                conditions.append("exams_passed > 0")
+            else:
+                conditions.append("exams_passed = 0")
+
+        where_clause = " AND ".join(conditions)
+        
+        result = db.query(f"SELECT COUNT(*) as cnt FROM learners_enriched WHERE {where_clause}")
+        return result[0]["cnt"] if result else 0
+
+    @staticmethod
     def get_learners(
         search: Optional[str] = None,
         status: Optional[str] = None,
@@ -274,14 +317,25 @@ class LearnerQueries:
         safe_limit = max(1, min(int(limit), 1000))  # Cap at 1000
         safe_offset = max(0, int(offset))
         
-        sql = f"""
-            SELECT *
-            FROM learners_enriched
-            WHERE {where_clause}
-            ORDER BY exams_passed DESC, total_exams DESC
-            LIMIT {safe_limit}
-            OFFSET {safe_offset}
-        """
+        # Use random sampling if no filters applied, otherwise sort by activity
+        if len(conditions) == 1:  # Only "1=1" condition
+            sql = f"""
+                SELECT *
+                FROM learners_enriched
+                WHERE {where_clause}
+                ORDER BY random()
+                LIMIT {safe_limit}
+                OFFSET {safe_offset}
+            """
+        else:
+            sql = f"""
+                SELECT *
+                FROM learners_enriched
+                WHERE {where_clause}
+                ORDER BY exams_passed DESC, total_exams DESC
+                LIMIT {safe_limit}
+                OFFSET {safe_offset}
+            """
         
         return db.query(sql)
 
@@ -330,6 +384,38 @@ class LearnerQueries:
         """)[0]
         
         return stats
+
+    @staticmethod
+    def get_growth_metrics() -> Dict[str, Any]:
+        """Get growth and activity metrics for journey dashboard."""
+        db = get_database()
+        
+        stats = db.query("""
+            SELECT
+                COUNT(*) as total_learners,
+                SUM(CASE WHEN total_active_days >= 1 THEN 1 ELSE 0 END) as active_any,
+                SUM(CASE WHEN total_engagement_events >= 10 THEN 1 ELSE 0 END) as engaged,
+                SUM(CASE WHEN total_engagement_events >= 100 THEN 1 ELSE 0 END) as highly_engaged,
+                SUM(CASE WHEN uses_copilot OR uses_actions OR uses_security THEN 1 ELSE 0 END) as product_users,
+                SUM(CASE WHEN exams_passed > 0 THEN 1 ELSE 0 END) as with_certifications
+            FROM learners_enriched
+        """)[0]
+        
+        total = stats.get("total_learners", 1) or 1
+        
+        return {
+            "total_learners": stats.get("total_learners", 0),
+            "active_learners": stats.get("active_any", 0),
+            "active_percentage": round((stats.get("active_any", 0) / total) * 100, 1),
+            "engaged_learners": stats.get("engaged", 0),
+            "engaged_percentage": round((stats.get("engaged", 0) / total) * 100, 1),
+            "highly_engaged": stats.get("highly_engaged", 0),
+            "highly_engaged_percentage": round((stats.get("highly_engaged", 0) / total) * 100, 1),
+            "product_users": stats.get("product_users", 0),
+            "product_percentage": round((stats.get("product_users", 0) / total) * 100, 1),
+            "with_certifications": stats.get("with_certifications", 0),
+            "cert_percentage": round((stats.get("with_certifications", 0) / total) * 100, 1),
+        }
 
     @staticmethod
     def get_stats_by_region() -> List[Dict]:
@@ -501,4 +587,99 @@ class LearnerQueries:
                     WHEN 'Registered' THEN 7
                     ELSE 8
                 END
+        """)
+
+
+class CopilotInsightQueries:
+    """Pre-built queries for Copilot insights from enriched learner data."""
+
+    @staticmethod
+    def get_copilot_stats() -> Dict[str, Any]:
+        """Get Copilot adoption statistics for enrolled learners."""
+        db = get_database()
+        result = db.query("""
+            SELECT
+                COUNT(*) as total_learners,
+                SUM(CASE WHEN uses_copilot THEN 1 ELSE 0 END) as copilot_users,
+                ROUND(100.0 * SUM(CASE WHEN uses_copilot THEN 1 ELSE 0 END) / COUNT(*), 1) as adoption_rate,
+                SUM(copilot_engagement_events) as total_events,
+                SUM(copilot_contribution_events) as total_contributions,
+                SUM(copilot_days) as total_copilot_days,
+                ROUND(AVG(CASE WHEN uses_copilot THEN copilot_days ELSE NULL END), 1) as avg_days_per_user,
+                ROUND(AVG(CASE WHEN uses_copilot THEN copilot_engagement_events ELSE NULL END), 0) as avg_events_per_user
+            FROM learners_enriched
+        """)
+        return result[0] if result else {}
+
+    @staticmethod
+    def get_copilot_by_learner_status() -> List[Dict]:
+        """Get Copilot usage broken down by learner status."""
+        db = get_database()
+        return db.query("""
+            SELECT
+                learner_status,
+                COUNT(*) as total_learners,
+                SUM(CASE WHEN uses_copilot THEN 1 ELSE 0 END) as copilot_users,
+                ROUND(100.0 * SUM(CASE WHEN uses_copilot THEN 1 ELSE 0 END) / COUNT(*), 1) as adoption_rate,
+                SUM(copilot_engagement_events) as total_events,
+                ROUND(AVG(CASE WHEN uses_copilot THEN copilot_engagement_events ELSE NULL END), 0) as avg_events,
+                ROUND(AVG(CASE WHEN uses_copilot THEN copilot_days ELSE NULL END), 1) as avg_days
+            FROM learners_enriched
+            GROUP BY learner_status
+            ORDER BY copilot_users DESC
+        """)
+
+    @staticmethod
+    def get_copilot_by_region() -> List[Dict]:
+        """Get Copilot usage broken down by region."""
+        db = get_database()
+        return db.query("""
+            SELECT
+                region,
+                COUNT(*) as total_learners,
+                SUM(CASE WHEN uses_copilot THEN 1 ELSE 0 END) as copilot_users,
+                ROUND(100.0 * SUM(CASE WHEN uses_copilot THEN 1 ELSE 0 END) / COUNT(*), 1) as adoption_rate,
+                SUM(copilot_engagement_events) as total_events,
+                ROUND(AVG(CASE WHEN uses_copilot THEN copilot_engagement_events ELSE NULL END), 0) as avg_events
+            FROM learners_enriched
+            WHERE region IS NOT NULL
+            GROUP BY region
+            ORDER BY copilot_users DESC
+        """)
+
+    @staticmethod
+    def get_copilot_top_users(limit: int = 20) -> List[Dict]:
+        """Get top Copilot users by engagement."""
+        db = get_database()
+        return db.query(f"""
+            SELECT
+                userhandle,
+                email,
+                company_name,
+                learner_status,
+                copilot_days,
+                copilot_engagement_events,
+                copilot_contribution_events,
+                exams_passed
+            FROM learners_enriched
+            WHERE uses_copilot = true
+            ORDER BY copilot_engagement_events DESC
+            LIMIT {int(limit)}
+        """)
+
+    @staticmethod
+    def get_copilot_vs_certification() -> List[Dict]:
+        """Compare Copilot adoption between certified and non-certified learners."""
+        db = get_database()
+        return db.query("""
+            SELECT
+                CASE WHEN exams_passed > 0 THEN 'Certified' ELSE 'Not Certified' END as cert_status,
+                COUNT(*) as total_learners,
+                SUM(CASE WHEN uses_copilot THEN 1 ELSE 0 END) as copilot_users,
+                ROUND(100.0 * SUM(CASE WHEN uses_copilot THEN 1 ELSE 0 END) / COUNT(*), 1) as adoption_rate,
+                ROUND(AVG(CASE WHEN uses_copilot THEN copilot_engagement_events ELSE NULL END), 0) as avg_events,
+                ROUND(AVG(CASE WHEN uses_copilot THEN copilot_days ELSE NULL END), 1) as avg_days
+            FROM learners_enriched
+            GROUP BY CASE WHEN exams_passed > 0 THEN 'Certified' ELSE 'Not Certified' END
+            ORDER BY adoption_rate DESC
         """)

@@ -63,7 +63,8 @@ const stageColors: Record<string, string> = {
   "Practitioner": "#22c55e",   // Green - actively practicing
   "Active Learner": "#3b82f6", // Blue - learning
   "Explorer": "#94a3b8",       // Slate - just starting
-  // Legacy certification-based statuses (for backward compatibility)
+  // Certification-based statuses
+  Engaged: "#94a3b8",          // Slate - engaged but not certified
   Learning: "#3b82f6",
   Certified: "#22c55e",
   "Multi-Certified": "#8b5cf6",
@@ -293,6 +294,7 @@ export default function DashboardPage() {
               secondaryDataKey="usage"
               color="#22c55e"
               secondaryColor="#3b82f6"
+              useSecondaryAxis={true}
             />
             <div className="flex justify-center gap-6 mt-4 text-sm">
               <div className="flex items-center gap-2">

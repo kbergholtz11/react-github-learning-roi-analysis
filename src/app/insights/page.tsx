@@ -79,75 +79,129 @@ function CopilotInsightsTab() {
 
   const languageData = data.languages?.slice(0, 10) || [];
   const totals = data.totals || {};
+  const stats = data.stats || {};
+  const isEnrichedData = data.source === "enriched";
+  const byLearnerStatus = data.byLearnerStatus || [];
 
   return (
     <div className="space-y-6">
-      {/* KPIs */}
+      {/* Data source indicator */}
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Users className="h-4 w-4" />
+        <span>
+          {isEnrichedData 
+            ? `Showing Copilot usage for ${formatNumber(stats.totalLearners || 0)} enrolled learners`
+            : "Showing sample Copilot data (start backend for learner-specific data)"}
+        </span>
+        <Badge variant={isEnrichedData ? "default" : "secondary"} className="ml-2">
+          {isEnrichedData ? "Live Learner Data" : "Sample Data"}
+        </Badge>
+      </div>
+
+      {/* KPIs - Updated for enriched learner data */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Suggestions</CardTitle>
-            <Code2 className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Copilot Users</CardTitle>
+            <Users className="h-4 w-4 text-purple-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatNumber(totals.totalSuggestions || 0)}</div>
-            <p className="text-xs text-muted-foreground">Code completions offered</p>
+            <div className="text-2xl font-bold">
+              {formatNumber(isEnrichedData ? (stats.copilotUsers || 0) : (totals.totalSuggestions || 0))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {isEnrichedData 
+                ? `${stats.adoptionRate || 0}% of enrolled learners`
+                : "Code completions offered"}
+            </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Acceptance Rate</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              {isEnrichedData ? "Adoption Rate" : "Acceptance Rate"}
+            </CardTitle>
             <CheckCircle2 className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totals.avgAcceptanceRate || 0}%</div>
-            <p className="text-xs text-muted-foreground">Average across languages</p>
+            <div className="text-2xl font-bold">
+              {isEnrichedData ? (stats.adoptionRate || 0) : (totals.avgAcceptanceRate || 0)}%
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {isEnrichedData ? "Learners using Copilot" : "Average across languages"}
+            </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Lines Accepted</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              {isEnrichedData ? "Total Events" : "Lines Accepted"}
+            </CardTitle>
             <TrendingUp className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {formatNumber(languageData.reduce((sum, l) => sum + (l.linesAccepted || 0), 0))}
+              {formatNumber(isEnrichedData 
+                ? (stats.totalEvents || 0) 
+                : languageData.reduce((sum, l) => sum + (l.linesAccepted || 0), 0))}
             </div>
-            <p className="text-xs text-muted-foreground">Lines of code from Copilot</p>
+            <p className="text-xs text-muted-foreground">
+              {isEnrichedData ? "Copilot engagement events" : "Lines of code from Copilot"}
+            </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Languages</CardTitle>
-            <Languages className="h-4 w-4 text-purple-500" />
+            <CardTitle className="text-sm font-medium">
+              {isEnrichedData ? "Avg Days/User" : "Languages"}
+            </CardTitle>
+            <Sparkles className="h-4 w-4 text-amber-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totals.totalLanguages || 0}</div>
-            <p className="text-xs text-muted-foreground">Programming languages used</p>
+            <div className="text-2xl font-bold">
+              {isEnrichedData ? (stats.avgDaysPerUser || 0) : (totals.totalLanguages || 0)}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {isEnrichedData ? "Active Copilot days per user" : "Programming languages used"}
+            </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Charts */}
+      {/* Charts - Updated for learner status breakdown */}
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Acceptance Rate by Language</CardTitle>
-            <CardDescription>How often developers accept Copilot suggestions</CardDescription>
+            <CardTitle>
+              {isEnrichedData ? "Copilot Adoption by Learner Status" : "Acceptance Rate by Language"}
+            </CardTitle>
+            <CardDescription>
+              {isEnrichedData 
+                ? "How Copilot usage varies by certification level"
+                : "How often developers accept Copilot suggestions"}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={languageData} layout="vertical">
+              <BarChart data={isEnrichedData ? byLearnerStatus : languageData} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" domain={[0, 50]} unit="%" />
-                <YAxis dataKey="language" type="category" width={80} />
-                <Tooltip 
-                  formatter={(value) => [`${value ?? 0}%`, "Acceptance Rate"]}
+                <XAxis type="number" domain={[0, isEnrichedData ? 100 : 50]} unit="%" />
+                <YAxis 
+                  dataKey={isEnrichedData ? "learner_status" : "language"} 
+                  type="category" 
+                  width={100} 
                 />
-                <Bar dataKey="acceptanceRate" fill="#7c3aed" radius={[0, 4, 4, 0]} />
+                <Tooltip 
+                  formatter={(value) => [`${value ?? 0}%`, isEnrichedData ? "Adoption Rate" : "Acceptance Rate"]}
+                />
+                <Bar 
+                  dataKey={isEnrichedData ? "adoption_rate" : "acceptanceRate"} 
+                  fill="#7c3aed" 
+                  radius={[0, 4, 4, 0]} 
+                />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -155,23 +209,29 @@ function CopilotInsightsTab() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Suggestions by Language</CardTitle>
-            <CardDescription>Distribution of code suggestions across languages</CardDescription>
+            <CardTitle>
+              {isEnrichedData ? "Copilot Users by Learner Status" : "Suggestions by Language"}
+            </CardTitle>
+            <CardDescription>
+              {isEnrichedData 
+                ? "Distribution of Copilot users across certification levels"
+                : "Distribution of code suggestions across languages"}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
-                  data={languageData.slice(0, 6)}
+                  data={isEnrichedData ? byLearnerStatus.slice(0, 6) : languageData.slice(0, 6)}
                   cx="50%"
                   cy="50%"
                   innerRadius={60}
                   outerRadius={100}
-                  dataKey="suggestions"
-                  nameKey="language"
+                  dataKey={isEnrichedData ? "copilot_users" : "suggestions"}
+                  nameKey={isEnrichedData ? "learner_status" : "language"}
                   label={({ name }: { name?: string }) => name || ""}
                 >
-                  {languageData.slice(0, 6).map((_, index) => (
+                  {(isEnrichedData ? byLearnerStatus : languageData).slice(0, 6).map((_, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
@@ -183,7 +243,7 @@ function CopilotInsightsTab() {
         </Card>
       </div>
 
-      {/* Language Details Table */}
+      {/* Learner Status Details Table */}
       <Card>
         <CardHeader>
           <CardTitle>Language Breakdown</CardTitle>

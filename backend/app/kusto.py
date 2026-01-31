@@ -628,16 +628,31 @@ class CopilotQueries:
     Uses copilot.copilot_unified_engagement on gh-analytics cluster.
     Schema: user_dotcom_id (long), copilot_product_pillar, copilot_product_feature,
             editor, language_id, num_events, day
+    
+    All queries filter to only include users from the ACE learning program.
     """
 
     CLUSTER = CLUSTER_GH
     DATABASE = "copilot"
 
     @staticmethod
-    def get_copilot_adoption_stats() -> str:
-        """Get Copilot adoption statistics from copilot_unified_engagement."""
+    def _get_learner_ids_cte() -> str:
+        """Common CTE to get learner dotcom IDs from ACE database."""
         return """
+        let learner_ids = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').users
+            | where dotcomid > 0
+            | distinct dotcom_id = tolong(dotcomid);
+        """
+
+    @staticmethod
+    def get_copilot_adoption_stats() -> str:
+        """Get Copilot adoption statistics from copilot_unified_engagement for learners only."""
+        return """
+        let learner_ids = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').users
+            | where dotcomid > 0
+            | distinct dotcom_id = tolong(dotcomid);
         copilot_unified_engagement
+        | where user_dotcom_id in (learner_ids)
         | summarize
             total_users = dcount(user_dotcom_id),
             active_30d = dcountif(user_dotcom_id, day >= ago(30d)),
@@ -648,9 +663,13 @@ class CopilotQueries:
 
     @staticmethod
     def get_copilot_usage_by_language() -> str:
-        """Get Copilot usage broken down by programming language."""
+        """Get Copilot usage broken down by programming language for learners only."""
         return """
+        let learner_ids = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').users
+            | where dotcomid > 0
+            | distinct dotcom_id = tolong(dotcomid);
         copilot_unified_engagement
+        | where user_dotcom_id in (learner_ids)
         | where isnotempty(language_id)
         | summarize
             users = dcount(user_dotcom_id),
@@ -662,9 +681,13 @@ class CopilotQueries:
 
     @staticmethod
     def get_copilot_trend(days: int = 30) -> str:
-        """Get Copilot usage trend over time."""
+        """Get Copilot usage trend over time for learners only."""
         return f"""
+        let learner_ids = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').users
+            | where dotcomid > 0
+            | distinct dotcom_id = tolong(dotcomid);
         copilot_unified_engagement
+        | where user_dotcom_id in (learner_ids)
         | where day >= ago({days}d)
         | summarize
             active_users = dcount(user_dotcom_id),
@@ -675,9 +698,13 @@ class CopilotQueries:
 
     @staticmethod
     def get_copilot_by_product_pillar() -> str:
-        """Get Copilot usage broken down by product pillar and feature."""
+        """Get Copilot usage broken down by product pillar and feature for learners only."""
         return """
+        let learner_ids = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').users
+            | where dotcomid > 0
+            | distinct dotcom_id = tolong(dotcomid);
         copilot_unified_engagement
+        | where user_dotcom_id in (learner_ids)
         | where day >= ago(30d)
         | summarize
             users = dcount(user_dotcom_id),
@@ -688,9 +715,13 @@ class CopilotQueries:
 
     @staticmethod
     def get_copilot_by_editor() -> str:
-        """Get Copilot usage broken down by editor."""
+        """Get Copilot usage broken down by editor for learners only."""
         return """
+        let learner_ids = cluster('gh-analytics.eastus.kusto.windows.net').database('ace').users
+            | where dotcomid > 0
+            | distinct dotcom_id = tolong(dotcomid);
         copilot_unified_engagement
+        | where user_dotcom_id in (learner_ids)
         | where day >= ago(30d) and isnotempty(editor)
         | summarize
             users = dcount(user_dotcom_id),

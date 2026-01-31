@@ -25,8 +25,11 @@ export async function GET() {
       return NextResponse.json({
         metrics: {
           totalLearners: metrics.total_learners || metrics.totalLearners || 0,
-          certifiedLearners: metrics.certified_users || metrics.certifiedUsers || 0,
-          totalCertifications: metrics.total_certifications || metrics.totalCertifications || 0,
+          certifiedUsers: metrics.certified_users || metrics.certifiedUsers || 0,
+          certifiedLearners: metrics.certified_users || metrics.certifiedUsers || 0, // alias
+          totalCertifications: metrics.total_certs_earned || metrics.totalCertifications || 0,
+          totalCertsEarned: metrics.total_certs_earned || metrics.totalCertsEarned || 0, // alias
+          totalLearningHours: metrics.total_learning_hours || metrics.totalLearningHours || 0,
           copilotUsers: metrics.copilot_users || 0,
           actionsUsers: metrics.actions_users || 0,
           securityUsers: metrics.security_users || 0,
@@ -34,6 +37,7 @@ export async function GET() {
           avgProductsAdopted: metrics.avg_products_adopted || metrics.avgProductsAdopted || 3,
           impactScore: metrics.impact_score || metrics.impactScore || 75,
           learningUsers: metrics.learning_users || metrics.learningUsers || 0,
+          prospectUsers: metrics.prospect_users || metrics.prospectUsers || 0,
           avgLearningHours: metrics.avg_learning_hours || metrics.avgLearningHours || 12,
           retentionRate: metrics.retention_rate || metrics.retentionRate || 85,
         },

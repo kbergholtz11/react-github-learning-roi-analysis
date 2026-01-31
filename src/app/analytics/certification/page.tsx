@@ -136,7 +136,8 @@ export default function CertificationROIPage() {
               <div className="text-right">Trend</div>
             </div>
             {statusBreakdown
-              .filter(s => s.status === "Certified" || s.status === "Multi-Certified" || s.status === "Specialist" || s.status === "Champion")
+              .filter(s => s.status === "Mastery" || s.status === "Power User" || s.status === "Practitioner" ||
+                           s.status === "Certified" || s.status === "Multi-Certified" || s.status === "Specialist" || s.status === "Champion")
               .map((status) => (
               <div key={status.status} className="grid grid-cols-4 gap-4 p-4 border-t items-center">
                 <div className="flex items-center gap-3">

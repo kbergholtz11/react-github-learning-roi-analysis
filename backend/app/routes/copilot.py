@@ -1,170 +1,228 @@
-"""Copilot analytics API routes."""
+"""Copilot analytics API routes.
+
+Provides Copilot usage insights for enrolled learners from enriched data.
+"""
 
 import logging
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.kusto import get_kusto_service, CopilotQueries
+from app.database import get_database, CopilotInsightQueries
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/copilot", tags=["copilot"])
 
 
 class CopilotStats(BaseModel):
-    """Copilot adoption statistics."""
-    total_users: int = 0
-    active_30d: int = 0
-    active_7d: int = 0
+    """Copilot adoption statistics for enrolled learners."""
+    total_learners: int = 0
+    copilot_users: int = 0
+    adoption_rate: float = 0.0
     total_events: int = 0
-    total_days_tracked: int = 0
+    total_contributions: int = 0
+    total_copilot_days: int = 0
+    avg_days_per_user: float = 0.0
+    avg_events_per_user: float = 0.0
 
 
-class LanguageUsage(BaseModel):
-    """Copilot usage by programming language."""
-    language: str
-    users: int
-    events: int
-    active_days: int = 0
-
-
-class DailyTrend(BaseModel):
-    """Daily Copilot usage trend."""
-    date: str
-    active_users: int
-    total_events: int = 0
-
-
-class LearnerImpact(BaseModel):
-    """Copilot impact by learner status."""
+class LearnerStatusUsage(BaseModel):
+    """Copilot usage by learner certification status."""
     learner_status: str
-    users: int
+    total_learners: int
+    copilot_users: int
+    adoption_rate: float
+    total_events: int = 0
     avg_events: float = 0.0
-    avg_active_days: float = 0.0
+    avg_days: float = 0.0
+
+
+class RegionUsage(BaseModel):
+    """Copilot usage by region."""
+    region: str
+    total_learners: int
+    copilot_users: int
+    adoption_rate: float
+    total_events: int = 0
+    avg_events: float = 0.0
+
+
+class TopUser(BaseModel):
+    """Top Copilot user."""
+    userhandle: Optional[str] = None
+    email: str
+    company_name: Optional[str] = None
+    learner_status: Optional[str] = None
+    copilot_days: int = 0
+    copilot_engagement_events: int = 0
+    copilot_contribution_events: int = 0
+    exams_passed: int = 0
+
+
+class CertificationComparison(BaseModel):
+    """Copilot adoption comparison by certification status."""
+    cert_status: str
+    total_learners: int
+    copilot_users: int
+    adoption_rate: float
+    avg_events: float = 0.0
+    avg_days: float = 0.0
 
 
 class CopilotAnalyticsResponse(BaseModel):
-    """Complete Copilot analytics response."""
+    """Complete Copilot analytics response for enrolled learners."""
     stats: CopilotStats
-    by_language: List[LanguageUsage]
-    trend: List[DailyTrend]
-    by_learner_status: List[LearnerImpact]
+    by_learner_status: List[LearnerStatusUsage]
+    by_region: List[RegionUsage]
+    cert_comparison: List[CertificationComparison]
+    source: str = "enriched"
 
 
 @router.get("/stats", response_model=CopilotStats)
 async def get_copilot_stats():
-    """Get Copilot adoption statistics from copilot_unified_engagement."""
-    kusto = get_kusto_service()
-
-    if not kusto.is_available:
+    """Get Copilot adoption statistics for all enrolled learners."""
+    db = get_database()
+    
+    if not db.is_available:
         return CopilotStats()
 
     try:
-        rows = kusto.execute_on_gh_copilot(CopilotQueries.get_copilot_adoption_stats())
-        if rows:
-            row = rows[0]
-            return CopilotStats(
-                total_users=row.get("total_users", 0),
-                active_30d=row.get("active_30d", 0),
-                active_7d=row.get("active_7d", 0),
-                total_events=row.get("total_events", 0),
-                total_days_tracked=row.get("total_days_tracked", 0),
-            )
+        stats = CopilotInsightQueries.get_copilot_stats()
+        return CopilotStats(
+            total_learners=int(stats.get("total_learners", 0)),
+            copilot_users=int(stats.get("copilot_users", 0)),
+            adoption_rate=float(stats.get("adoption_rate", 0)),
+            total_events=int(stats.get("total_events", 0) or 0),
+            total_contributions=int(stats.get("total_contributions", 0) or 0),
+            total_copilot_days=int(stats.get("total_copilot_days", 0) or 0),
+            avg_days_per_user=float(stats.get("avg_days_per_user", 0) or 0),
+            avg_events_per_user=float(stats.get("avg_events_per_user", 0) or 0),
+        )
     except Exception as e:
-        logger.warning(f"Kusto query failed: {e}")
-
-    return CopilotStats()
-
-
-@router.get("/by-language", response_model=List[LanguageUsage])
-async def get_copilot_by_language():
-    """Get Copilot usage by programming language from copilot_unified_engagement."""
-    kusto = get_kusto_service()
-
-    if not kusto.is_available:
-        return []
-
-    try:
-        rows = kusto.execute_on_gh_copilot(CopilotQueries.get_copilot_usage_by_language())
-        if rows:
-            return [
-                LanguageUsage(
-                    language=row.get("language_id", "Unknown"),
-                    users=row.get("users", 0),
-                    events=row.get("events", 0),
-                    active_days=row.get("active_days", 0),
-                )
-                for row in rows
-            ]
-    except Exception as e:
-        logger.warning(f"Kusto query failed: {e}")
-
-    return []
+        logger.warning(f"Query failed: {e}")
+        return CopilotStats()
 
 
-@router.get("/trend", response_model=List[DailyTrend])
-async def get_copilot_trend(days: int = 30):
-    """Get Copilot usage trend over time from copilot_unified_engagement."""
-    kusto = get_kusto_service()
-
-    if not kusto.is_available:
-        return []
-
-    try:
-        rows = kusto.execute_on_gh_copilot(CopilotQueries.get_copilot_trend(days))
-        if rows:
-            return [
-                DailyTrend(
-                    date=str(row.get("day", ""))[:10],
-                    active_users=row.get("active_users", 0),
-                    total_events=row.get("total_events", 0),
-                )
-                for row in rows
-            ]
-    except Exception as e:
-        logger.warning(f"Kusto query failed: {e}")
-
-    return []
-
-
-@router.get("/by-learner-status", response_model=List[LearnerImpact])
+@router.get("/by-learner-status", response_model=List[LearnerStatusUsage])
 async def get_copilot_by_learner_status():
-    """Get Copilot impact correlated with learning status."""
-    kusto = get_kusto_service()
-    
-    if not kusto.is_available:
+    """Get Copilot usage broken down by learner certification status."""
+    db = get_database()
+
+    if not db.is_available:
         return []
 
     try:
-        rows = kusto.execute_on_gh_copilot(CopilotQueries.get_copilot_impact_by_learner_status())
-        if rows:
-            return [
-                LearnerImpact(
-                    learner_status=row.get("learner_status", "Unknown"),
-                    users=row.get("users", 0),
-                    avg_events=row.get("avg_events", 0.0),
-                    avg_active_days=row.get("avg_active_days", 0.0),
-                )
-                for row in rows
-            ]
+        rows = CopilotInsightQueries.get_copilot_by_learner_status()
+        return [
+            LearnerStatusUsage(
+                learner_status=row.get("learner_status", "Unknown"),
+                total_learners=int(row.get("total_learners", 0)),
+                copilot_users=int(row.get("copilot_users", 0)),
+                adoption_rate=float(row.get("adoption_rate", 0)),
+                total_events=int(row.get("total_events", 0) or 0),
+                avg_events=float(row.get("avg_events", 0) or 0),
+                avg_days=float(row.get("avg_days", 0) or 0),
+            )
+            for row in rows
+        ]
     except Exception as e:
-        logger.warning(f"Kusto query failed: {e}")
+        logger.warning(f"Query failed: {e}")
+        return []
 
-    return []
+
+@router.get("/by-region", response_model=List[RegionUsage])
+async def get_copilot_by_region():
+    """Get Copilot usage broken down by region."""
+    db = get_database()
+
+    if not db.is_available:
+        return []
+
+    try:
+        rows = CopilotInsightQueries.get_copilot_by_region()
+        return [
+            RegionUsage(
+                region=row.get("region", "Unknown"),
+                total_learners=int(row.get("total_learners", 0)),
+                copilot_users=int(row.get("copilot_users", 0)),
+                adoption_rate=float(row.get("adoption_rate", 0)),
+                total_events=int(row.get("total_events", 0) or 0),
+                avg_events=float(row.get("avg_events", 0) or 0),
+            )
+            for row in rows
+        ]
+    except Exception as e:
+        logger.warning(f"Query failed: {e}")
+        return []
+
+
+@router.get("/top-users", response_model=List[TopUser])
+async def get_copilot_top_users(limit: int = 20):
+    """Get top Copilot users by engagement."""
+    db = get_database()
+
+    if not db.is_available:
+        return []
+
+    try:
+        rows = CopilotInsightQueries.get_copilot_top_users(limit)
+        return [
+            TopUser(
+                userhandle=row.get("userhandle"),
+                email=row.get("email", ""),
+                company_name=row.get("company_name"),
+                learner_status=row.get("learner_status"),
+                copilot_days=int(row.get("copilot_days", 0) or 0),
+                copilot_engagement_events=int(row.get("copilot_engagement_events", 0) or 0),
+                copilot_contribution_events=int(row.get("copilot_contribution_events", 0) or 0),
+                exams_passed=int(row.get("exams_passed", 0) or 0),
+            )
+            for row in rows
+        ]
+    except Exception as e:
+        logger.warning(f"Query failed: {e}")
+        return []
+
+
+@router.get("/cert-comparison", response_model=List[CertificationComparison])
+async def get_copilot_cert_comparison():
+    """Compare Copilot adoption between certified and non-certified learners."""
+    db = get_database()
+
+    if not db.is_available:
+        return []
+
+    try:
+        rows = CopilotInsightQueries.get_copilot_vs_certification()
+        return [
+            CertificationComparison(
+                cert_status=row.get("cert_status", "Unknown"),
+                total_learners=int(row.get("total_learners", 0)),
+                copilot_users=int(row.get("copilot_users", 0)),
+                adoption_rate=float(row.get("adoption_rate", 0)),
+                avg_events=float(row.get("avg_events", 0) or 0),
+                avg_days=float(row.get("avg_days", 0) or 0),
+            )
+            for row in rows
+        ]
+    except Exception as e:
+        logger.warning(f"Query failed: {e}")
+        return []
 
 
 @router.get("", response_model=CopilotAnalyticsResponse)
 async def get_copilot_analytics():
-    """Get complete Copilot analytics."""
+    """Get complete Copilot analytics for enrolled learners."""
     stats = await get_copilot_stats()
-    by_language = await get_copilot_by_language()
-    trend = await get_copilot_trend()
     by_learner_status = await get_copilot_by_learner_status()
+    by_region = await get_copilot_by_region()
+    cert_comparison = await get_copilot_cert_comparison()
     
     return CopilotAnalyticsResponse(
         stats=stats,
-        by_language=by_language,
-        trend=trend,
         by_learner_status=by_learner_status,
+        by_region=by_region,
+        cert_comparison=cert_comparison,
+        source="enriched",
     )

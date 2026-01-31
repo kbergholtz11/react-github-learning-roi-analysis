@@ -16,8 +16,12 @@ from skills.github.com to track hands-on learning.
 """
 
 import os
+import sys
 import json
 import csv
+
+# Increase CSV field size limit for large data files like learners_enriched.csv
+csv.field_size_limit(sys.maxsize)
 from datetime import datetime
 from pathlib import Path
 import requests
@@ -79,12 +83,55 @@ def get_headers():
     return headers
 
 
-def fetch_course_forks(course_repo: str, max_pages: int = 10) -> List[Dict]:
+def fetch_repo_stats(course_repo: str) -> Dict:
+    """
+    Fetch repository stats including fork count.
+    This is a single API call that gives us the total fork count.
+    """
+    try:
+        url = f"{API_BASE}/repos/{course_repo}"
+        response = requests.get(url, headers=get_headers())
+        
+        if response.status_code == 404:
+            print(f"   ⚠️  Repository not found: {course_repo}")
+            return {"forks_count": 0, "exists": False}
+        
+        if response.status_code == 403:
+            remaining = response.headers.get("X-RateLimit-Remaining", "?")
+            print(f"   ⚠️  Rate limited (remaining: {remaining})")
+            return {"forks_count": 0, "rate_limited": True}
+        
+        if response.status_code == 401:
+            print(f"   ⚠️  Authentication error - GITHUB_TOKEN may be missing or invalid")
+            return {"forks_count": 0, "auth_error": True}
+            
+        response.raise_for_status()
+        data = response.json()
+        return {
+            "forks_count": data.get("forks_count", 0),
+            "exists": True,
+            "description": data.get("description", ""),
+            "stargazers_count": data.get("stargazers_count", 0),
+        }
+    except requests.exceptions.RequestException as e:
+        print(f"   ⚠️  Error fetching repo stats for {course_repo}: {e}")
+        return {"forks_count": 0, "error": str(e)}
+
+
+def fetch_course_forks(course_repo: str, max_pages: int = 10) -> tuple[List[Dict], int]:
     """
     Fetch all forks of a skills course repository.
     
     Each fork represents a user starting the course.
+    Returns tuple of (forks_list, total_fork_count_from_repo)
     """
+    # First get the repo stats for accurate fork count
+    repo_stats = fetch_repo_stats(course_repo)
+    total_forks = repo_stats.get("forks_count", 0)
+    
+    if not repo_stats.get("exists", True) or repo_stats.get("rate_limited") or repo_stats.get("auth_error"):
+        return [], total_forks
+    
     forks = []
     
     for page in range(1, max_pages + 1):
@@ -97,7 +144,16 @@ def fetch_course_forks(course_repo: str, max_pages: int = 10) -> List[Dict]:
             )
             
             if response.status_code == 404:
-                return []  # Course not found
+                return [], total_forks  # Course not found
+            
+            if response.status_code == 403:
+                remaining = response.headers.get("X-RateLimit-Remaining", "?")
+                print(f"   ⚠️  Rate limited fetching forks (remaining: {remaining})")
+                break
+            
+            if response.status_code == 401:
+                print(f"   ⚠️  Authentication error fetching forks")
+                break
             
             response.raise_for_status()
             page_forks = response.json()
@@ -113,10 +169,10 @@ def fetch_course_forks(course_repo: str, max_pages: int = 10) -> List[Dict]:
             time.sleep(0.5)  # Rate limiting
             
         except requests.exceptions.RequestException as e:
-            print(f"   Error fetching forks for {course_repo}: {e}")
+            print(f"   ⚠️  Error fetching forks for {course_repo}: {e}")
             break
     
-    return forks
+    return forks, total_forks
 
 
 def check_course_completion(owner: str, repo_name: str) -> Dict:
@@ -169,17 +225,31 @@ def check_course_completion(owner: str, repo_name: str) -> Dict:
 
 
 def load_user_handles() -> set:
-    """Load user handles from unified_users.csv."""
+    """Load user handles from unified_users.csv and learners_enriched.csv."""
     handles = set()
-    csv_path = DATA_DIR / "unified_users.csv"
     
-    if csv_path.exists():
-        with open(csv_path, "r") as f:
+    # Load from unified_users.csv (user_handle column)
+    unified_path = DATA_DIR / "unified_users.csv"
+    if unified_path.exists():
+        with open(unified_path, "r") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 handle = row.get("user_handle", "").strip().lower()
                 if handle:
                     handles.add(handle)
+        print(f"   Loaded {len(handles)} handles from unified_users.csv")
+    
+    # Also load from learners_enriched.csv (userhandle column) - 270k+ additional users
+    enriched_path = DATA_DIR / "learners_enriched.csv"
+    initial_count = len(handles)
+    if enriched_path.exists():
+        with open(enriched_path, "r") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                handle = row.get("userhandle", "").strip().lower()
+                if handle:
+                    handles.add(handle)
+        print(f"   Loaded {len(handles) - initial_count} additional handles from learners_enriched.csv")
     
     return handles
 
@@ -208,10 +278,10 @@ def main():
         print(f"\n📚 {name}")
         print(f"   Fetching forks from {repo}...")
         
-        forks = fetch_course_forks(repo)
+        forks, total_forks = fetch_course_forks(repo)
         
-        if not forks:
-            print(f"   No forks found")
+        if not forks and total_forks == 0:
+            print(f"   No forks found (or couldn't fetch)")
             course_stats.append({
                 "course": name,
                 "repo": repo,
@@ -223,7 +293,11 @@ def main():
             })
             continue
         
-        print(f"   Found {len(forks)} forks")
+        # Use total_forks from repo stats if we couldn't fetch all forks
+        if total_forks > 0:
+            print(f"   Total forks (from repo): {total_forks}")
+        if forks:
+            print(f"   Fetched {len(forks)} fork details")
         
         # Track course-level stats
         known_learner_count = 0
@@ -270,7 +344,7 @@ def main():
             "repo": repo,
             "category": course["category"],
             "difficulty": course["difficulty"],
-            "total_forks": len(forks),
+            "total_forks": total_forks if total_forks > len(forks) else len(forks),
             "known_learners": known_learner_count,
             "completed": completed_count,
         })
@@ -291,6 +365,17 @@ def main():
     print(f"✅ Saved course stats to {stats_path}")
     
     # Save enrollments for known learners
+    # Save ALL enrollments (not just known learners)
+    if all_enrollments:
+        all_enrollments_path = DATA_DIR / "skills_all_enrollments.csv"
+        with open(all_enrollments_path, "w", newline="") as f:
+            fieldnames = ["handle", "course", "category", "difficulty", "fork_created", "fork_updated", "is_known_learner", "has_activity", "likely_completed", "commit_count"]
+            writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+            writer.writeheader()
+            writer.writerows(all_enrollments)
+        print(f"✅ Saved {len(all_enrollments):,} total enrollments to {all_enrollments_path}")
+    
+    # Save known learner enrollments separately (with detailed activity info)
     known_enrollments = [e for e in all_enrollments if e["is_known_learner"]]
     if known_enrollments:
         enrollments_path = DATA_DIR / "skills_enrollments.csv"
@@ -299,9 +384,9 @@ def main():
             writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
             writer.writeheader()
             writer.writerows(known_enrollments)
-        print(f"✅ Saved {len(known_enrollments)} learner enrollments to {enrollments_path}")
+        print(f"✅ Saved {len(known_enrollments)} known learner enrollments to {enrollments_path}")
     
-    # Save full JSON
+    # Save full JSON with all stats
     json_path = DATA_DIR / "skills_progress.json"
     with open(json_path, "w") as f:
         json.dump({
@@ -309,6 +394,13 @@ def main():
             "total_courses": len(SKILLS_COURSES),
             "total_enrollments": len(all_enrollments),
             "known_learner_enrollments": len(known_enrollments),
+            "all_enrollments_by_course": {
+                c["course"]: {
+                    "total": c["total_forks"],
+                    "known": c["known_learners"],
+                    "completed": c["completed"],
+                } for c in course_stats
+            },
             "generated_at": datetime.now().isoformat(),
         }, f, indent=2)
     print(f"✅ Saved JSON to {json_path}")
