@@ -22,14 +22,23 @@ export function AnimatedCounter({
   className,
   animate = true,
 }: AnimatedCounterProps) {
-  const [displayValue, setDisplayValue] = useState(animate ? 0 : value);
-  const previousValue = useRef(0);
+  // Initialize with value if not animating
+  const [displayValue, setDisplayValue] = useState(value);
+  const previousValue = useRef(value);
   const animationRef = useRef<number | undefined>(undefined);
+  const isFirstRender = useRef(true);
 
   useEffect(() => {
-    if (!animate) {
-      setDisplayValue(value);
+    // Skip animation on first render
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
       return;
+    }
+    
+    if (!animate) {
+      // Use timeout to avoid synchronous setState in effect
+      const timer = setTimeout(() => setDisplayValue(value), 0);
+      return () => clearTimeout(timer);
     }
 
     const startValue = previousValue.current;

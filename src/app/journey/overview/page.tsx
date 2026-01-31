@@ -9,12 +9,12 @@ import {
   TrendingUp, 
   Zap, 
   Award, 
-  Loader2, 
   BookOpen,
   Code2,
   Target,
   ArrowUpRight,
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useSkillJourney, useTopSkilledLearners } from "@/hooks/use-data";
 
 export default function JourneyOverviewPage() {
@@ -25,8 +25,18 @@ export default function JourneyOverviewPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="space-y-6" aria-busy="true" aria-label="Loading journey overview">
+        <div className="flex items-center justify-between">
+          <div>
+            <Skeleton className="h-8 w-72 mb-2" />
+            <Skeleton className="h-4 w-96" />
+          </div>
+          <Skeleton className="h-6 w-32" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-32" />)}
+        </div>
+        <Skeleton className="h-80" />
       </div>
     );
   }

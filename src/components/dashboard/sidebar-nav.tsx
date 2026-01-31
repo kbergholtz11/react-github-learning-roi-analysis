@@ -47,36 +47,37 @@ const navItems = [
   {
     title: "Overview",
     items: [
-      { title: "Home", href: "/", icon: Home },
-      { title: "Executive Summary", href: "/executive/summary", icon: FileText },
-      { title: "Learning Insights", href: "/insights", icon: Sparkles },
+      { title: "Home", href: "/", icon: Home, prefetch: true },
+      { title: "Executive Summary", href: "/executive/summary", icon: FileText, prefetch: true },
+      { title: "Learning Insights", href: "/insights", icon: Sparkles, prefetch: true },
     ],
   },
   {
     title: "Learning Journey",
     items: [
-      { title: "Journey Overview", href: "/journey/overview", icon: Target },
-      { title: "Journey Funnel", href: "/journey/funnel", icon: Filter },
-      { title: "Learner Explorer", href: "/journey/explorer", icon: Users },
-      { title: "Learner Profile", href: "/journey/profile", icon: UserCircle },
+      { title: "Journey Overview", href: "/journey/overview", icon: Target, prefetch: true },
+      { title: "Journey Funnel", href: "/journey/funnel", icon: Filter, prefetch: true },
+      { title: "Learner Explorer", href: "/journey/explorer", icon: Users, prefetch: false }, // Heavy page, don't prefetch
+      { title: "Learner Profile", href: "/journey/profile", icon: UserCircle, prefetch: false },
     ],
   },
   {
     title: "Skills & Growth",
     items: [
-      { title: "Progression", href: "/progression", icon: LineChart },
-      { title: "Skills Analysis", href: "/skills", icon: Zap },
-      { title: "Skills Analytics", href: "/skills/analytics", icon: BarChart2 },
-      { title: "Certifications", href: "/analytics/certification", icon: Award },
+      { title: "Progression", href: "/progression", icon: LineChart, prefetch: true },
+      { title: "Skills Analysis", href: "/skills", icon: Zap, prefetch: true },
+      { title: "Skills Analytics", href: "/skills/analytics", icon: BarChart2, prefetch: false },
+      { title: "Certifications", href: "/analytics/certification", icon: Award, prefetch: true },
     ],
   },
   {
     title: "Impact & Correlation",
     items: [
-      { title: "Learning Impact", href: "/impact", icon: TrendingUp },
-      { title: "Product Alignment", href: "/alignment", icon: Package },
-      { title: "Behavior Change", href: "/behavior", icon: Activity },
-      { title: "Compare Cohorts", href: "/compare", icon: BarChart2 },
+      { title: "Learning Impact", href: "/impact", icon: TrendingUp, prefetch: true },
+      { title: "Product Adoption", href: "/adoption", icon: Package, prefetch: true },
+      { title: "Product Alignment", href: "/alignment", icon: Package, prefetch: false },
+      { title: "Behavior Change", href: "/behavior", icon: Activity, prefetch: true },
+      { title: "Compare Cohorts", href: "/compare", icon: BarChart2, prefetch: false },
     ],
   },
 ];
@@ -122,7 +123,11 @@ export function DashboardSidebar() {
                           : "text-muted-foreground hover:bg-accent hover:text-foreground"
                       )}
                     >
-                      <Link href={item.href} aria-current={pathname === item.href ? 'page' : undefined}>
+                      <Link 
+                        href={item.href} 
+                        prefetch={item.prefetch}
+                        aria-current={pathname === item.href ? 'page' : undefined}
+                      >
                         <item.icon className="h-4 w-4" aria-hidden="true" />
                         {item.title}
                       </Link>

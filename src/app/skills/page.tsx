@@ -1,9 +1,11 @@
 "use client";
 
+import { useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Zap, Award, TrendingUp, Target, Loader2, BookOpen, ArrowRight, GitFork, Users, BarChart3 } from "lucide-react";
 import { useMetrics, useJourney, useImpact, useSkillsCourses } from "@/hooks/use-data";
 import Link from "next/link";
@@ -31,31 +33,48 @@ export default function SkillsDashboardPage() {
   const { data: skillsData, isLoading: skillsLoading } = useSkillsCourses();
   
   const isLoading = metricsLoading || journeyLoading || impactLoading || skillsLoading;
+
+  // Memoize expensive calculations - must be called before any early returns
+  const { totalLearners, certified, certificationLevels, avgProficiency, stageImpact } = useMemo(() => {
+    const total = metrics?.metrics?.totalLearners || 0;
+    const certifiedCount = metrics?.metrics?.certifiedUsers || 0;
+    const levels = {
+      "0": metrics?.metrics?.prospectUsers || 0,
+      "1": metrics?.metrics?.certifiedUsers || 0,
+      "2+": (metrics?.metrics?.totalCertsEarned || 0) - (metrics?.metrics?.certifiedUsers || 0),
+    };
+    
+    const stageImpactData = impact?.stageImpact || [];
+    const proficiency = stageImpactData.length > 0
+      ? Math.round(stageImpactData.reduce((sum: number, s: { avgUsageIncrease: number }) => sum + s.avgUsageIncrease, 0) / stageImpactData.length)
+      : 0;
+    
+    return { 
+      totalLearners: total, 
+      certified: certifiedCount, 
+      certificationLevels: levels, 
+      avgProficiency: proficiency,
+      stageImpact: stageImpactData,
+    };
+  }, [metrics, impact]);
   
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="space-y-6" aria-busy="true" aria-label="Loading skills data">
+        <div className="flex justify-between items-start">
+          <div>
+            <Skeleton className="h-8 w-72 mb-2" />
+            <Skeleton className="h-4 w-96" />
+          </div>
+          <Skeleton className="h-10 w-40" />
+        </div>
+        <Skeleton className="h-48 w-full" />
+        <div className="grid gap-4 md:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-28" />)}
+        </div>
       </div>
     );
   }
-
-  // Calculate metrics from real data
-  const totalLearners = metrics?.metrics?.totalLearners || 0;
-  const certified = metrics?.metrics?.certifiedUsers || 0;
-  const certificationLevels = {
-    "0": metrics?.metrics?.prospectUsers || 0,
-    "1": metrics?.metrics?.certifiedUsers || 0,
-    "2+": (metrics?.metrics?.totalCertsEarned || 0) - (metrics?.metrics?.certifiedUsers || 0),
-  };
-  
-  // Get stage impact for skill metrics - using correct property names
-  const stageImpact = impact?.stageImpact || [];
-  
-  // Calculate average usage increase as a proxy for proficiency
-  const avgProficiency = stageImpact.length > 0
-    ? Math.round(stageImpact.reduce((sum: number, s: { avgUsageIncrease: number }) => sum + s.avgUsageIncrease, 0) / stageImpact.length)
-    : 0;
 
   return (
     <div className="space-y-6">
@@ -103,7 +122,7 @@ export default function SkillsDashboardPage() {
                 <div className="text-xs text-muted-foreground">Courses</div>
               </div>
               <div className="text-center p-3 bg-muted/50 rounded-lg">
-                <div className="text-2xl font-bold">{(skillsData.uniqueLearners || 0).toLocaleString()}</div>
+                <div className="text-2xl font-bold">{(skillsData.uniqueKnownLearners || skillsData.totalUniqueLearners || 0).toLocaleString()}</div>
                 <div className="text-xs text-muted-foreground">Unique Learners</div>
               </div>
               <div className="text-center p-3 bg-muted/50 rounded-lg">

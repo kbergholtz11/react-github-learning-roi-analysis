@@ -6,7 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SimpleBarChart, SimpleAreaChart } from "@/components/dashboard";
 import { ExportButton } from "@/components/export-button";
-import { ArrowUp, ArrowDown, Minus, Layers, Calendar, Target, Loader2 } from "lucide-react";
+import { ArrowUp, ArrowDown, Minus, Layers, Calendar, Target } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useMetrics, useJourney, useImpact } from "@/hooks/use-data";
 
 export default function ComparisonPage() {
@@ -32,8 +33,18 @@ export default function ComparisonPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="space-y-6" aria-busy="true" aria-label="Loading comparison data">
+        <div className="flex items-center justify-between">
+          <div>
+            <Skeleton className="h-8 w-48 mb-2" />
+            <Skeleton className="h-4 w-80" />
+          </div>
+        </div>
+        <Skeleton className="h-12 w-96" />
+        <div className="grid gap-4 md:grid-cols-3">
+          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-32" />)}
+        </div>
+        <Skeleton className="h-80" />
       </div>
     );
   }
@@ -56,10 +67,10 @@ export default function ComparisonPage() {
   }));
 
   // Monthly progression data - use correct property names
-  const monthlyData = journey?.monthlyProgression?.map((m: { name: string; certified: number; learning: number; multiCert: number }) => ({
+  const monthlyData = journey?.monthlyProgression?.map((m) => ({
     name: m.name,
-    certified: m.certified,
-    learning: m.learning,
+    certified: m.certified ?? 0,
+    learning: m.learning ?? 0,
   })) || [];
 
   // Stage impact data
@@ -185,14 +196,16 @@ export default function ComparisonPage() {
                   <div className="text-right">Learning</div>
                   <div className="text-right">Change</div>
                 </div>
-                {journey?.monthlyProgression?.map((row: { name: string; certified: number; learning: number; multiCert: number }, index: number, arr: { name: string; certified: number; learning: number; multiCert: number }[]) => {
-                  const prevCertified = index > 0 ? arr[index - 1].certified : row.certified;
-                  const change = prevCertified > 0 ? Math.round(((row.certified - prevCertified) / prevCertified) * 100) : 0;
+                {journey?.monthlyProgression?.map((row, index, arr) => {
+                  const certified = row.certified ?? 0;
+                  const learning = row.learning ?? 0;
+                  const prevCertified = index > 0 ? (arr[index - 1].certified ?? 0) : certified;
+                  const change = prevCertified > 0 ? Math.round(((certified - prevCertified) / prevCertified) * 100) : 0;
                   return (
                     <div key={row.name} className="grid grid-cols-4 gap-4 p-4 border-t items-center">
                       <div className="font-medium">{row.name}</div>
-                      <div className="text-right font-mono">{row.certified.toLocaleString()}</div>
-                      <div className="text-right font-mono">{row.learning.toLocaleString()}</div>
+                      <div className="text-right font-mono">{certified.toLocaleString()}</div>
+                      <div className="text-right font-mono">{learning.toLocaleString()}</div>
                       <div className={`text-right flex items-center justify-end gap-1 ${getTrendColor(change)}`}>
                         {getTrendIcon(change)}
                         <span className="font-medium">{Math.abs(change)}%</span>

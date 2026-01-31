@@ -1,20 +1,19 @@
 "use client";
 
+import { useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Loader2,
   Sparkles,
-  Code2,
   GitPullRequest,
   GraduationCap,
   TrendingUp,
-  Languages,
   Users,
   CheckCircle2,
-  MessageSquare,
   GitCommit,
   Eye,
   BookOpen,
@@ -38,23 +37,52 @@ import {
   Cell,
   Legend,
 } from "recharts";
+import { formatNumber } from "@/lib/utils";
 
 const COLORS = ["#7c3aed", "#2563eb", "#059669", "#d97706", "#dc2626", "#8b5cf6", "#0891b2", "#65a30d"];
-
-function formatNumber(num: number): string {
-  if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-  if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
-  return num.toString();
-}
 
 // Copilot Insights Tab
 function CopilotInsightsTab() {
   const { data, isLoading, error } = useCopilotInsights();
 
+  // Memoize derived data
+  const { languageData, totals, stats, isEnrichedData, byLearnerStatus } = useMemo(() => {
+    const languages = data?.languages?.slice(0, 10) || [];
+    const totalsData = (data?.totals || {}) as {
+      totalSuggestions?: number;
+      avgAcceptanceRate?: number;
+      totalLanguages?: number;
+    };
+    const statsData = (data?.stats || {}) as {
+      totalLearners?: number;
+      copilotUsers?: number;
+      adoptionRate?: number;
+      totalEvents?: number;
+      avgDaysPerUser?: number;
+    };
+    return {
+      languageData: languages,
+      totals: totalsData,
+      stats: statsData,
+      isEnrichedData: data?.source === "enriched",
+      byLearnerStatus: data?.byLearnerStatus || [],
+    };
+  }, [data]);
+
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="space-y-6" aria-busy="true" aria-label="Loading Copilot insights">
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-4 w-4 rounded-full" />
+          <Skeleton className="h-4 w-64" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-28" />)}
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Skeleton className="h-80" />
+          <Skeleton className="h-80" />
+        </div>
       </div>
     );
   }
@@ -76,12 +104,6 @@ function CopilotInsightsTab() {
       </Card>
     );
   }
-
-  const languageData = data.languages?.slice(0, 10) || [];
-  const totals = data.totals || {};
-  const stats = data.stats || {};
-  const isEnrichedData = data.source === "enriched";
-  const byLearnerStatus = data.byLearnerStatus || [];
 
   return (
     <div className="space-y-6">
@@ -231,7 +253,7 @@ function CopilotInsightsTab() {
                   nameKey={isEnrichedData ? "learner_status" : "language"}
                   label={({ name }: { name?: string }) => name || ""}
                 >
-                  {(isEnrichedData ? byLearnerStatus : languageData).slice(0, 6).map((_, index) => (
+                  {(isEnrichedData ? byLearnerStatus : languageData).slice(0, 6).map((_: unknown, index: number) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>

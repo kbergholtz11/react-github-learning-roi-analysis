@@ -22,6 +22,9 @@ import type {
   EnrichedLearner,
 } from "@/types/data";
 
+// Backend URL - uses env var in production, falls back to localhost in development
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+
 // ============================================================================
 // Query Keys (centralized for cache management)
 // ============================================================================
@@ -205,6 +208,39 @@ interface ImpactResponse {
 }
 
 // ============================================================================
+// Placeholder Data (for instant loading while fetching fresh data)
+// ============================================================================
+
+const PLACEHOLDER_METRICS: MetricsResponse = {
+  metrics: {
+    totalLearners: 0,
+    activeLearners: 0,
+    certifiedUsers: 0,
+    learningUsers: 0,
+    prospectUsers: 0,
+    avgUsageIncrease: 0,
+    avgProductsAdopted: 0,
+    impactScore: 0,
+    avgLearningHours: 0,
+    retentionRate: 0,
+    totalLearningHours: 0,
+    totalCertsEarned: 0,
+  },
+  funnel: [],
+  statusBreakdown: [],
+  source: "aggregated",
+};
+
+const PLACEHOLDER_SEGMENTS: SegmentCounts = {
+  all: 0,
+  at_risk: 0,
+  rising_stars: 0,
+  ready_to_advance: 0,
+  inactive: 0,
+  high_value: 0,
+};
+
+// ============================================================================
 // Dashboard & Metrics Hooks
 // ============================================================================
 
@@ -217,6 +253,7 @@ export function useMetrics() {
       return res.json();
     },
     staleTime: 1000 * 60 * 5, // 5 minutes
+    placeholderData: PLACEHOLDER_METRICS,
   });
 }
 
@@ -244,6 +281,7 @@ export function useLearners(filters: LearnerFilters = {}) {
       return res.json();
     },
     staleTime: 1000 * 60 * 2, // 2 minutes
+    placeholderData: (previousData) => previousData, // Keep stale data while fetching
   });
 }
 
@@ -275,9 +313,10 @@ export interface SegmentCounts {
 export function useSegmentCounts() {
   return useQuery<SegmentCounts>({
     queryKey: ["segment-counts"],
+    placeholderData: PLACEHOLDER_SEGMENTS,
     queryFn: async () => {
       try {
-        const res = await fetch("http://localhost:8000/api/enriched/stats/segments");
+        const res = await fetch(`${BACKEND_URL}/api/enriched/stats/segments`);
         if (res.ok) {
           return res.json();
         }
@@ -314,7 +353,7 @@ export function useEnrichedLearners(options: {
     queryFn: async () => {
       // Try FastAPI backend first
       try {
-        const res = await fetch(`http://localhost:8000/api/enriched/learners?${params.toString()}`);
+        const res = await fetch(`${BACKEND_URL}/api/enriched/learners?${params.toString()}`);
         if (res.ok) {
           return res.json();
         }
@@ -343,7 +382,7 @@ export function useEnrichedLearner(email: string) {
       
       // Try FastAPI backend first
       try {
-        const res = await fetch(`http://localhost:8000/api/enriched/learners?search=${encodeURIComponent(email)}&limit=1`);
+        const res = await fetch(`${BACKEND_URL}/api/enriched/learners?search=${encodeURIComponent(email)}&limit=1`);
         if (res.ok) {
           const data = await res.json();
           return data.learners?.[0] || null;
@@ -372,7 +411,7 @@ export function useEnrichedStats() {
     queryFn: async () => {
       // Try FastAPI backend first
       try {
-        const res = await fetch("http://localhost:8000/api/enriched/stats");
+        const res = await fetch(`${BACKEND_URL}/api/enriched/stats`);
         if (res.ok) {
           return res.json();
         }

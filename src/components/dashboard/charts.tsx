@@ -712,3 +712,16 @@ export function CorrelationMatrix({ data, labels }: CorrelationMatrixProps) {
     />
   );
 }
+
+// Default export for lazy loading
+const Charts = {
+  DonutChart,
+  SimpleBarChart,
+  SimpleAreaChart,
+  ScatterPlot,
+  TrendLineChart,
+  Heatmap,
+  CorrelationMatrix,
+};
+
+export default Charts;

@@ -15,6 +15,7 @@ import {
   Clock, Calendar, Zap, GraduationCap, Trophy
 } from "lucide-react";
 import { useUrlParams } from "@/hooks/use-url-params";
+import { useDebounce } from "@/hooks/use-debounce";
 import { useEnrichedLearners, useSegmentCounts } from "@/hooks/use-unified-data";
 import type { LearnerStatus, EnrichedLearner, DataQualityLevel } from "@/types/data";
 
@@ -267,16 +268,24 @@ function isHighValue(user: EnrichedLearner): boolean {
 // Company breakdown component  
 function CompanyBreakdown({ learners }: { learners: EnrichedLearner[] }) {
   const companyData = useMemo(() => {
-    const companies: Record<string, { count: number; certified: number; copilotUsers: number }> = {};
+    const companies: Record<string, { 
+      count: number; 
+      certified: number; 
+      copilotUsers90d: number; 
+      copilotEverUsed: number;
+    }> = {};
     
     learners.forEach(learner => {
       const company = getCompany(learner) || "Unknown";
       if (!companies[company]) {
-        companies[company] = { count: 0, certified: 0, copilotUsers: 0 };
+        companies[company] = { count: 0, certified: 0, copilotUsers90d: 0, copilotEverUsed: 0 };
       }
       companies[company].count++;
       if (getCerts(learner) > 0) companies[company].certified++;
-      if (usesCopilot(learner)) companies[company].copilotUsers++;
+      // 90-day window (backward compatible)
+      if (usesCopilot(learner)) companies[company].copilotUsers90d++;
+      // 365-day "ever used" window (captures occasional users)
+      if (learner.copilot_ever_used) companies[company].copilotEverUsed++;
     });
     
     return Object.entries(companies)
@@ -284,7 +293,8 @@ function CompanyBreakdown({ learners }: { learners: EnrichedLearner[] }) {
         name,
         ...data,
         certRate: data.count > 0 ? Math.round((data.certified / data.count) * 100) : 0,
-        copilotRate: data.count > 0 ? Math.round((data.copilotUsers / data.count) * 100) : 0,
+        copilotRate90d: data.count > 0 ? Math.round((data.copilotUsers90d / data.count) * 100) : 0,
+        copilotRateEver: data.count > 0 ? Math.round((data.copilotEverUsed / data.count) * 100) : 0,
       }))
       .filter(c => c.name !== "Unknown" && c.count > 2)
       .sort((a, b) => b.count - a.count)
@@ -300,7 +310,7 @@ function CompanyBreakdown({ learners }: { learners: EnrichedLearner[] }) {
           <Building2 className="h-4 w-4" />
           Top Companies
         </CardTitle>
-        <CardDescription>Certification and adoption by organization</CardDescription>
+        <CardDescription>Certification and Copilot adoption by organization</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
@@ -315,10 +325,16 @@ function CompanyBreakdown({ learners }: { learners: EnrichedLearner[] }) {
                   <span className="font-semibold text-green-600 dark:text-green-400">{company.certRate}%</span>
                   <p className="text-xs text-muted-foreground">certified</p>
                 </div>
-                <div className="text-right">
-                  <span className="font-semibold text-violet-600 dark:text-violet-400">{company.copilotRate}%</span>
-                  <p className="text-xs text-muted-foreground">Copilot</p>
+                <div className="text-right" title="Active in last 90 days">
+                  <span className="font-semibold text-violet-600 dark:text-violet-400">{company.copilotRate90d}%</span>
+                  <p className="text-xs text-muted-foreground">Copilot 90d</p>
                 </div>
+                {company.copilotRateEver > company.copilotRate90d && (
+                  <div className="text-right" title="Ever used in last 365 days">
+                    <span className="font-semibold text-violet-400 dark:text-violet-500">{company.copilotRateEver}%</span>
+                    <p className="text-xs text-muted-foreground">ever used</p>
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -498,16 +514,17 @@ export default function LearnerExplorerPage() {
   const [localSearch, setLocalSearch] = useState(params.search);
   const [activeTab, setActiveTab] = useState<"table" | "analytics">("table");
   
-  // Debounce search
+  // Debounce search with custom hook (300ms delay)
+  const debouncedSearch = useDebounce(localSearch, 300);
+  
+  // Sync debounced search to URL params
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (localSearch !== params.search) {
-        setParams({ search: localSearch, page: 1 });
-      }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [localSearch, params.search, setParams]);
+    if (debouncedSearch !== params.search) {
+      setParams({ search: debouncedSearch, page: 1 });
+    }
+  }, [debouncedSearch, params.search, setParams]);
 
+  // Sync URL params back to local state when they change externally
   useEffect(() => {
     setLocalSearch(params.search);
   }, [params.search]);
@@ -585,11 +602,17 @@ export default function LearnerExplorerPage() {
 
   const SortIcon = ({ field }: { field: SortField }) => {
     if (sortField !== field) {
-      return <ArrowUpDown className="h-4 w-4 ml-1 opacity-50" />;
+      return <ArrowUpDown className="h-4 w-4 ml-1 opacity-50" aria-hidden="true" />;
     }
     return sortOrder === "asc" 
-      ? <ArrowUp className="h-4 w-4 ml-1" />
-      : <ArrowDown className="h-4 w-4 ml-1" />;
+      ? <ArrowUp className="h-4 w-4 ml-1" aria-hidden="true" />
+      : <ArrowDown className="h-4 w-4 ml-1" aria-hidden="true" />;
+  };
+
+  // Get aria-sort value for a column
+  const getAriaSortValue = (field: SortField): "ascending" | "descending" | "none" => {
+    if (sortField !== field) return "none";
+    return sortOrder === "asc" ? "ascending" : "descending";
   };
 
   // Sort learners
@@ -715,22 +738,24 @@ export default function LearnerExplorerPage() {
           {/* Search and Filters */}
           <Card>
             <CardContent className="pt-6">
-              <div className="flex gap-4 flex-wrap">
+              <div className="flex gap-4 flex-wrap" role="search">
                 <div className="relative flex-1 min-w-[200px]">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
                   <Input
                     placeholder="Search by name, email, company, or region..."
+                    aria-label="Search learners by name, email, company, or region"
                     className="pl-10 pr-10"
                     value={localSearch}
                     onChange={(e) => setLocalSearch(e.target.value)}
                   />
                   {isFetching && (
-                    <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground animate-spin" />
+                    <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground animate-spin" aria-label="Loading" />
                   )}
                 </div>
                 <select
                   value={statusFilter}
                   onChange={(e) => setParams({ status: e.target.value as LearnerStatus | "", page: 1 })}
+                  aria-label="Filter by learner status"
                   className="px-3 py-2 rounded-md border border-input bg-background"
                 >
                   <option value="">All Statuses</option>
@@ -785,45 +810,57 @@ export default function LearnerExplorerPage() {
                       <p>No learners found in this segment</p>
                     </div>
                   ) : (
-                    <div className="rounded-md border">
-                      <div className="grid grid-cols-12 gap-2 p-3 bg-muted/50 text-xs font-medium border-b">
-                        <button 
-                          className="col-span-2 flex items-center hover:text-foreground text-left"
-                          onClick={() => handleSort("handle")}
-                        >
-                          Learner <SortIcon field="handle" />
-                        </button>
-                        <button 
-                          className="col-span-2 flex items-center hover:text-foreground text-left"
-                          onClick={() => handleSort("status")}
-                        >
-                          Status <SortIcon field="status" />
-                        </button>
-                        <button 
-                          className="col-span-1 flex items-center hover:text-foreground text-left"
-                          onClick={() => handleSort("certs")}
-                        >
-                          Certs <SortIcon field="certs" />
-                        </button>
-                        <button 
-                          className="col-span-2 flex items-center hover:text-foreground text-left"
-                          onClick={() => handleSort("company")}
-                        >
-                          Company <SortIcon field="company" />
-                        </button>
-                        <button 
-                          className="col-span-1 flex items-center hover:text-foreground text-left"
-                          onClick={() => handleSort("region")}
-                        >
-                          Region <SortIcon field="region" />
-                        </button>
-                        <div className="col-span-2">Products</div>
-                        <button 
-                          className="col-span-2 flex items-center hover:text-foreground text-left"
-                          onClick={() => handleSort("lastActivity")}
-                        >
-                          Last Active <SortIcon field="lastActivity" />
-                        </button>
+                    <div className="rounded-md border" role="table" aria-label="Learner list">
+                      <div className="grid grid-cols-12 gap-2 p-3 bg-muted/50 text-xs font-medium border-b" role="row">
+                        <div className="col-span-2" role="columnheader" aria-sort={getAriaSortValue("handle")}>
+                          <button 
+                            className="flex items-center hover:text-foreground text-left"
+                            onClick={() => handleSort("handle")}
+                          >
+                            Learner <SortIcon field="handle" />
+                          </button>
+                        </div>
+                        <div className="col-span-2" role="columnheader" aria-sort={getAriaSortValue("status")}>
+                          <button 
+                            className="flex items-center hover:text-foreground text-left"
+                            onClick={() => handleSort("status")}
+                          >
+                            Status <SortIcon field="status" />
+                          </button>
+                        </div>
+                        <div className="col-span-1" role="columnheader" aria-sort={getAriaSortValue("certs")}>
+                          <button 
+                            className="flex items-center hover:text-foreground text-left"
+                            onClick={() => handleSort("certs")}
+                          >
+                            Certs <SortIcon field="certs" />
+                          </button>
+                        </div>
+                        <div className="col-span-2" role="columnheader" aria-sort={getAriaSortValue("company")}>
+                          <button 
+                            className="flex items-center hover:text-foreground text-left"
+                            onClick={() => handleSort("company")}
+                          >
+                            Company <SortIcon field="company" />
+                          </button>
+                        </div>
+                        <div className="col-span-1" role="columnheader" aria-sort={getAriaSortValue("region")}>
+                          <button 
+                            className="flex items-center hover:text-foreground text-left"
+                            onClick={() => handleSort("region")}
+                          >
+                            Region <SortIcon field="region" />
+                          </button>
+                        </div>
+                        <div className="col-span-2" role="columnheader">Products</div>
+                        <div className="col-span-2" role="columnheader" aria-sort={getAriaSortValue("lastActivity")}>
+                          <button 
+                            className="flex items-center hover:text-foreground text-left"
+                            onClick={() => handleSort("lastActivity")}
+                          >
+                            Last Active <SortIcon field="lastActivity" />
+                          </button>
+                        </div>
                       </div>
                       {sortedLearners.map((learner, idx) => {
                         const lastActivity = getLastActivity(learner);

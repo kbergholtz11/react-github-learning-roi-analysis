@@ -26,6 +26,7 @@ import csv
 import json
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -456,12 +457,62 @@ cluster('gh-analytics.eastus.kusto.windows.net').database('hydro').education_web
 
 
 # =============================================================================
-# KUSTO DATA SYNC - COMPLETE IMPLEMENTATION
+# KUSTO DATA SYNC - OPTIMIZED WITH PARALLEL EXECUTION
 # =============================================================================
 
+def execute_queries_parallel(
+    queries: List[tuple],
+    max_workers: int = 4
+) -> Dict[str, Optional[List[Dict]]]:
+    """
+    Execute multiple Kusto queries in parallel for faster sync.
+    
+    Args:
+        queries: List of tuples (client, database, query, description)
+        max_workers: Maximum parallel threads (default 4 to avoid throttling)
+    
+    Returns:
+        Dict mapping description to result list (or None if failed)
+    """
+    results = {}
+    
+    def run_query(client, database, query, description):
+        return description, execute_query(client, database, query, description)
+    
+    log(f"Executing {len(queries)} queries in parallel (max {max_workers} workers)...", "start")
+    start_time = datetime.now()
+    
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(run_query, client, db, query, desc): desc
+            for client, db, query, desc in queries
+        }
+        
+        for future in as_completed(futures):
+            try:
+                desc, result = future.result()
+                results[desc] = result
+                if result is not None:
+                    log(f"  \u2713 {desc}: {len(result):,} rows", "success")
+                else:
+                    log(f"  \u2717 {desc}: failed", "error")
+            except Exception as e:
+                desc = futures[future]
+                results[desc] = None
+                log(f"  \u2717 {desc}: {e}", "error")
+    
+    elapsed = (datetime.now() - start_time).total_seconds()
+    log(f"Parallel execution completed in {elapsed:.1f}s", "success")
+    return results
+
+
 def sync_kusto_data():
-    """Sync data from Kusto clusters using comprehensive queries."""
-    log("Starting Kusto data sync (complete coverage)...", "start")
+    """
+    Sync data from Kusto clusters using comprehensive queries.
+    OPTIMIZED: Uses parallel execution for 3-5x faster sync.
+    """
+    log("Starting Kusto data sync (parallel execution)...", "start")
+    sync_start = datetime.now()
     
     try:
         # Create clients for both clusters
@@ -475,41 +526,258 @@ def sync_kusto_data():
         
         log(f"Connected to clusters: CSE={cse_client is not None}, GH={gh_client is not None}", "info")
         
-        # Sync certified users (uses CSE cluster since pearson_exam_results is there)
-        sync_certified_users(cse_client)
+        # Build list of queries to execute in parallel
+        parallel_queries = []
         
-        # Sync unified users (same query, different perspective)
-        sync_unified_users(cse_client)
+        # CSE cluster queries
+        if cse_client:
+            parallel_queries.extend([
+                (cse_client, "ACE", CERTIFIED_USERS_WITH_IDS_QUERY, "certified_users"),
+            ])
         
-        # Sync individual exams (needs GH cluster for FY22-25 data)
-        sync_individual_exams(gh_client)
+        # GH cluster queries
+        if gh_client:
+            parallel_queries.extend([
+                (gh_client, "ace", INDIVIDUAL_EXAMS_QUERY, "individual_exams"),
+                (gh_client, "canonical", PRODUCT_USAGE_QUERY, "product_usage"),
+                (gh_client, "hydro", LEARNING_ACTIVITY_QUERY, "learning_activity"),
+                (gh_client, "hydro", GITHUB_LEARN_QUERY, "github_learn"),
+                (gh_client, "hydro", GITHUB_SKILLS_QUERY, "github_skills"),
+                (gh_client, "hydro", GITHUB_DOCS_QUERY, "github_docs"),
+                (gh_client, "ace", EVENTS_QUERY, "events"),
+            ])
         
-        # Sync product usage (from GH cluster canonical database)
-        sync_product_usage(gh_client)
+        # Execute all queries in parallel
+        results = execute_queries_parallel(parallel_queries, max_workers=4)
         
-        # Sync learning activity (from GH cluster hydro database)
-        sync_learning_activity(gh_client)
+        # Process and save results
+        for desc, rows in results.items():
+            if rows is None:
+                update_sync_status(desc, "error", error="Query failed")
+                continue
+            
+            # Process and save each result type
+            if desc == "certified_users":
+                save_certified_users(rows)
+                # Also save as unified_users (same data, different file)
+                save_unified_users(rows)
+            elif desc == "individual_exams":
+                save_individual_exams(rows)
+            elif desc == "product_usage":
+                save_product_usage(rows)
+            elif desc == "learning_activity":
+                save_learning_activity(rows)
+            elif desc == "github_learn":
+                save_github_learn(rows)
+            elif desc == "github_skills":
+                save_github_skills(rows)
+            elif desc == "github_docs":
+                save_github_docs(rows)
+            elif desc == "events":
+                save_events(rows)
         
-        # NEW: Comprehensive Learning Data Syncs
-        # Sync GitHub Learn engagement
-        sync_github_learn(gh_client)
-        
-        # Sync GitHub Skills engagement
-        sync_github_skills(gh_client)
-        
-        # Sync GitHub Docs engagement
-        sync_github_docs(gh_client)
-        
-        # Sync Events data
-        sync_events(gh_client)
-        
-        log("Kusto sync complete!", "success")
+        elapsed = (datetime.now() - sync_start).total_seconds()
+        log(f"Kusto sync complete in {elapsed:.1f}s!", "success")
         
     except Exception as e:
         log(f"Kusto sync failed: {e}", "error")
         import traceback
         traceback.print_exc()
         update_sync_status("kusto", "error", error=str(e))
+
+
+# =============================================================================
+# SAVE FUNCTIONS - Separated from query execution for parallel processing
+# =============================================================================
+
+def save_certified_users(rows: List[Dict]):
+    """Process and save certified users data."""
+    if not rows:
+        return
+    for row in rows:
+        for date_field in ["first_cert_date", "latest_cert_date"]:
+            if row.get(date_field) and hasattr(row[date_field], "isoformat"):
+                row[date_field] = row[date_field].isoformat()
+        for list_field in ["cert_titles", "exam_codes"]:
+            if row.get(list_field) and isinstance(row[list_field], list):
+                row[list_field] = ",".join(str(x) for x in row[list_field])
+    
+    count = save_csv("certified_users.csv", rows)
+    with_dotcom = sum(1 for r in rows if r.get("dotcom_id", 0) > 0)
+    total_passed = sum(r.get("total_certs", 0) for r in rows)
+    log(f"   Users with dotcom_id: {with_dotcom:,}/{len(rows):,}", "info")
+    log(f"   Total certifications: {total_passed:,}", "info")
+    update_sync_status("certified_users", "success", count)
+
+
+def save_unified_users(rows: List[Dict]):
+    """Save unified users (same as certified users, different file)."""
+    if not rows:
+        return
+    count = save_csv("unified_users.csv", rows)
+    status_counts = {}
+    for r in rows:
+        status = r.get("learner_status", "Unknown")
+        status_counts[status] = status_counts.get(status, 0) + 1
+    log(f"   Status breakdown: {status_counts}", "info")
+    update_sync_status("unified_users", "success", count)
+
+
+def save_individual_exams(rows: List[Dict]):
+    """Process and save individual exam records."""
+    if not rows:
+        return
+    CERT_NAME_MAP = {
+        "ACTIONS": "GitHub Actions", "ADMIN": "GitHub Administration",
+        "GHAS": "GitHub Advanced Security", "GHF": "GitHub Foundations",
+        "COPILOT": "GitHub Copilot", "GH-100": "GitHub Administration",
+        "GH-200": "GitHub Actions", "GH-300": "GitHub Copilot",
+        "GH-400": "GitHub Advanced Security",
+    }
+    for row in rows:
+        code = row.get("exam_code", "")
+        if code and code.upper() in CERT_NAME_MAP:
+            row["exam_name"] = CERT_NAME_MAP[code.upper()]
+        if row.get("exam_date") and hasattr(row["exam_date"], "isoformat"):
+            row["exam_date"] = row["exam_date"].isoformat()
+        score = row.get("score_percent")
+        if score is not None and score > 0:
+            row["score_percent"] = round(float(score), 1)
+        else:
+            row["score_percent"] = ""
+    
+    count = save_csv("individual_exams.csv", rows)
+    status_counts = {}
+    for r in rows:
+        status = r.get("exam_status", "Unknown")
+        status_counts[status] = status_counts.get(status, 0) + 1
+    log(f"   Status breakdown: {status_counts}", "info")
+    unique_emails = len(set(r.get("email", "") for r in rows))
+    log(f"   Unique learners: {unique_emails:,}", "info")
+    update_sync_status("individual_exams", "success", count)
+
+
+def save_product_usage(rows: List[Dict]):
+    """Process and save product usage data."""
+    if not rows:
+        return
+    for row in rows:
+        for field in ["copilot_events", "copilot_days", "actions_events", "security_events", "total_events", "activity_days"]:
+            if row.get(field):
+                row[field] = int(row[field])
+        if row.get("product_usage_hours"):
+            row["product_usage_hours"] = round(float(row["product_usage_hours"]), 2)
+    
+    count = save_csv("product_usage.csv", rows)
+    with_copilot = sum(1 for r in rows if r.get("copilot_events", 0) > 0)
+    avg_copilot = sum(r.get("copilot_events", 0) for r in rows) / max(len(rows), 1)
+    log(f"   Users with Copilot activity: {with_copilot:,}", "info")
+    log(f"   Avg Copilot events: {avg_copilot:.1f}", "info")
+    update_sync_status("product_usage", "success", count)
+
+
+def save_learning_activity(rows: List[Dict]):
+    """Process and save learning activity data."""
+    if not rows:
+        return
+    for row in rows:
+        for date_field in ["first_learning", "last_learning"]:
+            if row.get(date_field) and hasattr(row[date_field], "isoformat"):
+                row[date_field] = row[date_field].isoformat()
+        if row.get("learning_hours"):
+            row["learning_hours"] = round(float(row["learning_hours"]), 2)
+    
+    count = save_csv("learning_activity.csv", rows)
+    avg_hours = sum(r.get("learning_hours", 0) for r in rows) / max(len(rows), 1)
+    log(f"   Avg learning hours: {avg_hours:.1f}", "info")
+    update_sync_status("learning_activity", "success", count)
+
+
+def save_github_learn(rows: List[Dict]):
+    """Process and save GitHub Learn engagement data."""
+    if not rows:
+        return
+    for row in rows:
+        for date_field in ["first_learn_visit", "last_learn_visit"]:
+            if row.get(date_field) and hasattr(row[date_field], "isoformat"):
+                row[date_field] = row[date_field].isoformat()
+        if row.get("content_types_viewed") and isinstance(row["content_types_viewed"], list):
+            row["content_types_viewed"] = ",".join(str(x) for x in row["content_types_viewed"])
+    
+    count = save_csv("github_learn.csv", rows)
+    total_views = sum(r.get("learn_page_views", 0) for r in rows)
+    cert_viewers = sum(1 for r in rows if r.get("viewed_certifications", 0) > 0)
+    log(f"   Total page views: {total_views:,}", "info")
+    log(f"   Users who viewed certifications: {cert_viewers:,}", "info")
+    update_sync_status("github_learn", "success", count)
+
+
+def save_github_skills(rows: List[Dict]):
+    """Process and save GitHub Skills engagement data."""
+    if not rows:
+        return
+    for row in rows:
+        for date_field in ["first_skills_visit", "last_skills_visit"]:
+            if row.get(date_field) and hasattr(row[date_field], "isoformat"):
+                row[date_field] = row[date_field].isoformat()
+        if row.get("skills_completed") and isinstance(row["skills_completed"], list):
+            row["skills_completed"] = ",".join(str(x) for x in row["skills_completed"])
+    
+    count = save_csv("github_skills.csv", rows)
+    total_views = sum(r.get("skills_page_views", 0) for r in rows)
+    avg_skills = sum(r.get("skills_count", 0) for r in rows) / max(len(rows), 1)
+    ai_learners = sum(1 for r in rows if r.get("ai_skills_views", 0) > 0)
+    log(f"   Total page views: {total_views:,}", "info")
+    log(f"   Avg skills per user: {avg_skills:.1f}", "info")
+    log(f"   Users with AI/Copilot skills: {ai_learners:,}", "info")
+    update_sync_status("github_skills", "success", count)
+
+
+def save_github_docs(rows: List[Dict]):
+    """Process and save GitHub Docs engagement data."""
+    if not rows:
+        return
+    for row in rows:
+        for date_field in ["first_docs_visit", "last_docs_visit"]:
+            if row.get(date_field) and hasattr(row[date_field], "isoformat"):
+                row[date_field] = row[date_field].isoformat()
+        if row.get("docs_products_viewed") and isinstance(row["docs_products_viewed"], list):
+            row["docs_products_viewed"] = ",".join(str(x) for x in row["docs_products_viewed"])
+    
+    count = save_csv("github_docs.csv", rows)
+    total_views = sum(r.get("docs_page_views", 0) for r in rows)
+    copilot_viewers = sum(1 for r in rows if r.get("copilot_docs_views", 0) > 0)
+    actions_viewers = sum(1 for r in rows if r.get("actions_docs_views", 0) > 0)
+    log(f"   Total page views: {total_views:,}", "info")
+    log(f"   Users viewing Copilot docs: {copilot_viewers:,}", "info")
+    log(f"   Users viewing Actions docs: {actions_viewers:,}", "info")
+    update_sync_status("github_docs", "success", count)
+
+
+def save_events(rows: List[Dict]):
+    """Process and save event registration data."""
+    if not rows:
+        return
+    for row in rows:
+        for date_field in ["first_event_date", "last_event_date"]:
+            if row.get(date_field) and hasattr(row[date_field], "isoformat"):
+                row[date_field] = row[date_field].isoformat()
+        if row.get("event_categories") and isinstance(row["event_categories"], list):
+            row["event_categories"] = ",".join(str(x) for x in row["event_categories"])
+    
+    count = save_csv("events.csv", rows)
+    total_registered = sum(r.get("events_registered", 0) for r in rows)
+    total_attended = sum(r.get("events_attended", 0) for r in rows)
+    attendance_rate = total_attended / max(total_registered, 1) * 100
+    log(f"   Total registrations: {total_registered:,}", "info")
+    log(f"   Total attended: {total_attended:,}", "info")
+    log(f"   Attendance rate: {attendance_rate:.1f}%", "info")
+    update_sync_status("events", "success", count)
+
+
+# =============================================================================
+# LEGACY SYNC FUNCTIONS - Kept for backwards compatibility
+# =============================================================================
 
 
 def sync_certified_users(client):

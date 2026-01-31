@@ -134,27 +134,105 @@ export interface EnrichedLearner {
   org_has_enterprise_agreements: boolean;
   org_count: number;
   
-  // Copilot usage
-  uses_copilot: boolean;
-  copilot_days: number;
+  // Copilot usage - multi-window metrics (90d, 180d, 365d)
+  uses_copilot: boolean;  // Active in last 90 days (backward compatible)
+  copilot_ever_used: boolean;  // Ever used in 365-day window
+  copilot_usage_recency: 'active_90d' | 'active_180d' | 'active_365d' | 'never';
+  copilot_days: number;  // Total days in 365-day window
+  copilot_days_90d: number;  // Days active in last 90 days
+  copilot_days_180d: number;  // Days active in last 180 days
+  copilot_events_90d: number;  // Events in last 90 days
+  copilot_events_180d: number;  // Events in last 180 days
   copilot_engagement_events: number;
   copilot_contribution_events: number;
   copilot_products: string | null;
   copilot_features: string | null;
+  copilot_first_use: string | null;  // First usage date
+  copilot_last_use: string | null;  // Last usage date
   
-  // Actions usage
-  uses_actions: boolean;
-  actions_days: number;
+  // Actions usage - multi-window metrics
+  uses_actions: boolean;  // Active in last 90 days
+  actions_ever_used: boolean;  // Ever used in 365-day window
+  actions_usage_recency: 'active_90d' | 'active_180d' | 'active_365d' | 'never';
+  actions_days: number;  // Total days in 365-day window
+  actions_days_90d: number;
+  actions_days_180d: number;
+  actions_events_90d: number;
+  actions_events_180d: number;
   actions_engagement_events: number;
   actions_contribution_events: number;
+  actions_first_use: string | null;
+  actions_last_use: string | null;
   
-  // Security usage
-  uses_security: boolean;
-  security_days: number;
+  // Security usage - multi-window metrics
+  uses_security: boolean;  // Active in last 90 days
+  security_ever_used: boolean;  // Ever used in 365-day window
+  security_usage_recency: 'active_90d' | 'active_180d' | 'active_365d' | 'never';
+  security_days: number;  // Total days in 365-day window
+  security_days_90d: number;
+  security_days_180d: number;
   security_engagement_events: number;
+  security_first_use: string | null;
+  security_last_use: string | null;
   
-  // Aggregate activity
-  total_active_days: number;
+  // Pull Requests - collaboration skills
+  uses_pr: boolean;
+  pr_ever_used: boolean;
+  pr_days: number;
+  pr_days_90d: number;
+  pr_events: number;
+  
+  // Issues - project management skills
+  uses_issues: boolean;
+  issues_ever_used: boolean;
+  issues_days: number;
+  issues_days_90d: number;
+  issues_events: number;
+  
+  // Code Search - navigation proficiency
+  uses_code_search: boolean;
+  code_search_ever_used: boolean;
+  code_search_days: number;
+  code_search_days_90d: number;
+  code_search_events: number;
+  
+  // Packages - publishing/consumption
+  uses_packages: boolean;
+  packages_ever_used: boolean;
+  packages_days: number;
+  packages_days_90d: number;
+  packages_events: number;
+  
+  // Projects - planning skills
+  uses_projects: boolean;
+  projects_ever_used: boolean;
+  projects_days: number;
+  projects_days_90d: number;
+  projects_events: number;
+  
+  // Discussions - community engagement
+  uses_discussions: boolean;
+  discussions_ever_used: boolean;
+  discussions_days: number;
+  discussions_days_90d: number;
+  discussions_events: number;
+  
+  // Pages - documentation skills
+  uses_pages: boolean;
+  pages_ever_used: boolean;
+  pages_days: number;
+  pages_days_90d: number;
+  pages_events: number;
+  
+  // Skill Maturity
+  skill_maturity_score: number;  // 0-100 score
+  skill_maturity_level: 'Novice' | 'Beginner' | 'Intermediate' | 'Advanced' | 'Expert';
+  products_adopted_count: number;  // Count of products used (0-10)
+  
+  // Aggregate activity - multi-window metrics
+  total_active_days: number;  // Total days in 365-day window
+  total_active_days_90d: number;
+  total_active_days_180d: number;
   total_engagement_events: number;
   total_contribution_events: number;
   products_used: string | null;

@@ -20,7 +20,12 @@ export default function Error({
   }, [error])
 
   return (
-    <div className="flex min-h-[80vh] items-center justify-center p-4">
+    <div 
+      className="flex min-h-[80vh] items-center justify-center p-4" 
+      role="alert" 
+      aria-live="assertive"
+      aria-atomic="true"
+    >
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -34,10 +39,11 @@ export default function Error({
               animate={{ rotate: [0, -10, 10, -10, 0] }}
               transition={{ delay: 0.3, duration: 0.5 }}
               className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10"
+              aria-hidden="true"
             >
               <AlertTriangle className="h-8 w-8 text-destructive" />
             </motion.div>
-            <CardTitle className="text-2xl">Something went wrong!</CardTitle>
+            <CardTitle className="text-2xl" tabIndex={-1} id="error-heading">Something went wrong!</CardTitle>
           </CardHeader>
           
           <CardContent className="text-center">

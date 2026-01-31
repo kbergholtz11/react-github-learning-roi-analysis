@@ -12,33 +12,7 @@ import { useEnrichedLearner } from "@/hooks/use-unified-data";
 import { useQuery } from "@tanstack/react-query";
 import { fetchLearnerExams, type IndividualExam } from "@/lib/backend-client";
 import { DataQualityBadge } from "@/components/ui/data-quality-badge";
-
-// Format date for display
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return "—";
-  try {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("en-US", { 
-      year: "numeric", 
-      month: "short", 
-      day: "numeric" 
-    });
-  } catch {
-    return "—";
-  }
-}
-
-// Calculate days between two dates
-function daysBetween(date1: string | null, date2: string | null): number | null {
-  if (!date1 || !date2) return null;
-  try {
-    const d1 = new Date(date1);
-    const d2 = new Date(date2);
-    return Math.round(Math.abs(d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
-  } catch {
-    return null;
-  }
-}
+import { formatDate, daysBetween } from "@/lib/utils";
 
 export default function LearnerProfilePage() {
   const searchParams = useSearchParams();

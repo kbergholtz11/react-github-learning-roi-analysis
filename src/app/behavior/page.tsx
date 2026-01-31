@@ -1,9 +1,10 @@
 "use client";
 
+import { useMemo } from "react";
 import { MetricCard, SimpleBarChart, SimpleAreaChart } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 import { 
   Activity, 
   ArrowUpRight, 
@@ -13,10 +14,8 @@ import {
   GitPullRequest,
   GitCommit,
   Shield,
-  Zap,
   TrendingUp,
   Users,
-  Loader2
 } from "lucide-react";
 import { useImpact, useMetrics, useJourney } from "@/hooks/use-data";
 
@@ -26,63 +25,80 @@ export default function BehaviorChangePage() {
   const { data: journeyData, isLoading: journeyLoading } = useJourney();
 
   const isLoading = impactLoading || metricsLoading || journeyLoading;
+  const metrics = metricsData?.metrics;
+
+  // Memoize expensive data transformations - must be called before any early returns
+  const { behaviorMetrics, behaviorTimeline, cohortComparison, avgUsageIncrease, stageImpact } = useMemo(() => {
+    const productAdoption = impactData?.productAdoption || [];
+    const stageImpactData = impactData?.stageImpact || [];
+    const correlationData = impactData?.correlationData || [];
+    
+    const usageIncrease = Math.abs(metrics?.avgUsageIncrease || 0);
+    
+    const behaviorMetricsData = [
+      {
+        category: "Product Adoption",
+        icon: Code2,
+        metrics: productAdoption.map(p => ({
+          name: p.name,
+          before: p.before,
+          after: p.after,
+          unit: "%",
+          inverse: false,
+        })),
+      },
+      {
+        category: "Stage Impact",
+        icon: TrendingUp,
+        metrics: stageImpactData.slice(0, 3).map(s => ({
+          name: `${s.stage} Stage`,
+          before: 0,
+          after: s.avgUsageIncrease,
+          unit: "% increase",
+          inverse: false,
+        })),
+      },
+    ];
+
+    const timelineData = correlationData.map(c => ({
+      name: c.name,
+      productUsage: c.productUsage,
+      platformTime: c.platformTime,
+      learningHours: Math.round(c.learningHours / 100),
+    }));
+
+    const comparisonData = stageImpactData.map(s => ({
+      name: s.stage,
+      learners: s.avgUsageIncrease,
+      baseline: 10,
+    }));
+    
+    return {
+      behaviorMetrics: behaviorMetricsData,
+      behaviorTimeline: timelineData,
+      cohortComparison: comparisonData,
+      avgUsageIncrease: usageIncrease,
+      stageImpact: stageImpactData,
+    };
+  }, [impactData, metrics]);
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="space-y-6" aria-busy="true" aria-label="Loading behavior data">
+        <div className="flex items-center justify-between">
+          <div>
+            <Skeleton className="h-8 w-56 mb-2" />
+            <Skeleton className="h-4 w-80" />
+          </div>
+          <Skeleton className="h-6 w-32" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-28" />)}
+        </div>
+        <Skeleton className="h-96" />
       </div>
     );
   }
-
-  const metrics = metricsData?.metrics;
-  const productAdoption = impactData?.productAdoption || [];
-  const stageImpact = impactData?.stageImpact || [];
-  const correlationData = impactData?.correlationData || [];
-
-  // Calculate behavior metrics from impact data
-  const avgUsageIncrease = Math.abs(metrics?.avgUsageIncrease || 0);
-  
-  // Build behavior metrics from product adoption (before/after)
-  const behaviorMetrics = [
-    {
-      category: "Product Adoption",
-      icon: Code2,
-      metrics: productAdoption.map(p => ({
-        name: p.name,
-        before: p.before,
-        after: p.after,
-        unit: "%",
-        inverse: false,
-      })),
-    },
-    {
-      category: "Stage Impact",
-      icon: TrendingUp,
-      metrics: stageImpact.slice(0, 3).map(s => ({
-        name: `${s.stage} Stage`,
-        before: 0,
-        after: s.avgUsageIncrease,
-        unit: "% increase",
-        inverse: false,
-      })),
-    },
-  ];
-
-  // Build timeline from correlation data
-  const behaviorTimeline = correlationData.map(c => ({
-    name: c.name,
-    productUsage: c.productUsage,
-    platformTime: c.platformTime,
-    learningHours: Math.round(c.learningHours / 100),
-  }));
-
-  // Cohort comparison from stage impact
-  const cohortComparison = stageImpact.map(s => ({
-    name: s.stage,
-    learners: s.avgUsageIncrease,
-    baseline: 10,
-  }));
 
   return (
     <div className="space-y-6">

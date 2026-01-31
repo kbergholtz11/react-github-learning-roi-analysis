@@ -196,6 +196,7 @@ interface GitHubSkillsRaw {
 }
 
 // Learners Enriched (comprehensive learner data with activity metrics - 310k+ users)
+// Multi-window product usage: 90d, 180d, 365d with "ever used" flags
 interface LearnersEnrichedRaw {
   email: string;
   dotcom_id: number;
@@ -206,18 +207,89 @@ interface LearnersEnrichedRaw {
   total_exams: number;
   cert_names: string;
   exam_codes: string;
+  // Skill maturity
+  skill_maturity_score: number;
+  skill_maturity_level: string;
+  products_adopted_count: number;
+  // Product usage - "ever used" flags (365-day window)
+  copilot_ever_used: boolean;
+  actions_ever_used: boolean;
+  security_ever_used: boolean;
+  pr_ever_used: boolean;
+  issues_ever_used: boolean;
+  code_search_ever_used: boolean;
+  packages_ever_used: boolean;
+  projects_ever_used: boolean;
+  discussions_ever_used: boolean;
+  pages_ever_used: boolean;
+  // Product usage - current usage (90-day window, backward compatible)
   uses_copilot: boolean;
   uses_actions: boolean;
   uses_security: boolean;
-  total_active_days: number;
+  uses_pr: boolean;
+  uses_issues: boolean;
+  uses_code_search: boolean;
+  uses_packages: boolean;
+  uses_projects: boolean;
+  uses_discussions: boolean;
+  uses_pages: boolean;
+  // Product usage recency classification
+  copilot_usage_recency: string;  // active_90d, active_180d, active_365d, never
+  actions_usage_recency: string;
+  security_usage_recency: string;
+  // Multi-window metrics - Copilot
+  copilot_days_90d: number;
+  copilot_events_90d: number;
+  copilot_days_180d: number;
+  copilot_events_180d: number;
+  copilot_days: number;  // 365-day total
+  copilot_engagement_events: number;
+  copilot_first_use: string;
+  copilot_last_use: string;
+  // Multi-window metrics - Actions
+  actions_days_90d: number;
+  actions_events_90d: number;
+  actions_days_180d: number;
+  actions_events_180d: number;
+  actions_days: number;  // 365-day total
+  actions_engagement_events: number;
+  actions_first_use: string;
+  actions_last_use: string;
+  // Multi-window metrics - Security
+  security_days_90d: number;
+  security_days_180d: number;
+  security_days: number;  // 365-day total
+  security_engagement_events: number;
+  security_first_use: string;
+  security_last_use: string;
+  // Multi-window metrics - Additional products
+  pr_days_90d: number;
+  pr_days: number;
+  pr_events: number;
+  issues_days_90d: number;
+  issues_days: number;
+  issues_events: number;
+  code_search_days_90d: number;
+  code_search_days: number;
+  code_search_events: number;
+  packages_days_90d: number;
+  packages_days: number;
+  packages_events: number;
+  projects_days_90d: number;
+  projects_days: number;
+  projects_events: number;
+  discussions_days_90d: number;
+  discussions_days: number;
+  discussions_events: number;
+  pages_days_90d: number;
+  pages_days: number;
+  pages_events: number;
+  // Aggregate activity - multi-window
+  total_active_days_90d: number;
+  total_active_days_180d: number;
+  total_active_days: number;  // 365-day total
   total_engagement_events: number;
   total_contribution_events: number;
-  copilot_days: number;
-  copilot_engagement_events: number;
-  actions_days: number;
-  actions_engagement_events: number;
-  security_days: number;
-  security_engagement_events: number;
   products_used: number;
   company_name: string;
   country: string;
@@ -283,6 +355,17 @@ interface SkillsCourseRaw {
   completed: number;
 }
 
+// Individual exam record (from individual_exams.csv)
+interface IndividualExamRaw {
+  email: string;
+  exam_code: string;
+  exam_name: string;
+  exam_date: string;
+  exam_status: string; // Passed, Failed, No Show, Scheduled, Cancelled, Registered
+  score_percent: number | null;
+  source: string;
+}
+
 // Load core data
 const certifiedUsers = parseCSV<CertifiedUserRaw>("certified_users.csv");
 const unifiedUsers = parseCSV<UnifiedUserRaw>("unified_users.csv");
@@ -298,6 +381,7 @@ const githubActivity = parseCSV<GitHubActivityRaw>("github_activity.csv");
 const skillsEnrollments = parseCSV<SkillsEnrollmentRaw>("skills_enrollments.csv");
 const skillsAllEnrollments = parseCSV<SkillsAllEnrollmentRaw>("skills_all_enrollments.csv");
 const skillsCourses = parseCSV<SkillsCourseRaw>("skills_courses.csv");
+const individualExams = parseCSV<IndividualExamRaw>("individual_exams.csv");
 
 // Log enrichment data status
 if (learnersEnriched.length > 0) console.log(`👥 Learners Enriched: ${learnersEnriched.length} users with activity data`);
@@ -307,6 +391,7 @@ if (copilotLanguages.length > 0) console.log(`🤖 Copilot language data: ${copi
 if (githubActivity.length > 0) console.log(`📊 GitHub activity data: ${githubActivity.length} users`);
 if (skillsEnrollments.length > 0) console.log(`🎓 Skills enrollments: ${skillsEnrollments.length} enrollments`);
 if (skillsCourses.length > 0) console.log(`📚 Skills courses: ${skillsCourses.length} courses`);
+if (individualExams.length > 0) console.log(`📝 Individual exams: ${individualExams.length} exam records`);
 
 console.log("\n📊 Aggregating metrics...\n");
 
@@ -362,6 +447,303 @@ const avgLearningHoursPerUser = learningActivity.length > 0
 // Total certifications earned
 const totalCertsEarned = certifiedUsers.reduce((sum, u) => sum + (u.total_certs || 0), 0);
 
+// === Exam Attempt Metrics (tracks all attempts, not just passes) ===
+// Aggregate exam attempt statistics from individual_exams.csv
+const examStatusCounts: Record<string, number> = {
+  Passed: 0,
+  Failed: 0,
+  "No Show": 0,
+  Scheduled: 0,
+  Cancelled: 0,
+  Registered: 0,
+};
+
+individualExams.forEach(exam => {
+  const status = exam.exam_status;
+  if (status in examStatusCounts) {
+    examStatusCounts[status]++;
+  }
+});
+
+// Calculate key metrics
+const totalExamAttempts = examStatusCounts.Passed + examStatusCounts.Failed; // Actual attempts (delivered exams)
+const totalPassed = examStatusCounts.Passed;
+const totalFailed = examStatusCounts.Failed;
+const totalNoShows = examStatusCounts["No Show"];
+const totalScheduled = examStatusCounts.Scheduled + examStatusCounts.Registered;
+const totalCancelled = examStatusCounts.Cancelled;
+const overallPassRate = totalExamAttempts > 0 
+  ? Math.round((totalPassed / totalExamAttempts) * 1000) / 10 // One decimal place
+  : 0;
+
+// Get unique users who have attempted (not just passed)
+const usersWithAttempts = new Set(
+  individualExams
+    .filter(e => e.exam_status === "Passed" || e.exam_status === "Failed")
+    .map(e => e.email.toLowerCase())
+);
+const totalUsersWithAttempts = usersWithAttempts.size;
+
+// Get users who have registered but not yet attempted
+const usersRegistered = new Set(
+  individualExams
+    .filter(e => e.exam_status === "Scheduled" || e.exam_status === "Registered")
+    .map(e => e.email.toLowerCase())
+);
+const usersOnlyRegistered = new Set([...usersRegistered].filter(e => !usersWithAttempts.has(e)));
+const totalUsersRegisteredOnly = usersOnlyRegistered.size;
+
+// Pass rate by certification
+const examPassRates: Record<string, { passed: number; failed: number; rate: number }> = {};
+individualExams.forEach(exam => {
+  if (exam.exam_status !== "Passed" && exam.exam_status !== "Failed") return;
+  
+  const certName = exam.exam_name || exam.exam_code;
+  if (!examPassRates[certName]) {
+    examPassRates[certName] = { passed: 0, failed: 0, rate: 0 };
+  }
+  if (exam.exam_status === "Passed") {
+    examPassRates[certName].passed++;
+  } else {
+    examPassRates[certName].failed++;
+  }
+});
+
+// Calculate pass rates
+Object.keys(examPassRates).forEach(cert => {
+  const data = examPassRates[cert];
+  const total = data.passed + data.failed;
+  data.rate = total > 0 ? Math.round((data.passed / total) * 1000) / 10 : 0;
+});
+
+// Sort by total attempts
+const certificationPassRates = Object.entries(examPassRates)
+  .map(([name, data]) => ({
+    certification: name,
+    passed: data.passed,
+    failed: data.failed,
+    totalAttempts: data.passed + data.failed,
+    passRate: data.rate,
+  }))
+  .sort((a, b) => b.totalAttempts - a.totalAttempts);
+
+// Calculate average score for passed vs failed
+const passedScores = individualExams
+  .filter(e => e.exam_status === "Passed" && e.score_percent != null && e.score_percent > 0)
+  .map(e => Number(e.score_percent));
+const failedScores = individualExams
+  .filter(e => e.exam_status === "Failed" && e.score_percent != null && e.score_percent > 0)
+  .map(e => Number(e.score_percent));
+
+const avgPassedScore = passedScores.length > 0 
+  ? Math.round((passedScores.reduce((a, b) => a + b, 0) / passedScores.length) * 10) / 10
+  : 0;
+const avgFailedScore = failedScores.length > 0 
+  ? Math.round((failedScores.reduce((a, b) => a + b, 0) / failedScores.length) * 10) / 10
+  : 0;
+
+// === RETRY ATTEMPT TRACKING ===
+// Track first-time pass rate vs overall pass rate
+// Group exams by user+certification to identify retries
+interface UserCertAttempts {
+  attempts: { date: string; status: string; score: number | null }[];
+  firstAttemptPassed: boolean;
+  eventuallyPassed: boolean;
+  attemptsToPass: number | null;
+}
+
+const userCertHistory: Map<string, UserCertAttempts> = new Map();
+
+// Sort exams by date first to ensure chronological order
+const sortedExams = [...individualExams]
+  .filter(e => e.exam_status === "Passed" || e.exam_status === "Failed")
+  .sort((a, b) => new Date(a.exam_date).getTime() - new Date(b.exam_date).getTime());
+
+sortedExams.forEach(exam => {
+  const key = `${exam.email.toLowerCase().trim()}|${exam.exam_name || exam.exam_code}`;
+  
+  if (!userCertHistory.has(key)) {
+    userCertHistory.set(key, {
+      attempts: [],
+      firstAttemptPassed: false,
+      eventuallyPassed: false,
+      attemptsToPass: null,
+    });
+  }
+  
+  const history = userCertHistory.get(key)!;
+  history.attempts.push({
+    date: exam.exam_date,
+    status: exam.exam_status,
+    score: exam.score_percent,
+  });
+  
+  // Update tracking
+  if (history.attempts.length === 1) {
+    history.firstAttemptPassed = exam.exam_status === "Passed";
+  }
+  if (exam.exam_status === "Passed" && !history.eventuallyPassed) {
+    history.eventuallyPassed = true;
+    history.attemptsToPass = history.attempts.length;
+  }
+});
+
+// Calculate first-time pass rate
+const uniqueCertAttempts = userCertHistory.size;
+const firstTimePasses = [...userCertHistory.values()].filter(h => h.firstAttemptPassed).length;
+const firstTimePassRate = uniqueCertAttempts > 0 
+  ? Math.round((firstTimePasses / uniqueCertAttempts) * 1000) / 10 
+  : 0;
+
+// Calculate retry success rate (of those who failed first time, how many eventually pass?)
+const failedFirstTime = [...userCertHistory.values()].filter(h => !h.firstAttemptPassed);
+const retriedAndPassed = failedFirstTime.filter(h => h.eventuallyPassed).length;
+const retrySuccessRate = failedFirstTime.length > 0 
+  ? Math.round((retriedAndPassed / failedFirstTime.length) * 1000) / 10 
+  : 0;
+
+// Average attempts to pass
+const passedHistories = [...userCertHistory.values()].filter(h => h.eventuallyPassed);
+const avgAttemptsToPass = passedHistories.length > 0 
+  ? Math.round((passedHistories.reduce((sum, h) => sum + (h.attemptsToPass || 1), 0) / passedHistories.length) * 10) / 10 
+  : 0;
+
+// Multi-attempt distribution
+const attemptDistribution = {
+  firstTry: passedHistories.filter(h => h.attemptsToPass === 1).length,
+  secondTry: passedHistories.filter(h => h.attemptsToPass === 2).length,
+  thirdTry: passedHistories.filter(h => h.attemptsToPass === 3).length,
+  fourPlusTries: passedHistories.filter(h => (h.attemptsToPass || 0) >= 4).length,
+};
+
+console.log(`📈 First-time pass rate: ${firstTimePassRate}% (${firstTimePasses.toLocaleString()} of ${uniqueCertAttempts.toLocaleString()})`);
+console.log(`🔄 Retry success rate: ${retrySuccessRate}% (${retriedAndPassed.toLocaleString()} of ${failedFirstTime.length.toLocaleString()} who retried)`);
+
+// === NEAR-MISS SEGMENT ===
+// Identify learners who failed with scores close to passing (e.g., 60-69%)
+// These need just a bit more prep
+// Note: Passing threshold varies by exam but generally around 70%
+const NEAR_MISS_THRESHOLD_LOW = 60;
+const NEAR_MISS_THRESHOLD_HIGH = 69;
+const NEEDS_PREP_THRESHOLD = 50;
+
+// Normalize scores (FY26 scores are in 700-900 range, FY22-25 are 0-100)
+const normalizeScore = (score: number | null): number | null => {
+  if (score === null) return null;
+  if (score > 100) return Math.round(score / 10); // FY26 format
+  return score;
+};
+
+const failedExamsWithScores = individualExams
+  .filter(e => e.exam_status === "Failed" && e.score_percent != null && e.score_percent > 0)
+  .map(e => ({
+    ...e,
+    normalizedScore: normalizeScore(e.score_percent),
+  }));
+
+const nearMissExams = failedExamsWithScores.filter(
+  e => e.normalizedScore !== null && 
+       e.normalizedScore >= NEAR_MISS_THRESHOLD_LOW && 
+       e.normalizedScore <= NEAR_MISS_THRESHOLD_HIGH
+);
+
+const needsPrepExams = failedExamsWithScores.filter(
+  e => e.normalizedScore !== null && e.normalizedScore < NEEDS_PREP_THRESHOLD
+);
+
+const moderateGapExams = failedExamsWithScores.filter(
+  e => e.normalizedScore !== null && 
+       e.normalizedScore >= NEEDS_PREP_THRESHOLD && 
+       e.normalizedScore < NEAR_MISS_THRESHOLD_LOW
+);
+
+// Get unique users in each segment (who haven't passed that cert yet)
+const passedUserCerts = new Set(
+  individualExams
+    .filter(e => e.exam_status === "Passed")
+    .map(e => `${e.email.toLowerCase().trim()}|${e.exam_name || e.exam_code}`)
+);
+
+const nearMissUsers = new Set(
+  nearMissExams
+    .filter(e => !passedUserCerts.has(`${e.email.toLowerCase().trim()}|${e.exam_name || e.exam_code}`))
+    .map(e => e.email.toLowerCase().trim())
+);
+
+const needsPrepUsers = new Set(
+  needsPrepExams
+    .filter(e => !passedUserCerts.has(`${e.email.toLowerCase().trim()}|${e.exam_name || e.exam_code}`))
+    .map(e => e.email.toLowerCase().trim())
+);
+
+const moderateGapUsers = new Set(
+  moderateGapExams
+    .filter(e => !passedUserCerts.has(`${e.email.toLowerCase().trim()}|${e.exam_name || e.exam_code}`))
+    .map(e => e.email.toLowerCase().trim())
+);
+
+// Near-miss by certification
+const nearMissByCert: Record<string, number> = {};
+nearMissExams
+  .filter(e => !passedUserCerts.has(`${e.email.toLowerCase().trim()}|${e.exam_name || e.exam_code}`))
+  .forEach(e => {
+    const cert = e.exam_name || e.exam_code;
+    nearMissByCert[cert] = (nearMissByCert[cert] || 0) + 1;
+  });
+
+console.log(`🎯 Near-miss segment: ${nearMissUsers.size.toLocaleString()} users (scored 60-69%, need small push)`);
+
+// === SCHEDULED EXAM FORECASTING ===
+// Project upcoming certifications based on scheduled exams and historical pass rates
+const scheduledExams = individualExams.filter(
+  e => e.exam_status === "Scheduled" || e.exam_status === "Registered"
+);
+
+// Group by month for forecasting
+const scheduledByMonth: Record<string, { total: number; byCert: Record<string, number> }> = {};
+
+scheduledExams.forEach(exam => {
+  const date = new Date(exam.exam_date);
+  const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  const cert = exam.exam_name || exam.exam_code;
+  
+  if (!scheduledByMonth[monthKey]) {
+    scheduledByMonth[monthKey] = { total: 0, byCert: {} };
+  }
+  scheduledByMonth[monthKey].total++;
+  scheduledByMonth[monthKey].byCert[cert] = (scheduledByMonth[monthKey].byCert[cert] || 0) + 1;
+});
+
+// Calculate projected passes using historical pass rates
+const forecastData = Object.entries(scheduledByMonth)
+  .sort(([a], [b]) => a.localeCompare(b))
+  .slice(0, 6) // Next 6 months
+  .map(([month, data]) => {
+    // Calculate projected passes using cert-specific pass rates
+    let projectedPasses = 0;
+    Object.entries(data.byCert).forEach(([cert, count]) => {
+      const certRate = examPassRates[cert]?.rate || overallPassRate;
+      projectedPasses += Math.round(count * (certRate / 100));
+    });
+    
+    return {
+      month,
+      scheduled: data.total,
+      projectedPasses,
+      projectedPassRate: data.total > 0 ? Math.round((projectedPasses / data.total) * 100) : 0,
+      byCertification: Object.entries(data.byCert)
+        .map(([cert, count]) => ({ certification: cert, scheduled: count }))
+        .sort((a, b) => b.scheduled - a.scheduled),
+    };
+  });
+
+const totalScheduledNext3Months = forecastData.slice(0, 3).reduce((sum, m) => sum + m.scheduled, 0);
+const projectedPassesNext3Months = forecastData.slice(0, 3).reduce((sum, m) => sum + m.projectedPasses, 0);
+
+console.log(`📅 Scheduled exams (next 3 months): ${totalScheduledNext3Months.toLocaleString()}, projected passes: ${projectedPassesNext3Months.toLocaleString()}`);
+
+console.log(`📊 Exam attempts: ${totalExamAttempts.toLocaleString()} (${overallPassRate}% pass rate)`);
+
 // Impact score
 const impactScore = Math.min(100, Math.round(
   (certifiedCount / Math.max(totalLearners, 1)) * 30 +
@@ -382,6 +764,15 @@ const dashboardMetrics = {
   retentionRate: 87.5, // Would need 30-day activity data
   totalLearningHours: Math.round(totalLearningHours),
   totalCertsEarned,
+  // New exam attempt metrics
+  totalExamAttempts,
+  totalPassed,
+  totalFailed,
+  overallPassRate,
+  totalUsersWithAttempts,
+  totalUsersRegisteredOnly,
+  avgPassedScore,
+  avgFailedScore,
 };
 
 // === 2. Status Breakdown (exclude Registereds for learning journey funnel) ===
@@ -400,8 +791,8 @@ const statusBreakdown = Object.entries(statusCounts)
 
 // Create lookup maps for enrichment data
 const learnDotcomIdSet = new Set(githubLearn.map(u => u.dotcom_id));
-const skillsHandleSet = new Set(skillsEnrollments.map(u => u.handle.toLowerCase()));
-const activityHandleSet = new Set(githubActivity.map(u => u.handle.toLowerCase()));
+const skillsHandleSet = new Set(skillsEnrollments.map(u => String(u.handle || '').toLowerCase()).filter(h => h));
+const activityHandleSet = new Set(githubActivity.map(u => String(u.handle || '').toLowerCase()).filter(h => h));
 
 // Calculate progression stages from learners_enriched
 // Each user can be categorized into ONE stage (their highest achieved stage)
@@ -617,15 +1008,42 @@ const impactFlow = {
 const productUsageByDotcomId = new Map(productUsage.map(u => [u.dotcom_id, u]));
 
 // Get product adoption metrics by learner status using learners_enriched boolean flags
+// Now includes both 90-day ("uses_*") and 365-day ("*_ever_used") metrics
 const getStageMetrics = (status: string) => {
   const stageUsers = learnersEnriched.filter(u => u.learner_status === status);
   
-  if (stageUsers.length === 0) return { avgHours: 0, copilotRate: 0, actionsRate: 0, securityRate: 0, count: 0 };
+  if (stageUsers.length === 0) return { 
+    avgHours: 0, 
+    // 90-day rates (current behavior, backward compatible)
+    copilotRate: 0, 
+    actionsRate: 0, 
+    securityRate: 0, 
+    // 365-day "ever used" rates (captures occasional users)
+    copilotEverUsedRate: 0,
+    actionsEverUsedRate: 0,
+    securityEverUsedRate: 0,
+    // Multi-window breakdowns
+    copilotActive90d: 0,
+    copilotActive180d: 0,
+    copilotActive365d: 0,
+    count: 0 
+  };
   
   // Calculate adoption rates from boolean flags in learners_enriched
+  // 90-day rates (uses_* flags - backward compatible)
   const copilotRate = stageUsers.filter(u => parseBool(u.uses_copilot)).length / stageUsers.length * 100;
   const actionsRate = stageUsers.filter(u => parseBool(u.uses_actions)).length / stageUsers.length * 100;
   const securityRate = stageUsers.filter(u => parseBool(u.uses_security)).length / stageUsers.length * 100;
+  
+  // 365-day "ever used" rates (captures occasional users)
+  const copilotEverUsedRate = stageUsers.filter(u => parseBool(u.copilot_ever_used)).length / stageUsers.length * 100;
+  const actionsEverUsedRate = stageUsers.filter(u => parseBool(u.actions_ever_used)).length / stageUsers.length * 100;
+  const securityEverUsedRate = stageUsers.filter(u => parseBool(u.security_ever_used)).length / stageUsers.length * 100;
+  
+  // Multi-window breakdown by recency
+  const copilotActive90d = stageUsers.filter(u => u.copilot_usage_recency === 'active_90d').length;
+  const copilotActive180d = stageUsers.filter(u => u.copilot_usage_recency === 'active_180d').length;
+  const copilotActive365d = stageUsers.filter(u => u.copilot_usage_recency === 'active_365d').length;
   
   // Get average hours from product_usage for users that match
   const usageData = stageUsers
@@ -635,7 +1053,22 @@ const getStageMetrics = (status: string) => {
     ? usageData.reduce((sum, u) => sum + u.product_usage_hours, 0) / usageData.length
     : 0;
   
-  return { avgHours, copilotRate, actionsRate, securityRate, count: stageUsers.length };
+  return { 
+    avgHours, 
+    // 90-day rates
+    copilotRate, 
+    actionsRate, 
+    securityRate, 
+    // 365-day "ever used" rates
+    copilotEverUsedRate,
+    actionsEverUsedRate,
+    securityEverUsedRate,
+    // Multi-window counts
+    copilotActive90d,
+    copilotActive180d,
+    copilotActive365d,
+    count: stageUsers.length 
+  };
 };
 
 // Calculate baseline (Learning users with product usage data)
@@ -666,7 +1099,14 @@ const stageImpact = [
     avgUsageIncrease: 0, // Baseline
     platformTimeIncrease: 0,
     topProduct: "Docs & Guides",
-    adoptionRate: Math.round(learningMetrics.copilotRate || 0),
+    adoptionRate: Math.round(learningMetrics.copilotRate || 0),  // 90-day rate
+    adoptionRateEverUsed: Math.round(learningMetrics.copilotEverUsedRate || 0),  // 365-day rate
+    copilotBreakdown: {
+      active90d: learningMetrics.copilotActive90d,
+      active180d: learningMetrics.copilotActive180d,
+      active365d: learningMetrics.copilotActive365d,
+      total: learningMetrics.count,
+    },
   },
   {
     stage: "Certified",
@@ -677,6 +1117,13 @@ const stageImpact = [
     platformTimeIncrease: Math.round(certifiedMetrics.copilotRate - learningMetrics.copilotRate),
     topProduct: getTopProduct(certifiedMetrics),
     adoptionRate: Math.round(certifiedMetrics.copilotRate || 0),
+    adoptionRateEverUsed: Math.round(certifiedMetrics.copilotEverUsedRate || 0),
+    copilotBreakdown: {
+      active90d: certifiedMetrics.copilotActive90d,
+      active180d: certifiedMetrics.copilotActive180d,
+      active365d: certifiedMetrics.copilotActive365d,
+      total: certifiedMetrics.count,
+    },
   },
   {
     stage: "Multi-Certified",
@@ -687,6 +1134,13 @@ const stageImpact = [
     platformTimeIncrease: Math.round(multiCertMetrics.copilotRate - learningMetrics.copilotRate),
     topProduct: getTopProduct(multiCertMetrics),
     adoptionRate: Math.round(multiCertMetrics.copilotRate || 0),
+    adoptionRateEverUsed: Math.round(multiCertMetrics.copilotEverUsedRate || 0),
+    copilotBreakdown: {
+      active90d: multiCertMetrics.copilotActive90d,
+      active180d: multiCertMetrics.copilotActive180d,
+      active365d: multiCertMetrics.copilotActive365d,
+      total: multiCertMetrics.count,
+    },
   },
   {
     stage: "Specialist",
@@ -697,6 +1151,13 @@ const stageImpact = [
     platformTimeIncrease: Math.round(specialistMetrics.copilotRate - learningMetrics.copilotRate),
     topProduct: getTopProduct(specialistMetrics),
     adoptionRate: Math.round(specialistMetrics.copilotRate || 0),
+    adoptionRateEverUsed: Math.round(specialistMetrics.copilotEverUsedRate || 0),
+    copilotBreakdown: {
+      active90d: specialistMetrics.copilotActive90d,
+      active180d: specialistMetrics.copilotActive180d,
+      active365d: specialistMetrics.copilotActive365d,
+      total: specialistMetrics.count,
+    },
   },
   {
     stage: "Champion",
@@ -707,6 +1168,13 @@ const stageImpact = [
     platformTimeIncrease: Math.round(championMetrics.copilotRate - learningMetrics.copilotRate),
     topProduct: getTopProduct(championMetrics),
     adoptionRate: Math.round(championMetrics.copilotRate || 0),
+    adoptionRateEverUsed: Math.round(championMetrics.copilotEverUsedRate || 0),
+    copilotBreakdown: {
+      active90d: championMetrics.copilotActive90d,
+      active180d: championMetrics.copilotActive180d,
+      active365d: championMetrics.copilotActive365d,
+      total: championMetrics.count,
+    },
   },
 ];
 
@@ -1062,7 +1530,7 @@ const skillProfiles: SkillProfile[] = learnersEnriched.map(user => {
   );
   
   return {
-    handle: user.user_handle || email.split("@")[0] || "unknown",
+    handle: user.userhandle || email.split("@")[0] || "unknown",
     email: user.email,
     skill_score: skillScore,
     skill_level: getSkillLevel(skillScore),
@@ -1175,6 +1643,51 @@ writeJSON("metrics.json", {
   statusBreakdown,
   funnel,
   productAdoption,
+  // New certification analytics with attempt tracking
+  certificationAnalytics: {
+    examStatusCounts,
+    certificationPassRates,
+    summary: {
+      totalExamAttempts,
+      totalPassed,
+      totalFailed,
+      totalNoShows,
+      totalScheduled,
+      totalCancelled,
+      overallPassRate,
+      totalUsersWithAttempts,
+      totalUsersRegisteredOnly,
+      avgPassedScore,
+      avgFailedScore,
+    },
+    // Retry attempt tracking
+    retryAnalytics: {
+      uniqueCertAttempts,
+      firstTimePasses,
+      firstTimePassRate,
+      failedFirstTimeCount: failedFirstTime.length,
+      retriedAndPassed,
+      retrySuccessRate,
+      avgAttemptsToPass,
+      attemptDistribution,
+    },
+    // Near-miss segment for targeted support
+    nearMissSegment: {
+      nearMissCount: nearMissUsers.size,
+      nearMissThreshold: `${NEAR_MISS_THRESHOLD_LOW}-${NEAR_MISS_THRESHOLD_HIGH}%`,
+      moderateGapCount: moderateGapUsers.size,
+      needsPrepCount: needsPrepUsers.size,
+      nearMissByCertification: Object.entries(nearMissByCert)
+        .map(([cert, count]) => ({ certification: cert, count }))
+        .sort((a, b) => b.count - a.count),
+    },
+    // Scheduled exam forecasting
+    examForecast: {
+      totalScheduledNext3Months,
+      projectedPassesNext3Months,
+      monthlyForecast: forecastData,
+    },
+  },
   generatedAt: new Date().toISOString(),
 });
 

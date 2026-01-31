@@ -57,10 +57,10 @@ export default function ExecutiveSummaryPage() {
   if (monthlyProgression.length > 0) {
     let cumulativeCerts = 0;
     chartData = monthlyProgression.slice(-6).map((m) => {
-      cumulativeCerts += m.certified || 0;
+      cumulativeCerts += m.certified ?? 0;
       return {
-        name: m.name || m.month || "Unknown",
-        count: m.certified || 0,
+        name: m.name ?? "Unknown",
+        count: m.certified ?? 0,
       };
     });
   } else {

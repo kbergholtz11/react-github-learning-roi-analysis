@@ -3,7 +3,8 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Target, TrendingUp, Users, CheckCircle, ArrowRight, Package, Loader2, Info, BarChart3, ArrowUpRight, Activity } from "lucide-react";
+import { TrendingUp, CheckCircle, Info, BarChart3, Activity } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { SimpleBarChart } from "@/components/dashboard/charts";
 import { useImpact, useMetrics } from "@/hooks/use-data";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -16,8 +17,18 @@ export default function ProductAlignmentPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="space-y-6" aria-busy="true" aria-label="Loading alignment data">
+        <div className="flex items-center justify-between">
+          <div>
+            <Skeleton className="h-8 w-64 mb-2" />
+            <Skeleton className="h-4 w-96" />
+          </div>
+          <Skeleton className="h-6 w-32" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-32" />)}
+        </div>
+        <Skeleton className="h-80" />
       </div>
     );
   }

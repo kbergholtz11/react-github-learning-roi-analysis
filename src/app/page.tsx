@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import Link from "next/link";
 import { MetricCard, DonutChart, SimpleAreaChart, TrendLineChart } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +13,7 @@ import {
   Award, 
   TrendingUp, 
   ArrowRight,
+  ArrowUpRight,
   Sparkles,
   GraduationCap,
   Zap,
@@ -23,7 +25,7 @@ import {
 import { useMetrics } from "@/hooks/use-data";
 import { useCopilotTrend, useEnrichedStats } from "@/hooks/use-unified-data";
 
-// Quick Navigation Cards
+// Quick Navigation Cards - defined outside component to avoid recreation
 const quickNavCards = [
   {
     title: "Learning Impact",
@@ -112,80 +114,94 @@ export default function DashboardPage() {
   const { data: copilotTrend } = useCopilotTrend(30);
   const { data: enrichedStats } = useEnrichedStats();
 
+  // Memoize expensive data transformations
+  const { metrics, funnel, statusBreakdown } = useMemo(() => {
+    if (!data) return { metrics: null, funnel: [], statusBreakdown: [] };
+    
+    // Normalize metrics - handle both old and new API response shapes
+    // Use type assertion to handle different API shapes
+    const rawMetrics = (data.metrics || data) as unknown as Record<string, unknown>;
+    return {
+      metrics: {
+        totalLearners: Number(rawMetrics.totalLearners ?? rawMetrics.total_learners ?? 0),
+        certifiedUsers: Number(rawMetrics.certifiedUsers ?? rawMetrics.certifiedLearners ?? rawMetrics.certified_learners ?? 0),
+        avgUsageIncrease: Number(rawMetrics.avgUsageIncrease ?? 25),
+        avgProductsAdopted: Number(rawMetrics.avgProductsAdopted ?? 3),
+        impactScore: Number(rawMetrics.impactScore ?? 75),
+        learningUsers: Number(rawMetrics.learningUsers ?? rawMetrics.totalLearners ?? 0),
+        avgLearningHours: Number(rawMetrics.avgLearningHours ?? 12),
+        retentionRate: Number(rawMetrics.retentionRate ?? 85),
+      },
+      funnel: data.funnel || [],
+      statusBreakdown: data.statusBreakdown || [],
+    };
+  }, [data]);
+
+  // Memoize derived chart data
+  const { journeyStages, impactSummary, activityTrend, topPaths } = useMemo(() => {
+    if (!metrics) return { journeyStages: [], impactSummary: [], activityTrend: [], topPaths: [] };
+    
+    // Transform funnel data for display
+    const maxCount = funnel.length > 0 ? Math.max(...funnel.map((f: { count: number }) => f.count)) : 0;
+    const journeyStages = funnel.map((f: { stage: string; count: number }) => ({
+      stage: f.stage,
+      count: f.count,
+      percentage: maxCount > 0 ? Math.round((f.count / maxCount) * 100) : 0,
+      color: stageColors[f.stage] || "#94a3b8"
+    })).reverse();
+
+    // Transform status breakdown for donut chart
+    const impactSummary = statusBreakdown.map((s: { status: string; count: number }) => ({
+      name: s.status,
+      value: s.count,
+      color: stageColors[s.status] || "#94a3b8"
+    }));
+
+    // Activity trend (simulated monthly data based on current metrics)
+    const activityTrend = [
+      { name: "Aug", completions: Math.round(metrics.certifiedUsers * 0.6), usage: 45 },
+      { name: "Sep", completions: Math.round(metrics.certifiedUsers * 0.7), usage: 52 },
+      { name: "Oct", completions: Math.round(metrics.certifiedUsers * 0.8), usage: 58 },
+      { name: "Nov", completions: Math.round(metrics.certifiedUsers * 0.9), usage: 65 },
+      { name: "Dec", completions: Math.round(metrics.certifiedUsers * 0.95), usage: 71 },
+      { name: "Jan", completions: metrics.certifiedUsers, usage: 78 },
+    ];
+
+    // Top learning paths (derived from status breakdown)
+    const topPaths = [
+      { 
+        name: "GitHub Copilot Mastery", 
+        learners: Math.round(metrics.certifiedUsers * 0.3), 
+        impact: 89, 
+        adoption: "+55%" 
+      },
+      { 
+        name: "Actions & Automation", 
+        learners: Math.round(metrics.certifiedUsers * 0.25), 
+        impact: 82, 
+        adoption: "+48%" 
+      },
+      { 
+        name: "Security Fundamentals", 
+        learners: Math.round(metrics.certifiedUsers * 0.18), 
+        impact: 76, 
+        adoption: "+42%" 
+      },
+      { 
+        name: "Code Review Excellence", 
+        learners: Math.round(metrics.certifiedUsers * 0.15), 
+        impact: 71, 
+        adoption: "+38%" 
+      },
+    ];
+
+    return { journeyStages, impactSummary, activityTrend, topPaths };
+  }, [metrics, funnel, statusBreakdown]);
+
+  // Early returns after all hooks
   if (isLoading) return <LoadingSkeleton />;
   if (error) return <ErrorState error={error as Error} />;
-  if (!data) return null;
-
-  // Normalize metrics - handle both old and new API response shapes
-  const rawMetrics = data.metrics || data;
-  const metrics = {
-    totalLearners: rawMetrics.totalLearners || rawMetrics.total_learners || 0,
-    certifiedUsers: rawMetrics.certifiedUsers || rawMetrics.certifiedLearners || rawMetrics.certified_learners || 0,
-    avgUsageIncrease: rawMetrics.avgUsageIncrease || 25,
-    avgProductsAdopted: rawMetrics.avgProductsAdopted || 3,
-    impactScore: rawMetrics.impactScore || 75,
-    learningUsers: rawMetrics.learningUsers || rawMetrics.totalLearners || 0,
-    avgLearningHours: rawMetrics.avgLearningHours || 12,
-    retentionRate: rawMetrics.retentionRate || 85,
-  };
-  
-  // Safe defaults for funnel and statusBreakdown (may not exist in new API)
-  const funnel = data.funnel || [];
-  const statusBreakdown = data.statusBreakdown || [];
-
-  // Transform funnel data for display
-  const maxCount = funnel.length > 0 ? Math.max(...funnel.map(f => f.count)) : 0;
-  const journeyStages = funnel.map(f => ({
-    stage: f.stage,
-    count: f.count,
-    percentage: maxCount > 0 ? Math.round((f.count / maxCount) * 100) : 0,
-    color: stageColors[f.stage] || "#94a3b8"
-  })).reverse();
-
-  // Transform status breakdown for donut chart
-  const impactSummary = statusBreakdown.map(s => ({
-    name: s.status,
-    value: s.count,
-    color: stageColors[s.status] || "#94a3b8"
-  }));
-
-  // Activity trend (simulated monthly data based on current metrics)
-  const activityTrend = [
-    { name: "Aug", completions: Math.round(metrics.certifiedUsers * 0.6), usage: 45 },
-    { name: "Sep", completions: Math.round(metrics.certifiedUsers * 0.7), usage: 52 },
-    { name: "Oct", completions: Math.round(metrics.certifiedUsers * 0.8), usage: 58 },
-    { name: "Nov", completions: Math.round(metrics.certifiedUsers * 0.9), usage: 65 },
-    { name: "Dec", completions: Math.round(metrics.certifiedUsers * 0.95), usage: 71 },
-    { name: "Jan", completions: metrics.certifiedUsers, usage: 78 },
-  ];
-
-  // Top learning paths (derived from status breakdown)
-  const topPaths = [
-    { 
-      name: "GitHub Copilot Mastery", 
-      learners: Math.round(metrics.certifiedUsers * 0.3), 
-      impact: 89, 
-      adoption: "+55%" 
-    },
-    { 
-      name: "Actions & Automation", 
-      learners: Math.round(metrics.certifiedUsers * 0.25), 
-      impact: 82, 
-      adoption: "+48%" 
-    },
-    { 
-      name: "Security Fundamentals", 
-      learners: Math.round(metrics.certifiedUsers * 0.18), 
-      impact: 76, 
-      adoption: "+42%" 
-    },
-    { 
-      name: "Code Review Excellence", 
-      learners: Math.round(metrics.certifiedUsers * 0.15), 
-      impact: 71, 
-      adoption: "+38%" 
-    },
-  ];
+  if (!metrics) return null;
 
   return (
     <div className="space-y-6">
@@ -363,7 +379,7 @@ export default function DashboardPage() {
         <Card className="col-span-3">
           <CardHeader>
             <CardTitle>Product Adoption</CardTitle>
-            <CardDescription>Learners using GitHub products</CardDescription>
+            <CardDescription>Learners using GitHub products (90-day active)</CardDescription>
           </CardHeader>
           <CardContent>
             {enrichedStats ? (
@@ -373,21 +389,36 @@ export default function DashboardPage() {
                     <Sparkles className="h-5 w-5 text-violet-600" />
                     <span className="font-medium">Copilot</span>
                   </div>
-                  <span className="text-xl font-bold text-violet-600">{(enrichedStats.copilot_users || 0).toLocaleString()}</span>
+                  <div className="text-right">
+                    <span className="text-xl font-bold text-violet-600">{(enrichedStats.copilot_users || 0).toLocaleString()}</span>
+                    <span className="text-xs text-muted-foreground ml-2">
+                      ({enrichedStats.total_learners ? Math.round((enrichedStats.copilot_users || 0) / enrichedStats.total_learners * 100) : 0}%)
+                    </span>
+                  </div>
                 </div>
                 <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
                   <div className="flex items-center gap-2">
                     <Zap className="h-5 w-5 text-blue-600" />
                     <span className="font-medium">Actions</span>
                   </div>
-                  <span className="text-xl font-bold text-blue-600">{(enrichedStats.actions_users || 0).toLocaleString()}</span>
+                  <div className="text-right">
+                    <span className="text-xl font-bold text-blue-600">{(enrichedStats.actions_users || 0).toLocaleString()}</span>
+                    <span className="text-xs text-muted-foreground ml-2">
+                      ({enrichedStats.total_learners ? Math.round((enrichedStats.actions_users || 0) / enrichedStats.total_learners * 100) : 0}%)
+                    </span>
+                  </div>
                 </div>
                 <div className="flex items-center justify-between p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg">
                   <div className="flex items-center gap-2">
                     <Shield className="h-5 w-5 text-amber-600" />
                     <span className="font-medium">Security</span>
                   </div>
-                  <span className="text-xl font-bold text-amber-600">{(enrichedStats.security_users || 0).toLocaleString()}</span>
+                  <div className="text-right">
+                    <span className="text-xl font-bold text-amber-600">{(enrichedStats.security_users || 0).toLocaleString()}</span>
+                    <span className="text-xs text-muted-foreground ml-2">
+                      ({enrichedStats.total_learners ? Math.round((enrichedStats.security_users || 0) / enrichedStats.total_learners * 100) : 0}%)
+                    </span>
+                  </div>
                 </div>
                 <div className="pt-2 border-t">
                   <div className="flex items-center justify-between text-sm">
@@ -398,6 +429,13 @@ export default function DashboardPage() {
                     <span className="text-muted-foreground">With Company</span>
                     <span className="font-semibold">{(enrichedStats.learners_with_company || 0).toLocaleString()}</span>
                   </div>
+                  <Link 
+                    href="/adoption" 
+                    className="flex items-center justify-center gap-1 mt-3 text-sm text-primary hover:underline"
+                  >
+                    View Full Product Adoption Analysis
+                    <ArrowUpRight className="h-3 w-3" />
+                  </Link>
                 </div>
               </div>
             ) : (

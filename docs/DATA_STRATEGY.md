@@ -83,6 +83,60 @@
 | `learning_activity.csv` | Kusto | Nightly |
 | `journey_complete.csv` | Synthetic | Manual |
 
+## Product Usage Time Windows
+
+Product usage data is now tracked for **10 products** across multiple time windows to capture both active and occasional users:
+
+### Tracked Products
+
+| Category | Product | Skill Assessment |
+|----------|---------|------------------|
+| **Advanced Tools** | Copilot, Security | AI-assisted development, security practices |
+| **CI/CD** | Actions | Automation and deployment skills |
+| **Collaboration** | Pull Requests, Issues | Code review and project management |
+| **Ecosystem** | Packages, Projects, Discussions, Pages, Code Search | Full platform proficiency |
+
+### Time Windows
+
+| Window | Purpose | Fields |
+|--------|---------|--------|
+| 90-day | Current active users | `uses_copilot`, `copilot_days_90d`, `copilot_events_90d` |
+| 180-day | Captures bi-monthly users | `copilot_days_180d`, `copilot_events_180d` |
+| 365-day | Full year, all occasional users | `copilot_days`, `copilot_ever_used` |
+
+### Skill Maturity Score (0-100)
+
+Learners receive a skill maturity score based on products adopted:
+
+| Level | Score | Products Used |
+|-------|-------|---------------|
+| **Expert** | 80-100 | Uses most/all products including ecosystem |
+| **Advanced** | 60-79 | Uses advanced tools + CI/CD + collaboration |
+| **Intermediate** | 40-59 | Uses CI/CD + some collaboration |
+| **Beginner** | 20-39 | Uses basic collaboration tools |
+| **Novice** | 0-19 | Limited product usage |
+
+### Score Components
+
+- **Level 1 (25 pts)**: Basic GitHub - Pull Requests (15) + Issues (10)
+- **Level 2 (25 pts)**: CI/CD - Actions (25)
+- **Level 3 (25 pts)**: Advanced Tools - Copilot (15) + Security (10)
+- **Level 4 (25 pts)**: Ecosystem - Packages (6) + Projects (5) + Discussions (5) + Pages (4) + Code Search (5)
+
+### "Ever Used" vs "Active" Flags
+
+- **`uses_copilot`** (90-day): Backward compatible flag for "currently active" users
+- **`copilot_ever_used`** (365-day): Captures occasional users who may be missed by 90-day window
+- **`copilot_usage_recency`**: Classification (`active_90d`, `active_180d`, `active_365d`, `never`)
+
+### Impact on Metrics
+
+The 90-day window may undercount Copilot adoption by ~30-50% for occasional users. Use:
+- **90-day rates** for "active adoption" metrics and engagement
+- **365-day rates** for "penetration" and "reach" metrics
+- **Recency breakdown** to understand usage patterns
+- **Skill maturity score** for holistic learner assessment
+
 ## Sync Strategy
 
 ### Live Data (Real-time)

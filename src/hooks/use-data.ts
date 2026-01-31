@@ -33,6 +33,77 @@ const warnDeprecated = (hookName: string, replacement: string) => {
 };
 
 // Dashboard metrics hook
+interface CertificationPassRate {
+  certification: string;
+  passed: number;
+  failed: number;
+  totalAttempts: number;
+  passRate: number;
+}
+
+interface ExamStatusCounts {
+  Passed: number;
+  Failed: number;
+  "No Show": number;
+  Scheduled: number;
+  Cancelled: number;
+  Registered: number;
+}
+
+interface CertificationAnalytics {
+  examStatusCounts: ExamStatusCounts;
+  certificationPassRates: CertificationPassRate[];
+  summary: {
+    totalExamAttempts: number;
+    totalPassed: number;
+    totalFailed: number;
+    totalNoShows: number;
+    totalScheduled: number;
+    totalCancelled: number;
+    overallPassRate: number;
+    totalUsersWithAttempts: number;
+    totalUsersRegisteredOnly: number;
+    avgPassedScore: number;
+    avgFailedScore: number;
+  };
+  // Retry attempt tracking
+  retryAnalytics?: {
+    uniqueCertAttempts: number;
+    firstTimePasses: number;
+    firstTimePassRate: number;
+    failedFirstTimeCount: number;
+    retriedAndPassed: number;
+    retrySuccessRate: number;
+    avgAttemptsToPass: number;
+    attemptDistribution: {
+      firstTry: number;
+      secondTry: number;
+      thirdTry: number;
+      fourPlusTries: number;
+    };
+  };
+  // Near-miss segment
+  nearMissSegment?: {
+    nearMissCount: number;
+    nearMissThreshold: string;
+    moderateGapCount: number;
+    needsPrepCount: number;
+    nearMissByCertification: { certification: string; count: number }[];
+  };
+  // Exam forecasting
+  examForecast?: {
+    totalScheduledNext3Months: number;
+    projectedPassesNext3Months: number;
+    monthlyForecast: {
+      month: string;
+      scheduled: number;
+      projectedPasses: number;
+      projectedPassRate: number;
+      byCertification: { certification: string; scheduled: number }[];
+    }[];
+  };
+}
+
 interface MetricsResponse {
   metrics: DashboardMetrics;
   funnel: JourneyFunnelData[];
@@ -43,6 +114,7 @@ interface MetricsResponse {
     security: { before: number; after: number };
     totalUsage: { before: number; after: number };
   };
+  certificationAnalytics?: CertificationAnalytics;
 }
 
 /**
@@ -293,6 +365,13 @@ interface CopilotLanguage {
   linesAccepted: number;
 }
 
+interface CopilotByLearnerStatus {
+  learner_status: string;
+  copilot_users: number;
+  total_users: number;
+  adoption_rate: number;
+}
+
 interface CopilotInsights {
   languages: CopilotLanguage[];
   totals: {
@@ -303,6 +382,14 @@ interface CopilotInsights {
   };
   topLanguages: string[];
   generatedAt: string;
+  // Extended properties from enriched data source
+  source?: "enriched" | "sample";
+  stats?: {
+    totalLearners: number;
+    copilotUsers: number;
+    adoptionRate: number;
+  };
+  byLearnerStatus?: CopilotByLearnerStatus[];
 }
 
 export function useCopilotInsights() {

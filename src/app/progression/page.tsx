@@ -1,7 +1,8 @@
 "use client";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart2, TrendingUp, Award, Clock, Loader2 } from "lucide-react";
+import { BarChart2, TrendingUp, Award, Clock } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { SimpleBarChart, SimpleAreaChart } from "@/components/dashboard/charts";
 import { useMetrics, useJourney, useImpact } from "@/hooks/use-data";
 
@@ -14,8 +15,15 @@ export default function ProgressionTrackingPage() {
   
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="space-y-6" aria-busy="true" aria-label="Loading progression data">
+        <div>
+          <Skeleton className="h-8 w-64 mb-2" />
+          <Skeleton className="h-4 w-96" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-28" />)}
+        </div>
+        <Skeleton className="h-80" />
       </div>
     );
   }
@@ -33,10 +41,10 @@ export default function ProgressionTrackingPage() {
   })) || [];
   
   // Monthly progression from journey data - using correct property names
-  const monthlyProgression = journey?.monthlyProgression?.map((m: { name: string; certified: number; learning: number; multiCert: number }) => ({
+  const monthlyProgression = journey?.monthlyProgression?.map((m) => ({
     name: m.name,
-    certified: m.certified,
-    learning: m.learning,
+    certified: m.certified ?? 0,
+    learning: m.learning ?? 0,
   })) || [];
 
   // Stage impact data - using correct property names  

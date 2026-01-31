@@ -4,13 +4,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 import { 
   BookOpen, 
   Users, 
   GitFork, 
   CheckCircle2, 
   TrendingUp, 
-  Loader2,
   Award,
   Target,
   Activity,
@@ -20,6 +20,7 @@ import {
   ExternalLink
 } from "lucide-react";
 import { useSkillsCourses } from "@/hooks/use-data";
+import { formatNumber } from "@/lib/utils";
 import {
   ResponsiveContainer,
   BarChart,
@@ -55,19 +56,20 @@ const DIFFICULTY_COLORS: Record<string, string> = {
   "advanced": "#ef4444",
 };
 
-function formatNumber(value: number): string {
-  if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
-  if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
-  return value.toLocaleString();
-}
-
 export default function SkillsAnalyticsPage() {
   const { data: skillsData, isLoading, error } = useSkillsCourses();
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="space-y-6" aria-busy="true" aria-label="Loading skills analytics">
+        <div>
+          <Skeleton className="h-8 w-64 mb-2" />
+          <Skeleton className="h-4 w-96" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-28" />)}
+        </div>
+        <Skeleton className="h-80" />
       </div>
     );
   }

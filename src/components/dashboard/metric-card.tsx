@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
@@ -15,7 +16,7 @@ interface MetricCardProps {
   className?: string;
 }
 
-export function MetricCard({
+function MetricCardComponent({
   title,
   value,
   description,
@@ -71,3 +72,6 @@ export function MetricCard({
     </Card>
   );
 }
+
+// Memoize to prevent unnecessary re-renders when parent state changes
+export const MetricCard = memo(MetricCardComponent);

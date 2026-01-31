@@ -4,10 +4,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
-  Users, TrendingUp, ChevronDown, Loader2, 
+  Users, TrendingUp, ChevronDown, 
   Eye, Activity, BookOpen, GraduationCap, Crown,
   ArrowRight, Clock, CheckCircle2, Compass, Rocket
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useJourney, useMetrics, useImpact } from "@/hooks/use-data";
 
 // Icon mapping for progression-based journey stages
@@ -80,8 +81,18 @@ export default function JourneyFunnelPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="space-y-6" aria-busy="true" aria-label="Loading funnel data">
+        <div className="flex items-center justify-between">
+          <div>
+            <Skeleton className="h-8 w-56 mb-2" />
+            <Skeleton className="h-4 w-80" />
+          </div>
+          <Skeleton className="h-6 w-32" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-28" />)}
+        </div>
+        <Skeleton className="h-96" />
       </div>
     );
   }

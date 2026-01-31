@@ -306,6 +306,7 @@ def main():
         for fork in forks:
             owner = fork.get("owner", {})
             username = owner.get("login", "").lower()
+            user_id = owner.get("id")  # dotcom_id from GitHub API
             
             # Check if this is one of our known learners
             is_known = username in known_users
@@ -315,6 +316,7 @@ def main():
             # Create enrollment record
             enrollment = {
                 "handle": username,
+                "dotcom_id": user_id,  # Capture user ID for enrichment
                 "course": name,
                 "course_repo": repo,
                 "category": course["category"],
@@ -369,7 +371,7 @@ def main():
     if all_enrollments:
         all_enrollments_path = DATA_DIR / "skills_all_enrollments.csv"
         with open(all_enrollments_path, "w", newline="") as f:
-            fieldnames = ["handle", "course", "category", "difficulty", "fork_created", "fork_updated", "is_known_learner", "has_activity", "likely_completed", "commit_count"]
+            fieldnames = ["handle", "dotcom_id", "course", "category", "difficulty", "fork_created", "fork_updated", "is_known_learner", "has_activity", "likely_completed", "commit_count"]
             writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
             writer.writeheader()
             writer.writerows(all_enrollments)
@@ -380,7 +382,7 @@ def main():
     if known_enrollments:
         enrollments_path = DATA_DIR / "skills_enrollments.csv"
         with open(enrollments_path, "w", newline="") as f:
-            fieldnames = ["handle", "course", "category", "difficulty", "fork_created", "has_activity", "likely_completed", "commit_count"]
+            fieldnames = ["handle", "dotcom_id", "course", "category", "difficulty", "fork_created", "has_activity", "likely_completed", "commit_count"]
             writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
             writer.writeheader()
             writer.writerows(known_enrollments)
