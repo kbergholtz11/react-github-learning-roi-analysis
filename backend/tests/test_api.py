@@ -224,3 +224,161 @@ class TestQueryEndpoints:
         )
         # Should be 503 if Kusto not configured
         assert response.status_code in [200, 503]
+
+
+class TestEnrichedEndpoints:
+    """Test enriched learner data endpoints (DuckDB/Parquet)."""
+
+    def test_enriched_learners(self, client):
+        """Test listing enriched learners."""
+        response = client.get("/api/enriched/learners")
+        assert response.status_code == 200
+        data = response.json()
+        assert "learners" in data
+        assert "count" in data  # Response uses 'count' not 'total'
+        assert "limit" in data
+
+    def test_enriched_learners_search(self, client):
+        """Test searching enriched learners."""
+        response = client.get("/api/enriched/learners/search?q=test")
+        assert response.status_code == 200
+        data = response.json()
+        assert "results" in data  # Response uses 'results' not 'learners'
+        assert "count" in data
+
+    def test_enriched_stats(self, client):
+        """Test enriched stats endpoint."""
+        response = client.get("/api/enriched/stats")
+        assert response.status_code == 200
+        data = response.json()
+        # Should have overall statistics
+        assert isinstance(data, dict)
+
+    def test_enriched_stats_by_region(self, client):
+        """Test stats breakdown by region."""
+        response = client.get("/api/enriched/stats/by-region")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, (list, dict))
+
+    def test_enriched_stats_by_status(self, client):
+        """Test stats breakdown by learner status."""
+        response = client.get("/api/enriched/stats/by-status")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, (list, dict))
+
+    def test_enriched_stats_growth(self, client):
+        """Test growth statistics."""
+        response = client.get("/api/enriched/stats/growth")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, dict)
+
+    def test_enriched_stats_segments(self, client):
+        """Test segment analysis."""
+        response = client.get("/api/enriched/stats/segments")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, (list, dict))
+
+    def test_top_companies(self, client):
+        """Test top companies endpoint."""
+        response = client.get("/api/enriched/companies/top")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, (list, dict))
+
+    def test_copilot_adoption_analysis(self, client):
+        """Test copilot adoption by certification status."""
+        response = client.get("/api/enriched/analysis/copilot-adoption")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, (list, dict))
+
+    def test_learning_to_usage_analysis(self, client):
+        """Test learning to usage correlation."""
+        response = client.get("/api/enriched/analysis/learning-to-usage")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, (list, dict))
+
+    def test_database_status(self, client):
+        """Test database status endpoint."""
+        response = client.get("/api/enriched/database/status")
+        assert response.status_code == 200
+        data = response.json()
+        assert "available" in data  # Response uses 'available' not 'connected'
+        assert "table_count" in data
+
+    def test_sync_status(self, client):
+        """Test sync status endpoint."""
+        response = client.get("/api/enriched/sync/status")
+        assert response.status_code == 200
+        data = response.json()
+        # Should have sync metadata
+        assert isinstance(data, dict)
+
+
+class TestCopilotEndpoints:
+    """Test Copilot analytics endpoints."""
+
+    def test_copilot_overview(self, client):
+        """Test main copilot analytics endpoint."""
+        response = client.get("/api/copilot")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, dict)
+
+    def test_copilot_stats(self, client):
+        """Test copilot stats endpoint."""
+        response = client.get("/api/copilot/stats")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, dict)
+
+    def test_copilot_by_learner_status(self, client):
+        """Test copilot usage by learner status."""
+        response = client.get("/api/copilot/by-learner-status")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+
+    def test_copilot_by_region(self, client):
+        """Test copilot usage by region."""
+        response = client.get("/api/copilot/by-region")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+
+    def test_copilot_top_users(self, client):
+        """Test top copilot users."""
+        response = client.get("/api/copilot/top-users")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+
+    def test_copilot_cert_comparison(self, client):
+        """Test copilot usage by certification."""
+        response = client.get("/api/copilot/cert-comparison")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+
+
+class TestSkillsEndpoints:
+    """Test skills journey endpoints."""
+
+    def test_skills_summary(self, client):
+        """Test skills journey summary."""
+        response = client.get("/api/journey/skills")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, dict)
+
+    def test_top_skilled_learners(self, client):
+        """Test top skilled learners."""
+        response = client.get("/api/journey/skills/top")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, (list, dict))

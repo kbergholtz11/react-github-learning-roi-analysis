@@ -144,6 +144,123 @@ function DialogDescription({
   )
 }
 
+/**
+ * GitHub-style Confirmation Dialog
+ * Used for destructive actions or important confirmations
+ */
+interface ConfirmDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  description: string;
+  confirmText?: string;
+  cancelText?: string;
+  variant?: "default" | "danger";
+  onConfirm: () => void | Promise<void>;
+  onCancel?: () => void;
+  loading?: boolean;
+}
+
+function ConfirmDialog({
+  open,
+  onOpenChange,
+  title,
+  description,
+  confirmText = "Confirm",
+  cancelText = "Cancel",
+  variant = "default",
+  onConfirm,
+  onCancel,
+  loading = false,
+}: ConfirmDialogProps) {
+  const [isLoading, setIsLoading] = React.useState(false);
+
+  const handleConfirm = async () => {
+    setIsLoading(true);
+    try {
+      await onConfirm();
+      onOpenChange(false);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCancel = () => {
+    onCancel?.();
+    onOpenChange(false);
+  };
+
+  const isPending = loading || isLoading;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md" showCloseButton={false}>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2 sm:gap-2">
+          <Button 
+            variant="outline" 
+            onClick={handleCancel}
+            disabled={isPending}
+          >
+            {cancelText}
+          </Button>
+          <Button 
+            variant={variant === "danger" ? "destructive" : "default"}
+            onClick={handleConfirm}
+            disabled={isPending}
+          >
+            {isPending ? "Loading..." : confirmText}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Alert Dialog for important messages (no cancel option)
+ */
+interface AlertDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  description: string;
+  confirmText?: string;
+  variant?: "default" | "danger" | "success";
+}
+
+function AlertDialog({
+  open,
+  onOpenChange,
+  title,
+  description,
+  confirmText = "OK",
+  variant = "default",
+}: AlertDialogProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md" showCloseButton={false}>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button 
+            variant={variant === "danger" ? "destructive" : variant === "success" ? "default" : "outline"}
+            onClick={() => onOpenChange(false)}
+            className={variant === "success" ? "bg-green-600 hover:bg-green-700" : undefined}
+          >
+            {confirmText}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export {
   Dialog,
   DialogClose,
@@ -155,4 +272,6 @@ export {
   DialogPortal,
   DialogTitle,
   DialogTrigger,
+  ConfirmDialog,
+  AlertDialog,
 }

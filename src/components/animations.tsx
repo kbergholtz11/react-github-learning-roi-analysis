@@ -100,6 +100,157 @@ export function StaggerItem({
   );
 }
 
+// GitHub-style spring transition (snappy but smooth)
+export const springTransition = {
+  type: "spring" as const,
+  stiffness: 500,
+  damping: 30,
+};
+
+// Smooth ease transition
+export const smoothTransition = {
+  duration: 0.2,
+  ease: [0.25, 0.1, 0.25, 1.0] as [number, number, number, number], // cubic-bezier for GitHub feel
+};
+
+// Animated list with layout animations (like GitHub's notification list)
+export function AnimatedList({ 
+  children, 
+  className = "" 
+}: { 
+  children: React.ReactNode; 
+  className?: string;
+}) {
+  return (
+    <motion.div layout className={className}>
+      <AnimatePresence mode="popLayout">
+        {children}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+// Animated list item with layout ID for smooth reordering
+export function AnimatedListItem({ 
+  children, 
+  layoutId,
+  className = "",
+}: { 
+  children: React.ReactNode; 
+  layoutId: string;
+  className?: string;
+}) {
+  return (
+    <motion.div
+      layout
+      layoutId={layoutId}
+      initial={{ opacity: 0, scale: 0.96 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.96 }}
+      transition={springTransition}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+// Animated tab content for smooth tab switching
+export function AnimatedTabContent({ 
+  children, 
+  activeKey,
+  className = "",
+}: { 
+  children: React.ReactNode; 
+  activeKey: string;
+  className?: string;
+}) {
+  return (
+    <AnimatePresence mode="wait">
+      <motion.div
+        key={activeKey}
+        initial={{ opacity: 0, x: 10 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: -10 }}
+        transition={{ duration: 0.15 }}
+        className={className}
+      >
+        {children}
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
+// Counter animation component
+export function AnimatedNumber({ 
+  value,
+  className = "",
+}: { 
+  value: number;
+  className?: string;
+}) {
+  return (
+    <motion.span
+      key={value}
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className={className}
+    >
+      {value.toLocaleString()}
+    </motion.span>
+  );
+}
+
+// Collapse/expand animation (like GitHub's collapsible sections)
+export function Collapse({ 
+  isOpen, 
+  children,
+  className = "",
+}: { 
+  isOpen: boolean; 
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <AnimatePresence initial={false}>
+      {isOpen && (
+        <motion.div
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: "auto", opacity: 1 }}
+          exit={{ height: 0, opacity: 0 }}
+          transition={{ duration: 0.2, ease: "easeInOut" }}
+          className={className}
+          style={{ overflow: "hidden" }}
+        >
+          {children}
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// Presence animation for elements entering/leaving
+export function Presence({ 
+  children,
+  className = "",
+}: { 
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      transition={smoothTransition}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
 // Scale animation for interactive elements
 export function ScaleOnHover({ 
   children, 

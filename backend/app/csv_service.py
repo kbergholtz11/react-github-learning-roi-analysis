@@ -1,9 +1,15 @@
-"""CSV data service for fallback when Kusto is not available."""
+"""CSV data service for fallback when Kusto is not available.
+
+NOTE: This is a LEGACY fallback service. Primary data comes from:
+- DuckDB (database.py) for enriched learner queries
+- Kusto (kusto.py) for live analytics
+
+This module is only used when Parquet/Kusto are unavailable.
+"""
 
 import csv
 import logging
 from datetime import datetime
-from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -490,10 +496,14 @@ def get_monthly_progression() -> List[MonthlyProgression]:
 
 
 def get_stage_impact() -> List[StageImpact]:
-    """Get impact metrics by journey stage."""
+    """Get impact metrics by journey stage.
+    
+    LEGACY: Returns simulated data. For real metrics, use:
+    - database.py LearnerQueries.get_learning_to_usage_correlation()
+    """
     breakdown = get_status_breakdown()
 
-    # Simulated impact data (would come from Kusto in production)
+    # Simulated impact data - for real data use database.py
     impact_factors = {
         LearnerStatus.REGISTERED: (0, 0, "None"),
         LearnerStatus.ENGAGED: (5, 3, "GitHub Copilot"),
@@ -504,20 +514,40 @@ def get_stage_impact() -> List[StageImpact]:
         LearnerStatus.CHAMPION: (95, 70, "GitHub Copilot"),
     }
 
-    return [
-        StageImpact(
-            stage=item.status.value,
+    result = []
+    for item in breakdown:
+        # Handle both enum and string status values
+        status = item.status
+        if isinstance(status, str):
+            stage_name = status
+            # Try to match string to enum for impact lookup
+            try:
+                status_enum = LearnerStatus(status)
+                factors = impact_factors.get(status_enum, (0, 0, "Unknown"))
+            except ValueError:
+                factors = (0, 0, "Unknown")
+        else:
+            stage_name = status.value
+            factors = impact_factors.get(status, (0, 0, "Unknown"))
+        
+        result.append(StageImpact(
+            stage=stage_name,
             learners=item.count,
-            avg_usage_increase=impact_factors.get(item.status, (0, 0, ""))[0],
-            platform_time_increase=impact_factors.get(item.status, (0, 0, ""))[1],
-            top_product=impact_factors.get(item.status, (0, 0, "Unknown"))[2],
-        )
-        for item in breakdown
-    ]
+            avg_usage_increase=factors[0],
+            platform_time_increase=factors[1],
+            top_product=factors[2],
+        ))
+    
+    return result
 
 
 def get_product_adoption() -> List[ProductAdoption]:
-    """Get product adoption before/after learning."""
+    """Get product adoption before/after learning.
+    
+    LEGACY: Returns simulated data. For real metrics, use:
+    - database.py LearnerQueries.get_copilot_adoption_by_cert_status()
+    - database.py CopilotInsightQueries.get_copilot_vs_certification()
+    """
     return [
         ProductAdoption(name="GitHub Copilot", before=25, after=72),
         ProductAdoption(name="GitHub Actions", before=35, after=68),

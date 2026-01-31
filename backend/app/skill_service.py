@@ -1,6 +1,13 @@
 """
 Skill Journey Service
 
+LEGACY: This module reads from CSV files. For new development, prefer:
+- database.py queries that use enriched Parquet data
+- Skill scores are now computed during sync (see sync-enriched-learners.py)
+
+This module is kept for backwards compatibility with journey routes.
+For primary skill metrics, use data/aggregated/skill-journey.json.
+
 Combines data from multiple sources to calculate skill scores for all learners.
 """
 

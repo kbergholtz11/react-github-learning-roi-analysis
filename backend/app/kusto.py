@@ -769,38 +769,8 @@ class CopilotQueries:
         """
 
 
-class HydroQueries:
-    """Pre-built queries for Hydro analytics.
-
-    Uses hydro.analytics_v0_page_view on gh-analytics cluster.
-    """
-
-    CLUSTER = CLUSTER_GH
-    DATABASE = "hydro"
-
-    @staticmethod
-    def get_page_view_stats(days: int = 7) -> str:
-        """Get page view statistics from analytics_v0_page_view."""
-        return f"""
-        analytics_v0_page_view
-        | where timestamp > ago({days}d)
-        | summarize
-            total_views = count(),
-            unique_users = dcount(actor_id)
-          by page_category = extract("github\\\\.com/([^/]+)", 1, page)
-        | where isnotempty(page_category)
-        | top 20 by total_views desc
-        """
-
-    @staticmethod
-    def get_daily_active_users(days: int = 30) -> str:
-        """Get daily active user counts from page views."""
-        return f"""
-        analytics_v0_page_view
-        | where timestamp > ago({days}d)
-        | summarize dau = dcount(actor_id) by bin(timestamp, 1d)
-        | order by timestamp asc
-        """
+# NOTE: HydroQueries class was removed - routes/hydro.py uses inline queries
+# See routes/hydro.py for Hydro analytics implementation
 
 
 # Singleton instance
