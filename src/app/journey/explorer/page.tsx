@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Download, ChevronLeft, ChevronRight, X, AlertCircle, Users, Loader2, ArrowUpDown, ArrowUp, ArrowDown, Sparkles, Shield } from "lucide-react";
+import { Search, Download, ChevronLeft, ChevronRight, X, AlertCircle, Users, Loader2, ArrowUpDown, ArrowUp, ArrowDown, Sparkles, Shield, FileDown } from "lucide-react";
 import { useUrlParams } from "@/hooks/use-url-params";
 import { useLearners } from "@/hooks/use-data";
 import { DataQualityBadge, DataQualityDot } from "@/components/ui/data-quality-badge";
@@ -63,11 +63,13 @@ export default function LearnerExplorerPage() {
     search: "",
     page: 1,
     status: "" as LearnerStatus | "",
+    copilot: "" as "true" | "false" | "",
   });
 
   // Sorting state
   const [sortField, setSortField] = useState<SortField>("handle");
   const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
+  const [isExporting, setIsExporting] = useState(false);
 
   // Local state for immediate input feedback
   const [localSearch, setLocalSearch] = useState(params.search);
@@ -90,6 +92,7 @@ export default function LearnerExplorerPage() {
   const searchTerm = params.search;
   const currentPage = params.page;
   const statusFilter = params.status;
+  const copilotFilter = params.copilot;
   const pageSize = 25;
 
   const { data, isLoading, error, isFetching } = useLearners({
@@ -211,6 +214,48 @@ export default function LearnerExplorerPage() {
     });
   }, [learners, sortField, sortOrder]);
 
+  // Export to CSV
+  const handleExport = useCallback(async () => {
+    setIsExporting(true);
+    try {
+      // Build CSV header
+      const headers = ["Handle", "Email", "Status", "Certifications", "Focus", "Copilot", "Actions", "Quality Score", "Quality Level", "Dotcom ID"];
+      
+      // Build CSV rows from current sorted learners
+      const rows = sortedLearners.map(learner => [
+        getHandle(learner),
+        getEmail(learner),
+        learner.learner_status || "",
+        getCerts(learner).toString(),
+        getProductFocus(learner),
+        usesCopilot(learner) ? "Yes" : "No",
+        usesActions(learner) ? "Yes" : "No",
+        getDataQuality(learner).score.toString(),
+        getDataQuality(learner).level,
+        learner.dotcom_id?.toString() || ""
+      ]);
+      
+      // Create CSV content
+      const csvContent = [
+        headers.join(","),
+        ...rows.map(row => row.map(cell => `"${(cell || "").replace(/"/g, '""')}"`).join(","))
+      ].join("\n");
+      
+      // Download file
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `learners-export-${new Date().toISOString().split("T")[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } finally {
+      setIsExporting(false);
+    }
+  }, [sortedLearners]);
+
   // Early returns AFTER all hooks
   if (isLoading && !data) return <LoadingSkeleton />;
   if (error) return <ErrorState error={error as Error} />;
@@ -225,8 +270,8 @@ export default function LearnerExplorerPage() {
             Search and analyze {total.toLocaleString()} learners
           </p>
         </div>
-        <Button variant="outline" className="gap-2">
-          <Download className="h-4 w-4" />
+        <Button variant="outline" className="gap-2" onClick={handleExport} disabled={isExporting || learners.length === 0}>
+          {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
           Export Data
         </Button>
       </div>
@@ -241,7 +286,7 @@ export default function LearnerExplorerPage() {
                 aria-hidden="true"
               />
               <Input
-                placeholder="Search by email or username..."
+                placeholder="Search by email, username, or company..."
                 className="pl-10 pr-10"
                 value={localSearch}
                 onChange={(e) => setLocalSearch(e.target.value)}
@@ -265,6 +310,16 @@ export default function LearnerExplorerPage() {
               <option value="Learning">Learning</option>
               <option value="Engaged">Engaged</option>
               <option value="Registered">Registered</option>
+            </select>
+            <select
+              value={copilotFilter}
+              onChange={(e) => setParams({ copilot: e.target.value as "true" | "false" | "", page: 1 })}
+              className="px-3 py-2 rounded-md border border-input bg-background"
+              aria-label="Filter by Copilot usage"
+            >
+              <option value="">All Products</option>
+              <option value="true">✨ Copilot Users</option>
+              <option value="false">Non-Copilot</option>
             </select>
             {hasActiveFilters && (
               <Button variant="ghost" onClick={clearParams} className="gap-2">
@@ -335,7 +390,6 @@ export default function LearnerExplorerPage() {
                 >
                   ID <SortIcon field="id" />
                 </button>
-              </div>
               </div>
               {sortedLearners.map((learner, idx) => (
                 <div

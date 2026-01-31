@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { MetricCard, DonutChart, SimpleAreaChart } from "@/components/dashboard";
+import { MetricCard, DonutChart, SimpleAreaChart, TrendLineChart } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,9 +17,11 @@ import {
   Zap,
   Activity,
   Target,
-  AlertCircle
+  AlertCircle,
+  Shield
 } from "lucide-react";
 import { useMetrics } from "@/hooks/use-data";
+import { useCopilotTrend, useEnrichedStats } from "@/hooks/use-unified-data";
 
 // Quick Navigation Cards
 const quickNavCards = [
@@ -99,6 +101,8 @@ function ErrorState({ error }: { error: Error }) {
 
 export default function DashboardPage() {
   const { data, isLoading, error } = useMetrics();
+  const { data: copilotTrend } = useCopilotTrend(30);
+  const { data: enrichedStats } = useEnrichedStats();
 
   if (isLoading) return <LoadingSkeleton />;
   if (error) return <ErrorState error={error as Error} />;
@@ -289,6 +293,94 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <DonutChart data={impactSummary} />
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Copilot & Product Usage Row */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+        {/* Copilot Adoption Trend */}
+        <Card className="col-span-4">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-violet-500" />
+              Copilot Adoption Trend
+            </CardTitle>
+            <CardDescription>Daily active learners using GitHub Copilot (30 days)</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {copilotTrend && copilotTrend.length > 0 ? (
+              <>
+                <SimpleAreaChart 
+                  data={copilotTrend.map(d => ({
+                    name: new Date(d.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+                    value: d.active_users,
+                    events: d.total_events || 0
+                  }))}
+                  dataKey="value"
+                  color="#8b5cf6"
+                />
+                <div className="flex justify-center gap-6 mt-4 text-sm">
+                  <div className="flex items-center gap-2">
+                    <div className="h-3 w-3 rounded-full bg-violet-500" />
+                    <span className="text-muted-foreground">Active Users</span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="h-[200px] flex items-center justify-center text-muted-foreground">
+                <p>Copilot trend data loading...</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Product Usage from Enriched Data */}
+        <Card className="col-span-3">
+          <CardHeader>
+            <CardTitle>Product Adoption</CardTitle>
+            <CardDescription>Learners using GitHub products</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {enrichedStats ? (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-3 bg-violet-50 dark:bg-violet-950/30 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-violet-600" />
+                    <span className="font-medium">Copilot</span>
+                  </div>
+                  <span className="text-xl font-bold text-violet-600">{(enrichedStats.copilot_users || 0).toLocaleString()}</span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Zap className="h-5 w-5 text-blue-600" />
+                    <span className="font-medium">Actions</span>
+                  </div>
+                  <span className="text-xl font-bold text-blue-600">{(enrichedStats.actions_users || 0).toLocaleString()}</span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Shield className="h-5 w-5 text-amber-600" />
+                    <span className="font-medium">Security</span>
+                  </div>
+                  <span className="text-xl font-bold text-amber-600">{(enrichedStats.security_users || 0).toLocaleString()}</span>
+                </div>
+                <div className="pt-2 border-t">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Enriched Learners</span>
+                    <span className="font-semibold">{(enrichedStats.total_learners || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">With Company</span>
+                    <span className="font-semibold">{(enrichedStats.unique_companies || 0).toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="h-[200px] flex items-center justify-center text-muted-foreground">
+                <p>Loading enriched stats...</p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

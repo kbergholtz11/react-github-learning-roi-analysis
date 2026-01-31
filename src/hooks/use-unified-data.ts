@@ -274,6 +274,38 @@ export function useEnrichedLearners(options: {
 }
 
 /**
+ * Fetch a single enriched learner by email
+ * Used for the learner profile page
+ */
+export function useEnrichedLearner(email: string) {
+  return useQuery<EnrichedLearner | null>({
+    queryKey: ["enriched-learner", email],
+    queryFn: async () => {
+      if (!email) return null;
+      
+      // Try FastAPI backend first
+      try {
+        const res = await fetch(`http://localhost:8000/api/enriched/learners?search=${encodeURIComponent(email)}&limit=1`);
+        if (res.ok) {
+          const data = await res.json();
+          return data.learners?.[0] || null;
+        }
+      } catch {
+        // Backend not available, fall through
+      }
+      
+      // Fallback to Next.js proxy
+      const res = await fetch(`/api/enriched/learners?search=${encodeURIComponent(email)}&limit=1`);
+      if (!res.ok) throw new Error("Failed to fetch enriched learner");
+      const data = await res.json();
+      return data.learners?.[0] || null;
+    },
+    enabled: !!email,
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
+/**
  * Enriched stats from FastAPI backend
  */
 export function useEnrichedStats() {

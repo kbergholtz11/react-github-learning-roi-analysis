@@ -4,12 +4,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { SimpleBarChart } from "@/components/dashboard";
-import { Mail, Award, TrendingUp, BookOpen, ArrowLeft, Loader2, User, Calendar, Clock, Target, CheckCircle, XCircle } from "lucide-react";
+import { Mail, Award, TrendingUp, BookOpen, ArrowLeft, Loader2, User, Calendar, Clock, Target, CheckCircle, XCircle, Building2, MapPin, Sparkles, Shield, Activity, Zap } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useLearners, useMetrics } from "@/hooks/use-data";
+import { useEnrichedLearner } from "@/hooks/use-unified-data";
 import { useQuery } from "@tanstack/react-query";
 import { fetchLearnerExams, type IndividualExam } from "@/lib/backend-client";
+import { DataQualityBadge } from "@/components/ui/data-quality-badge";
 
 // Format date for display
 function formatDate(dateStr: string | null): string {
@@ -48,6 +50,9 @@ export default function LearnerProfilePage() {
     pageSize: emailParam ? 1 : 10 
   });
   const { data: metricsData, isLoading: metricsLoading } = useMetrics();
+  
+  // Get enriched data from DuckDB
+  const { data: enrichedLearner, isLoading: enrichedLoading } = useEnrichedLearner(emailParam);
   
   // Get the learner first to use their email for exams query
   const topLearners = learnersData?.learners || [];
@@ -118,12 +123,18 @@ export default function LearnerProfilePage() {
               <AvatarFallback className="text-2xl bg-primary/10">{initials}</AvatarFallback>
             </Avatar>
             <div className="flex-1">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <h1 className="text-2xl font-bold">@{handle}</h1>
                 <Badge variant="secondary" className="bg-green-100 text-green-700">{status}</Badge>
+                {enrichedLearner && (
+                  <DataQualityBadge 
+                    score={enrichedLearner.data_quality_score} 
+                    level={enrichedLearner.data_quality_level} 
+                  />
+                )}
               </div>
               <p className="text-muted-foreground">{stage}</p>
-              <div className="flex items-center gap-6 mt-4 text-sm">
+              <div className="flex items-center gap-6 mt-4 text-sm flex-wrap">
                 <div className="flex items-center gap-2">
                   <Mail className="h-4 w-4 text-muted-foreground" />
                   <span>{email}</span>
@@ -132,7 +143,42 @@ export default function LearnerProfilePage() {
                   <Award className="h-4 w-4 text-muted-foreground" />
                   <span>{totalCerts} certification{totalCerts !== 1 ? 's' : ''}</span>
                 </div>
+                {enrichedLearner?.company_name && (
+                  <div className="flex items-center gap-2">
+                    <Building2 className="h-4 w-4 text-muted-foreground" />
+                    <span>{enrichedLearner.company_name}</span>
+                  </div>
+                )}
+                {enrichedLearner?.country && (
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-muted-foreground" />
+                    <span>{enrichedLearner.country}</span>
+                  </div>
+                )}
               </div>
+              {/* Product usage badges */}
+              {enrichedLearner && (enrichedLearner.uses_copilot || enrichedLearner.uses_actions || enrichedLearner.uses_security) && (
+                <div className="flex items-center gap-2 mt-3">
+                  {enrichedLearner.uses_copilot && (
+                    <Badge variant="outline" className="gap-1 bg-violet-50 dark:bg-violet-950 text-violet-700 dark:text-violet-300 border-violet-200">
+                      <Sparkles className="h-3 w-3" />
+                      Copilot ({enrichedLearner.copilot_days}d)
+                    </Badge>
+                  )}
+                  {enrichedLearner.uses_actions && (
+                    <Badge variant="outline" className="gap-1 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-200">
+                      <Zap className="h-3 w-3" />
+                      Actions ({enrichedLearner.actions_days}d)
+                    </Badge>
+                  )}
+                  {enrichedLearner.uses_security && (
+                    <Badge variant="outline" className="gap-1 bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border-amber-200">
+                      <Shield className="h-3 w-3" />
+                      Security ({enrichedLearner.security_days}d)
+                    </Badge>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </CardContent>
