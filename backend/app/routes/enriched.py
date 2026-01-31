@@ -11,10 +11,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.database import get_database, LearnerQueries
 from app.config import get_settings
+from app.middleware.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/enriched", tags=["enriched"])
@@ -377,7 +378,8 @@ async def get_database_status() -> Dict[str, Any]:
 
 
 @router.post("/database/reload")
-async def reload_database() -> Dict[str, str]:
+@limiter.limit("2/minute")  # Prevent DoS via expensive reloads
+async def reload_database(request: Request) -> Dict[str, str]:
     """Reload database from disk (after running sync script)."""
     try:
         db = get_database()

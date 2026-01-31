@@ -1,9 +1,12 @@
 """Journey analytics API routes."""
 
+import json
 import logging
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
 
+from app.config import get_settings
 from app.csv_service import (
     get_dashboard_metrics,
     get_drop_off_analysis,
@@ -22,6 +25,22 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/journey", tags=["journey"])
 
 
+def get_aggregated_journey():
+    """Read pre-aggregated journey.json file for accurate data."""
+    settings = get_settings()
+    journey_file = Path(settings.data_dir) / "aggregated" / "journey.json"
+    
+    if not journey_file.exists():
+        return None
+    
+    try:
+        with open(journey_file) as f:
+            return json.load(f)
+    except Exception as e:
+        logger.warning(f"Failed to read aggregated journey: {e}")
+        return None
+
+
 @router.get("", response_model=JourneyResponse)
 async def get_journey_analytics():
     """
@@ -35,9 +54,42 @@ async def get_journey_analytics():
     - Monthly progression trends
     """
     try:
-        # NOTE: Kusto integration was removed as it wasn't being used.
-        # Journey data comes from enriched Parquet data via csv_service.
-        # For live Kusto queries, see /api/query endpoint.
+        # First try pre-aggregated JSON data
+        aggregated = get_aggregated_journey()
+        if aggregated:
+            logger.info("Using pre-aggregated journey.json data")
+            
+            # Map camelCase JSON to snake_case Pydantic models
+            raw_funnel = aggregated.get("funnel", [])
+            funnel = [
+                {
+                    "stage": f.get("stage"),
+                    "count": f.get("count", 0),
+                    "percentage": f.get("percentage", 0),
+                    "color": f.get("color", "#94a3b8"),
+                }
+                for f in raw_funnel
+            ]
+            
+            raw_progression = aggregated.get("progressionAnalysis", [])
+            drop_off_analysis = [
+                {
+                    "stage": p.get("stage"),
+                    "count": p.get("count", 0),
+                    "drop_off_rate": p.get("dropOffRate", 0),
+                    "next_stage": p.get("nextStage"),
+                }
+                for p in raw_progression
+            ]
+            
+            return JourneyResponse(
+                funnel=funnel,
+                avg_time_to_completion=aggregated.get("avgTimeToCompletion", 45),
+                stage_velocity=aggregated.get("stageVelocity", {}),
+                drop_off_analysis=drop_off_analysis,
+                monthly_progression=[],  # Empty if not in aggregated data
+                total_journey_users=sum(f.get("count", 0) for f in funnel),
+            )
         
         funnel = get_journey_funnel()
         drop_off = get_drop_off_analysis()

@@ -146,6 +146,11 @@ class DashboardMetrics(BaseModel):
     retention_rate: float
     total_learning_hours: int
     total_certs_earned: int
+    # Optional exam/certification metrics
+    total_exam_attempts: Optional[int] = None
+    total_passed: Optional[int] = None
+    total_failed: Optional[int] = None
+    overall_pass_rate: Optional[float] = None
 
 
 class StatusBreakdown(BaseModel):
@@ -171,6 +176,7 @@ class MetricsResponse(BaseModel):
     metrics: DashboardMetrics
     status_breakdown: List[StatusBreakdown]
     funnel: List[JourneyFunnelStage]
+    certification_analytics: Optional[dict] = None
 
 
 # =============================================================================

@@ -1,9 +1,12 @@
 """Impact analytics API routes."""
 
+import json
 import logging
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 
+from app.config import get_settings
 from app.csv_service import (
     get_dashboard_metrics,
     get_product_adoption,
@@ -23,15 +26,21 @@ ROI_BREAKDOWN = [
     {"name": "Knowledge", "value": 10, "color": "#f59e0b"},
 ]
 
-# Fallback correlation data when Kusto is unavailable
-FALLBACK_CORRELATION_DATA = [
-    {"name": "Week 1", "learning_hours": 100, "product_usage": 20, "platform_time": 15},
-    {"name": "Week 2", "learning_hours": 250, "product_usage": 35, "platform_time": 28},
-    {"name": "Week 3", "learning_hours": 420, "product_usage": 48, "platform_time": 42},
-    {"name": "Week 4", "learning_hours": 580, "product_usage": 62, "platform_time": 55},
-    {"name": "Week 5", "learning_hours": 750, "product_usage": 75, "platform_time": 68},
-    {"name": "Week 6", "learning_hours": 920, "product_usage": 85, "platform_time": 78},
-]
+
+def get_aggregated_impact():
+    """Read pre-aggregated impact.json file for accurate data."""
+    settings = get_settings()
+    impact_file = Path(settings.data_dir) / "aggregated" / "impact.json"
+    
+    if not impact_file.exists():
+        return None
+    
+    try:
+        with open(impact_file) as f:
+            return json.load(f)
+    except Exception as e:
+        logger.warning(f"Failed to read aggregated impact: {e}")
+        return None
 
 
 @router.get("", response_model=ImpactResponse)
@@ -46,6 +55,50 @@ async def get_impact_analytics():
     - ROI breakdown
     """
     try:
+        # First try pre-aggregated JSON data
+        aggregated = get_aggregated_impact()
+        if aggregated:
+            logger.info("Using pre-aggregated impact.json data")
+            
+            # Map camelCase JSON to snake_case Pydantic models
+            stage_impact = [
+                {
+                    "stage": s.get("stage"),
+                    "learners": s.get("learners", 0),
+                    "avg_usage_increase": s.get("avgUsageIncrease", 0),
+                    "platform_time_increase": s.get("platformTimeIncrease", 0),
+                    "top_product": s.get("topProduct", "Unknown"),
+                }
+                for s in aggregated.get("stageImpact", [])
+            ]
+            
+            product_adoption = [
+                {
+                    "name": p.get("name"),
+                    "before": p.get("before", 0),
+                    "after": p.get("after", 0),
+                    "increase": p.get("increase", 0),
+                }
+                for p in aggregated.get("productAdoption", [])
+            ]
+            
+            correlation_data = [
+                {
+                    "name": c.get("name"),
+                    "learning_hours": c.get("learningHours", 0),
+                    "product_usage": c.get("productUsage", 0),
+                    "platform_time": c.get("platformTime", 0),
+                }
+                for c in aggregated.get("correlationData", [])
+            ]
+            
+            return ImpactResponse(
+                stage_impact=stage_impact,
+                product_adoption=product_adoption,
+                correlation_data=correlation_data,
+                roi_breakdown=aggregated.get("roiBreakdown", ROI_BREAKDOWN),
+            )
+        
         kusto = get_kusto_service()
 
         if kusto.is_available:
@@ -116,11 +169,16 @@ async def get_impact_by_stage():
         kusto = get_kusto_service()
         
         if kusto.is_available:
-            rows = kusto.execute_query(ImpactQueries.get_product_usage_by_stage())
-            return {
-                "stages": rows,
-                "source": "kusto",
-            }
+            # Use get_product_usage_by_cert_status which groups by learner_status
+            rows = kusto.execute_on_gh(
+                ImpactQueries.get_product_usage_by_cert_status(),
+                database="canonical",
+            )
+            if rows:
+                return {
+                    "stages": rows,
+                    "source": "kusto",
+                }
         
         stage_impact = get_stage_impact()
         return {
@@ -200,10 +258,15 @@ async def get_roi_metrics():
     try:
         metrics = get_dashboard_metrics()
         
+        # ROI calculation constants (documented values)
+        ROI_PER_CERTIFIED_USER = 2500  # Estimated productivity gain per certified user ($)
+        ROI_PER_LEARNING_HOUR = 50     # Estimated value per hour of learning ($)
+        ROI_PER_IMPACT_POINT = 1000    # Estimated value per impact score point ($)
+        
         # Calculate estimated ROI
-        productivity_gain = metrics.certified_users * 2500  # $2500 per certified user
-        time_savings = metrics.total_learning_hours * 50  # $50 per hour saved
-        quality_improvement = metrics.impact_score * 1000  # $1000 per impact point
+        productivity_gain = metrics.certified_users * ROI_PER_CERTIFIED_USER
+        time_savings = metrics.total_learning_hours * ROI_PER_LEARNING_HOUR
+        quality_improvement = metrics.impact_score * ROI_PER_IMPACT_POINT
         
         total_roi = productivity_gain + time_savings + quality_improvement
         

@@ -382,3 +382,48 @@ class TestSkillsEndpoints:
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, (list, dict))
+
+
+class TestHydroEndpoints:
+    """Test Hydro analytics endpoints (requires Kusto connection)."""
+
+    def test_hydro_docs_stats(self, client):
+        """Test docs stats endpoint - returns 503 if Kusto unavailable."""
+        response = client.get("/api/hydro/docs/stats")
+        # 200 if Kusto available, 503 if not
+        assert response.status_code in [200, 503]
+
+    def test_hydro_docs_trends(self, client):
+        """Test docs trends endpoint."""
+        response = client.get("/api/hydro/docs/trends")
+        assert response.status_code in [200, 503]
+
+    def test_hydro_skills_stats(self, client):
+        """Test skills stats endpoint."""
+        response = client.get("/api/hydro/skills/stats")
+        assert response.status_code in [200, 503]
+
+    def test_hydro_learn_stats(self, client):
+        """Test learn stats endpoint."""
+        response = client.get("/api/hydro/learn/stats")
+        assert response.status_code in [200, 503]
+
+    def test_hydro_page_views(self, client):
+        """Test page views endpoint."""
+        response = client.get("/api/hydro/page-views")
+        assert response.status_code in [200, 503]
+
+    def test_hydro_dau(self, client):
+        """Test daily active users endpoint."""
+        response = client.get("/api/hydro/dau")
+        assert response.status_code in [200, 503]
+
+
+class TestRealtimeEndpoints:
+    """Test realtime metrics endpoint."""
+
+    def test_realtime_metrics(self, client):
+        """Test realtime metrics - requires Kusto."""
+        response = client.get("/api/metrics/realtime")
+        # 200 if Kusto available, 503 if not
+        assert response.status_code in [200, 503]

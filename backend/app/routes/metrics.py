@@ -1,6 +1,8 @@
 """Metrics API routes."""
 
+import json
 import logging
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 
@@ -9,13 +11,29 @@ from app.csv_service import (
     get_dashboard_metrics,
     get_journey_funnel,
     get_journey_status_breakdown,
-    get_status_breakdown,
 )
 from app.database import get_database, LearnerQueries
+from app.kusto import get_kusto_service, LearnerQueries as KustoLearnerQueries
 from app.models import MetricsResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/metrics", tags=["metrics"])
+
+
+def get_aggregated_metrics():
+    """Read pre-aggregated metrics.json file for accurate data."""
+    settings = get_settings()
+    metrics_file = Path(settings.data_dir) / "aggregated" / "metrics.json"
+    
+    if not metrics_file.exists():
+        return None
+    
+    try:
+        with open(metrics_file) as f:
+            return json.load(f)
+    except Exception as e:
+        logger.warning(f"Failed to read aggregated metrics: {e}")
+        return None
 
 
 @router.get("", response_model=MetricsResponse)
@@ -30,7 +48,37 @@ async def get_metrics():
     - Status breakdown and journey funnel
     """
     try:
-        # First try enriched DuckDB data (most accurate)
+        # First try pre-aggregated JSON files (most accurate, includes certification analytics)
+        aggregated = get_aggregated_metrics()
+        if aggregated:
+            logger.info("Using pre-aggregated metrics.json data")
+            metrics_data = aggregated.get("metrics", {})
+            
+            return MetricsResponse(
+                metrics={
+                    "total_learners": metrics_data.get("totalLearners", 0),
+                    "active_learners": metrics_data.get("activeLearners", 0),
+                    "certified_users": metrics_data.get("certifiedUsers", 0),
+                    "learning_users": metrics_data.get("learningUsers", 0),
+                    "prospect_users": metrics_data.get("prospectUsers", 0),
+                    "avg_usage_increase": metrics_data.get("avgUsageIncrease", 0),
+                    "avg_products_adopted": metrics_data.get("avgProductsAdopted", 0),
+                    "avg_learning_hours": metrics_data.get("avgLearningHours", 0),
+                    "impact_score": metrics_data.get("impactScore", 0),
+                    "retention_rate": metrics_data.get("retentionRate", 0),
+                    "total_learning_hours": metrics_data.get("totalLearningHours", 0),
+                    "total_certs_earned": metrics_data.get("totalCertsEarned", 0),
+                    "total_exam_attempts": metrics_data.get("totalExamAttempts", 0),
+                    "total_passed": metrics_data.get("totalPassed", 0),
+                    "total_failed": metrics_data.get("totalFailed", 0),
+                    "overall_pass_rate": metrics_data.get("overallPassRate", 0),
+                },
+                status_breakdown=aggregated.get("statusBreakdown", []),
+                funnel=aggregated.get("funnel", []),
+                certification_analytics=aggregated.get("certificationAnalytics"),
+            )
+        
+        # Fall back to DuckDB enriched data
         db = get_database()
         if db.is_available:
             try:

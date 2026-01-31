@@ -16,6 +16,8 @@ from datetime import datetime
 from functools import lru_cache
 from typing import Any, Dict, List, Optional
 
+from cachetools import TTLCache, cached
+
 from app.config import get_settings
 from app.csv_service import parse_csv, parse_array_string, parse_cert_titles
 from app.skill_journey import (
@@ -31,7 +33,11 @@ from app.skill_journey import (
 
 logger = logging.getLogger(__name__)
 
+# Cache for expensive skill calculations (5 minute TTL)
+_skill_cache: TTLCache = TTLCache(maxsize=10, ttl=300)
 
+
+@cached(_skill_cache)
 def get_learning_activity_map() -> Dict[str, Dict[str, Any]]:
     """Load learning activity data indexed by user_ref."""
     rows = parse_csv("learning_activity.csv")
@@ -53,6 +59,7 @@ def get_learning_activity_map() -> Dict[str, Dict[str, Any]]:
     return result
 
 
+@cached(_skill_cache)
 def get_product_usage_map() -> Dict[int, Dict[str, Any]]:
     """Load product usage data indexed by dotcom_id."""
     rows = parse_csv("product_usage.csv")
@@ -78,6 +85,7 @@ def get_product_usage_map() -> Dict[int, Dict[str, Any]]:
     return result
 
 
+@cached(_skill_cache)
 def get_certified_users_map() -> Dict[str, Dict[str, Any]]:
     """Load certified users data indexed by user_handle."""
     rows = parse_csv("certified_users.csv")
@@ -126,9 +134,16 @@ def calculate_days_since(date_str: str) -> int:
         return 999
 
 
-def get_all_skill_profiles() -> List[SkillProfile]:
+# Use a separate cache for the expensive profile calculation
+_profiles_cache: TTLCache = TTLCache(maxsize=1, ttl=300)
+
+
+@cached(_profiles_cache)
+def get_all_skill_profiles() -> tuple:
     """
     Calculate skill profiles for all learners by combining data sources.
+    
+    Returns a tuple for cacheability. Convert to list when using.
     
     This is the main function that merges:
     - Unified users (base user list)
@@ -243,14 +258,14 @@ def get_all_skill_profiles() -> List[SkillProfile]:
         profiles.append(profile)
     
     logger.info(f"Calculated skill profiles for {len(profiles)} learners")
-    return profiles
+    return tuple(profiles)  # Return tuple for cacheability
 
 
 def get_skill_journey_summary() -> SkillJourneyResponse:
     """
     Get the skill journey funnel and summary statistics.
     """
-    profiles = get_all_skill_profiles()
+    profiles = list(get_all_skill_profiles())  # Convert cached tuple to list
     
     if not profiles:
         return SkillJourneyResponse(
@@ -324,15 +339,16 @@ def get_skill_journey_summary() -> SkillJourneyResponse:
 
 def get_top_skill_learners(limit: int = 10) -> List[SkillProfile]:
     """Get top learners by skill score."""
-    profiles = get_all_skill_profiles()
+    profiles = get_all_skill_profiles()  # Already cached
     sorted_profiles = sorted(profiles, key=lambda p: p.skill_score, reverse=True)
-    return sorted_profiles[:limit]
+    return list(sorted_profiles[:limit])
 
 
 def get_skill_profile_by_handle(handle: str) -> Optional[SkillProfile]:
     """Get skill profile for a specific user."""
-    profiles = get_all_skill_profiles()
+    profiles = get_all_skill_profiles()  # Already cached
+    handle_lower = handle.lower()
     for p in profiles:
-        if p.user_handle.lower() == handle.lower():
+        if p.user_handle.lower() == handle_lower:
             return p
     return None
