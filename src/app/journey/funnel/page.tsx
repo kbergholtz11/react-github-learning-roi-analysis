@@ -9,7 +9,7 @@ import {
   ArrowRight, Clock, CheckCircle2, Compass, Rocket
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useJourney, useMetrics, useImpact } from "@/hooks/use-data";
+import { useJourney, useMetrics, useImpact } from "@/hooks/use-unified-data";
 
 // Icon mapping for progression-based journey stages
 const stageIcons: Record<string, React.ComponentType<{ className?: string }>> = {

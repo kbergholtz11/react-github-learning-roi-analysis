@@ -15,7 +15,7 @@ import {
   ArrowUpRight,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useSkillJourney, useTopSkilledLearners } from "@/hooks/use-data";
+import { useSkillJourney, useTopSkilledLearners } from "@/hooks/use-unified-data";
 
 export default function JourneyOverviewPage() {
   const { data: skillData, isLoading: skillLoading } = useSkillJourney();

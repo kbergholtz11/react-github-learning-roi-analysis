@@ -256,6 +256,18 @@ interface JourneyResponse {
 }
 
 interface ImpactResponse {
+  impactFlow?: {
+    learningHours: number;
+    skillsAcquired: number;
+    productAdoption: number;
+    timeOnPlatform: number;
+  };
+  metrics?: {
+    avgUsageIncrease: number;
+    featuresAdopted: number;
+    activeLearners: number;
+    timeToValue: number;
+  };
   stageImpact: Array<{
     stage: string;
     learners: number;
@@ -846,6 +858,131 @@ export function useDataSource() {
     hasEnrichedData: health?.data?.enriched ?? false,
     hasAggregatedData: health?.data?.aggregated ?? false,
   };
+}
+
+// ============================================================================
+// Skill Journey Hooks
+// ============================================================================
+
+interface SkillFunnelStage {
+  level: string;
+  count: number;
+  percentage: number;
+  avgScore: number;
+  color: string;
+  description: string;
+}
+
+interface SkillJourneyResponse {
+  funnel: SkillFunnelStage[];
+  totalLearners: number;
+  avgSkillScore: number;
+  skillDistribution: Record<string, number>;
+  dimensionAverages: Record<string, number>;
+  growthMetrics: {
+    growing_learners: number;
+    growing_percentage: number;
+    active_30_days: number;
+    active_percentage: number;
+    with_certifications: number;
+    cert_percentage: number;
+  };
+  weights: Record<string, number>;
+}
+
+export function useSkillJourney() {
+  return useQuery<SkillJourneyResponse>({
+    queryKey: ["skillJourney"],
+    queryFn: async () => {
+      const res = await fetch("/api/journey/skills");
+      if (!res.ok) throw new Error("Failed to fetch skill journey data");
+      return res.json();
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
+interface SkillLearner {
+  handle: string;
+  dotcomId: number;
+  skillScore: number;
+  skillLevel: string;
+  dimensions: Record<string, { raw: number; weighted: number }>;
+  learningHours: number;
+  productUsageHours: number;
+  totalCerts: number;
+  isGrowing: boolean;
+}
+
+interface TopSkillLearnersResponse {
+  learners: SkillLearner[];
+  total: number;
+}
+
+export function useTopSkilledLearners(limit = 10) {
+  return useQuery<TopSkillLearnersResponse>({
+    queryKey: ["topSkilledLearners", limit],
+    queryFn: async () => {
+      const res = await fetch(`/api/journey/skills/top?limit=${limit}`);
+      if (!res.ok) throw new Error("Failed to fetch top skilled learners");
+      return res.json();
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
+// ============================================================================
+// Skills Courses Hook
+// ============================================================================
+
+interface SkillsCourseData {
+  totalCourses: number;
+  totalEnrollments: number;
+  totalUniqueLearners: number;
+  knownEnrollments: number;
+  uniqueKnownLearners: number;
+  completedCourses: number;
+  totalCommits: number;
+  completionRate: number;
+  knownLearnerRatio: number;
+  byCategory: Array<{
+    category: string;
+    courses: number;
+    totalForks: number;
+    knownLearners: number;
+    completionRate: number;
+  }>;
+  popularCourses: Array<{
+    name: string;
+    category: string;
+    difficulty: string;
+    totalForks: number;
+    knownLearners: number;
+    completionRate: number;
+  }>;
+  topSkillLearners: Array<{
+    handle: string;
+    coursesStarted: number;
+    coursesCompleted: number;
+    categories: string[];
+  }>;
+  generatedAt: string;
+}
+
+export function useSkillsCourses() {
+  return useQuery<SkillsCourseData>({
+    queryKey: ["skillsCourses"],
+    queryFn: async () => {
+      const res = await fetch("/api/skills");
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.message || "Failed to fetch Skills courses");
+      }
+      return res.json();
+    },
+    staleTime: 1000 * 60 * 10,
+    retry: false,
+  });
 }
 
 // ============================================================================

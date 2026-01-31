@@ -14,7 +14,7 @@ import {
   useAnalyticsFilters,
 } from "./use-url-state";
 import { learnersApi, eventsApi, analyticsApi } from "@/lib/api";
-import { queryKeys } from "./use-queries";
+import { queryKeys } from "./use-unified-data";
 
 // ============================================
 // Learners with URL-synced Filters

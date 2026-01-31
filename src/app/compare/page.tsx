@@ -21,7 +21,7 @@ import {
   Shield
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useMetrics, useJourney, useImpact } from "@/hooks/use-data";
+import { useMetrics, useJourney, useImpact } from "@/hooks/use-unified-data";
 import { Progress } from "@/components/ui/progress";
 
 // Types for cohort data

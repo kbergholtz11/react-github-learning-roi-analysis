@@ -7,7 +7,7 @@ import { SimpleBarChart } from "@/components/dashboard";
 import { Mail, Award, TrendingUp, BookOpen, ArrowLeft, Loader2, User, Calendar, Clock, Target, CheckCircle, XCircle, Building2, MapPin, Sparkles, Shield, Activity, Zap } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useLearners, useMetrics } from "@/hooks/use-data";
+import { useLearners, useMetrics } from "@/hooks/use-unified-data";
 import { useEnrichedLearner } from "@/hooks/use-unified-data";
 import { useQuery } from "@tanstack/react-query";
 import { fetchLearnerExams, type IndividualExam } from "@/lib/backend-client";

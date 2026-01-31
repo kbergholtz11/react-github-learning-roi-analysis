@@ -30,7 +30,7 @@ import {
   XCircle,
   BarChart3
 } from "lucide-react";
-import { useMetrics, useSkillsCourses, useSkillJourney } from "@/hooks/use-data";
+import { useMetrics, useSkillsCourses, useSkillJourney } from "@/hooks/use-unified-data";
 import { useCopilotTrend, useEnrichedStats, useJourney, useImpact } from "@/hooks/use-unified-data";
 
 // Quick Navigation Cards - defined outside component to avoid recreation

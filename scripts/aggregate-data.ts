@@ -1948,13 +1948,13 @@ for (const learner of certifiedForGeo) {
     certsByRegion[region] = { count: 0, totalCerts: 0 };
   }
   certsByRegion[region].count++;
-  certsByRegion[region].totalCerts += Number(learner.exams_passed) || 0;
+  certsByRegion[region].totalCerts += learner.exams_passed || 0;
   
   if (!certsByCountry[country]) {
     certsByCountry[country] = { count: 0, totalCerts: 0 };
   }
   certsByCountry[country].count++;
-  certsByCountry[country].totalCerts += Number(learner.exams_passed) || 0;
+  certsByCountry[country].totalCerts += learner.exams_passed || 0;
 }
 
 // Sort regions by count
@@ -1963,7 +1963,7 @@ const regionBreakdown = Object.entries(certsByRegion)
     region,
     certifiedUsers: data.count,
     totalCerts: data.totalCerts,
-    percentage: Math.round((data.count / certifiedForGeo.length) * 100 * 10) / 10,
+    percentage: Math.round((data.count / certifiedLearners.length) * 100 * 10) / 10,
   }))
   .sort((a, b) => b.certifiedUsers - a.certifiedUsers);
 
@@ -1974,12 +1974,12 @@ const topCountries = Object.entries(certsByCountry)
     country,
     certifiedUsers: data.count,
     totalCerts: data.totalCerts,
-    percentage: Math.round((data.count / certifiedForGeo.length) * 100 * 10) / 10,
+    percentage: Math.round((data.count / certifiedLearners.length) * 100 * 10) / 10,
   }))
   .sort((a, b) => b.certifiedUsers - a.certifiedUsers)
   .slice(0, 10);
 
-console.log(`   Found ${certifiedForGeo.length.toLocaleString()} certified users across ${regionBreakdown.length} regions`);
+console.log(`   Found ${certifiedLearners.length.toLocaleString()} certified users across ${regionBreakdown.length} regions`);
 
 // === Write all aggregated files ===
 console.log("\n📁 Writing aggregated files...\n");
