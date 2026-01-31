@@ -327,7 +327,6 @@ class LearnerQueries:
                 COUNT(DISTINCT company_name) as unique_companies,
                 COUNT(DISTINCT country) as unique_countries
             FROM learners_enriched
-            WHERE company_name != '' OR dotcom_id > 0
         """)[0]
         
         return stats
