@@ -1930,6 +1930,57 @@ const skillJourneyData = {
   topLearners: topSkilledLearners.slice(0, 10),
 };
 
+// === Region breakdown for certifications ===
+console.log("📊 Calculating region breakdown for certifications...");
+
+// Get certified users for geographic breakdown (reusing existing certifiedLearners)
+const certifiedForGeo = certifiedLearners;
+
+// Region breakdown for certified users
+const certsByRegion: Record<string, { count: number; totalCerts: number }> = {};
+const certsByCountry: Record<string, { count: number; totalCerts: number }> = {};
+
+for (const learner of certifiedForGeo) {
+  const region = learner.region || "Unknown";
+  const country = learner.country || "Unknown";
+  
+  if (!certsByRegion[region]) {
+    certsByRegion[region] = { count: 0, totalCerts: 0 };
+  }
+  certsByRegion[region].count++;
+  certsByRegion[region].totalCerts += Number(learner.exams_passed) || 0;
+  
+  if (!certsByCountry[country]) {
+    certsByCountry[country] = { count: 0, totalCerts: 0 };
+  }
+  certsByCountry[country].count++;
+  certsByCountry[country].totalCerts += Number(learner.exams_passed) || 0;
+}
+
+// Sort regions by count
+const regionBreakdown = Object.entries(certsByRegion)
+  .map(([region, data]) => ({
+    region,
+    certifiedUsers: data.count,
+    totalCerts: data.totalCerts,
+    percentage: Math.round((data.count / certifiedForGeo.length) * 100 * 10) / 10,
+  }))
+  .sort((a, b) => b.certifiedUsers - a.certifiedUsers);
+
+// Top 10 countries by certified users  
+const topCountries = Object.entries(certsByCountry)
+  .filter(([country]) => country && country !== "Unknown" && country !== "")
+  .map(([country, data]) => ({
+    country,
+    certifiedUsers: data.count,
+    totalCerts: data.totalCerts,
+    percentage: Math.round((data.count / certifiedForGeo.length) * 100 * 10) / 10,
+  }))
+  .sort((a, b) => b.certifiedUsers - a.certifiedUsers)
+  .slice(0, 10);
+
+console.log(`   Found ${certifiedForGeo.length.toLocaleString()} certified users across ${regionBreakdown.length} regions`);
+
 // === Write all aggregated files ===
 console.log("\n📁 Writing aggregated files...\n");
 
@@ -1985,6 +2036,12 @@ writeJSON("metrics.json", {
       forecastMethod: "holt-winters-exponential-smoothing",
       historicalTrend,
       monthlyForecast: forecastData,
+    },
+    // Geographic breakdown of certifications
+    geographicBreakdown: {
+      totalCertifiedUsers: certifiedLearners.length,
+      regionBreakdown,
+      topCountries,
     },
   },
   generatedAt: new Date().toISOString(),

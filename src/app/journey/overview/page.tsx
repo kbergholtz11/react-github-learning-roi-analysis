@@ -101,8 +101,9 @@ export default function JourneyOverviewPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {skillData?.funnel?.map((stage) => {
-                const maxCount = skillData.funnel[0]?.count || 1;
+              {skillData?.funnel?.slice().reverse().map((stage) => {
+                // Use the maximum count across all stages for proper bar scaling
+                const maxCount = Math.max(...(skillData.funnel?.map(s => s.count) || [1]));
                 const barPercentage = (stage.count / maxCount) * 100;
                 
                 return (
@@ -123,7 +124,7 @@ export default function JourneyOverviewPage() {
                           {stage.count.toLocaleString()}
                         </span>
                         <Badge variant="secondary" className="text-xs">
-                          {stage.percentage}%
+                          {Math.round(stage.percentage)}%
                         </Badge>
                         <span className="text-xs text-muted-foreground w-16 text-right">
                           Avg: {stage.avgScore}

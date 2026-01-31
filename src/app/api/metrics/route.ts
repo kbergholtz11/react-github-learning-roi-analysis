@@ -71,6 +71,7 @@ export async function GET() {
       funnel: metricsData.funnel,
       statusBreakdown: metricsData.statusBreakdown,
       productAdoption: metricsData.productAdoption,
+      certificationAnalytics: metricsData.certificationAnalytics,
       generatedAt: metricsData.generatedAt,
       source: "aggregated",
     });

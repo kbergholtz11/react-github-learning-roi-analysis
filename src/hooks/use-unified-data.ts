@@ -84,6 +84,84 @@ export const queryKeys = {
 // Type Definitions
 // ============================================================================
 
+interface CertificationAnalytics {
+  examStatusCounts?: Record<string, number>;
+  certificationPassRates?: Array<{
+    certification: string;
+    passed: number;
+    failed: number;
+    totalAttempts: number;
+    passRate: number;
+  }>;
+  summary?: {
+    totalExamAttempts: number;
+    totalPassed: number;
+    totalFailed: number;
+    totalNoShows: number;
+    totalScheduled: number;
+    totalCancelled: number;
+    overallPassRate: number;
+    totalUsersWithAttempts: number;
+    totalUsersRegisteredOnly: number;
+    avgPassedScore: number;
+    avgFailedScore: number;
+  };
+  retryAnalytics?: {
+    uniqueCertAttempts: number;
+    firstTimePasses: number;
+    firstTimePassRate: number;
+    failedFirstTimeCount: number;
+    retriedAndPassed: number;
+    retrySuccessRate: number;
+    avgAttemptsToPass: number;
+    attemptDistribution: {
+      firstTry: number;
+      secondTry: number;
+      thirdTry: number;
+      fourPlusTries: number;
+    };
+  };
+  nearMissSegment?: {
+    nearMissCount: number;
+    nearMissThreshold: string;
+    moderateGapCount: number;
+    needsPrepCount: number;
+    nearMissByCertification: { certification: string; count: number }[];
+  };
+  examForecast?: {
+    totalScheduledNext3Months: number;
+    projectedAttemptsNext3Months?: number;
+    projectedPassesNext3Months: number;
+    avgMonthlyGrowthRate?: number;
+    forecastMethod?: string;
+    historicalTrend?: {
+      month: string;
+      actual: number;
+      passed: number;
+      failed: number;
+      noShows: number;
+      passRate: number;
+    }[];
+    monthlyForecast?: {
+      month: string;
+      scheduled: number;
+      projectedAttempts?: number;
+      projectedPasses: number;
+      projectedPassRate: number;
+      confidence?: number;
+      forecastMethod?: string;
+      byCertification: { certification: string; scheduled: number }[];
+    }[];
+  };
+  geographicBreakdown?: {
+    regionBreakdown?: Array<{ region: string; certifiedUsers: number; totalCerts: number; percentage: number }>;
+    topCountries?: Array<{ country: string; region: string; certifiedUsers: number; totalCerts: number; percentage: number }>;
+    countriesByRegion?: Record<string, Array<{ country: string; certifiedUsers: number; totalCerts: number; percentage: number }>>;
+    topCompanies?: Array<{ company: string; certifiedUsers: number; totalCerts: number; percentage: number }>;
+    totalCertified?: number;
+  };
+}
+
 interface MetricsResponse {
   metrics: DashboardMetrics;
   funnel?: JourneyFunnelData[];
@@ -94,6 +172,7 @@ interface MetricsResponse {
     security: { before: number; after: number };
     totalUsage: { before: number; after: number };
   };
+  certificationAnalytics?: CertificationAnalytics;
   source?: "kusto" | "aggregated";
 }
 

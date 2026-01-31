@@ -1,15 +1,17 @@
 "use client";
 
+import { useState } from "react";
 import { MetricCard, TrendLineChart } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Award, Calendar, Loader2, Target, AlertCircle, CheckCircle2, RefreshCw, Users, CalendarDays } from "lucide-react";
+import { Award, Calendar, Loader2, Target, AlertCircle, CheckCircle2, RefreshCw, Users, CalendarDays, X } from "lucide-react";
 import { useMetrics, useJourney } from "@/hooks/use-data";
 import { Progress } from "@/components/ui/progress";
 
 export default function CertificationROIPage() {
   const { data: metricsData, isLoading: metricsLoading } = useMetrics();
   const { data: journeyData, isLoading: journeyLoading } = useJourney();
+  const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
 
   const isLoading = metricsLoading || journeyLoading;
 
@@ -594,128 +596,174 @@ export default function CertificationROIPage() {
         </Card>
       </div>
 
-      {/* Certification ROI: Product Adoption */}
-      {metricsData?.productAdoption && (() => {
-        const adoption = metricsData.productAdoption as { 
-          copilot: { before: number; after: number; certifiedCount?: number; learningCount?: number };
-          actions: { before: number; after: number; certifiedCount?: number; learningCount?: number };
-          security: { before: number; after: number; certifiedCount?: number; learningCount?: number };
-          learningUserCount?: number;
-          certifiedUserCount?: number;
+      {/* Geographic Breakdown */}
+      {certAnalytics?.geographicBreakdown && (() => {
+        const geo = certAnalytics.geographicBreakdown as {
+          regionBreakdown: Array<{ region: string; certifiedUsers: number; totalCerts: number; percentage: number }>;
+          topCountries: Array<{ country: string; region: string; certifiedUsers: number; totalCerts: number; percentage: number }>;
+          countriesByRegion: Record<string, Array<{ country: string; certifiedUsers: number; totalCerts: number; percentage: number }>>;
+          topCompanies: Array<{ company: string; certifiedUsers: number; totalCerts: number; percentage: number }>;
+          totalCertified: number;
         };
+        const regionColors: Record<string, string> = {
+          'APAC': '#22c55e',
+          'AMER': '#3b82f6', 
+          'LATAM': '#06b6d4',
+          'EMEA': '#8b5cf6',
+          'Other': '#f59e0b',
+          'Unknown': '#94a3b8',
+        };
+        
+        // Get countries to display based on selection
+        const displayCountries = selectedRegion && geo.countriesByRegion?.[selectedRegion]
+          ? geo.countriesByRegion[selectedRegion]
+          : geo.topCountries;
+        
+        // Calculate the total for percentage display when filtered
+        const selectedRegionData = selectedRegion 
+          ? geo.regionBreakdown.find(r => r.region === selectedRegion)
+          : null;
+        
         return (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5" />
-              Certification ROI: Product Adoption
-            </CardTitle>
-            <CardDescription>
-              How certification correlates with GitHub product usage
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-6 md:grid-cols-3">
-              {/* Copilot */}
+        <div className="grid gap-4 md:grid-cols-2">
+          {/* Regions */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Users className="h-5 w-5" />
+                Certified Users by Region
+              </CardTitle>
+              <CardDescription>
+                {geo.totalCertified.toLocaleString()} certified users across regions
+                {selectedRegion && <span className="text-primary"> • Click to filter countries</span>}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">Copilot</span>
-                  <Badge variant="outline" className="bg-green-500/10 text-green-700 dark:text-green-400">
-                    +{((adoption.copilot.after / adoption.copilot.before - 1) * 100).toFixed(0)}% lift
-                  </Badge>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Learning</span>
-                    <span>{adoption.copilot.before}%</span>
+                {geo.regionBreakdown.map((r) => (
+                  <div 
+                    key={r.region} 
+                    className={`space-y-1 cursor-pointer rounded-lg p-2 -mx-2 transition-all ${
+                      selectedRegion === r.region 
+                        ? 'bg-primary/10 ring-2 ring-primary/30' 
+                        : 'hover:bg-muted/50'
+                    }`}
+                    onClick={() => setSelectedRegion(selectedRegion === r.region ? null : r.region)}
+                  >
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium flex items-center gap-2">
+                        {r.region}
+                        {selectedRegion === r.region && (
+                          <Badge variant="secondary" className="text-xs py-0">
+                            Selected
+                          </Badge>
+                        )}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {r.certifiedUsers.toLocaleString()} ({r.percentage}%)
+                      </span>
+                    </div>
+                    <div className="h-4 bg-muted rounded-full overflow-hidden">
+                      <div 
+                        className="h-full rounded-full transition-all"
+                        style={{ 
+                          width: `${r.percentage}%`,
+                          backgroundColor: regionColors[r.region] || '#94a3b8'
+                        }} 
+                      />
+                    </div>
                   </div>
-                  <div className="h-2 bg-muted rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-400 rounded-full" style={{ width: `${adoption.copilot.before}%` }} />
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Certified</span>
-                    <span className="font-semibold text-green-600 dark:text-green-400">{adoption.copilot.after}%</span>
-                  </div>
-                  <div className="h-2 bg-muted rounded-full overflow-hidden">
-                    <div className="h-full bg-green-500 rounded-full" style={{ width: `${adoption.copilot.after}%` }} />
-                  </div>
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {(adoption.copilot.certifiedCount || 0).toLocaleString()} certified users
-                </div>
+                ))}
               </div>
+            </CardContent>
+          </Card>
 
-              {/* Actions */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">Actions</span>
-                  <Badge variant="outline" className="bg-green-500/10 text-green-700 dark:text-green-400">
-                    +{((adoption.actions.after / adoption.actions.before - 1) * 100).toFixed(0)}% lift
-                  </Badge>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Learning</span>
-                    <span>{adoption.actions.before}%</span>
+          {/* Top Countries */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Award className="h-5 w-5" />
+                {selectedRegion ? `Countries in ${selectedRegion}` : 'Top Countries'}
+                {selectedRegion && (
+                  <button 
+                    onClick={() => setSelectedRegion(null)}
+                    className="ml-auto p-1 rounded-full hover:bg-muted transition-colors"
+                    title="Clear filter"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </CardTitle>
+              <CardDescription>
+                {selectedRegion 
+                  ? `${selectedRegionData?.certifiedUsers.toLocaleString() || 0} certified users in ${selectedRegion}`
+                  : 'Countries with most certified users'
+                }
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {displayCountries.slice(0, 8).map((c, idx) => (
+                  <div key={c.country} className="flex items-center justify-between text-sm py-1 border-b border-border/50 last:border-0">
+                    <div className="flex items-center gap-2">
+                      <span className="w-5 text-muted-foreground text-xs">{idx + 1}.</span>
+                      <span className="font-medium">{c.country}</span>
+                      {!selectedRegion && 'region' in c && (
+                        <Badge 
+                          variant="outline" 
+                          className="text-xs py-0"
+                          style={{ 
+                            borderColor: regionColors[(c as { region: string }).region] || '#94a3b8',
+                            color: regionColors[(c as { region: string }).region] || '#94a3b8'
+                          }}
+                        >
+                          {(c as { region: string }).region}
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-muted-foreground">{c.certifiedUsers.toLocaleString()}</span>
+                      <Badge variant="outline" className="text-xs">
+                        {c.percentage}%
+                      </Badge>
+                    </div>
                   </div>
-                  <div className="h-2 bg-muted rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-400 rounded-full" style={{ width: `${adoption.actions.before}%` }} />
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Certified</span>
-                    <span className="font-semibold text-green-600 dark:text-green-400">{adoption.actions.after}%</span>
-                  </div>
-                  <div className="h-2 bg-muted rounded-full overflow-hidden">
-                    <div className="h-full bg-green-500 rounded-full" style={{ width: `${adoption.actions.after}%` }} />
-                  </div>
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {(adoption.actions.certifiedCount || 0).toLocaleString()} certified users
-                </div>
+                ))}
               </div>
+            </CardContent>
+          </Card>
 
-              {/* Security */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">Advanced Security</span>
-                  <Badge variant="outline" className="bg-green-500/10 text-green-700 dark:text-green-400">
-                    +{((adoption.security.after / adoption.security.before - 1) * 100).toFixed(0)}% lift
-                  </Badge>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Learning</span>
-                    <span>{adoption.security.before}%</span>
+          {/* Top Companies */}
+          <Card className="md:col-span-2">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <CheckCircle2 className="h-5 w-5" />
+                Top Companies by Certifications
+              </CardTitle>
+              <CardDescription>
+                Organizations with the most certified employees
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-2 md:grid-cols-3">
+                {geo.topCompanies.map((c, idx) => (
+                  <div key={c.company} className="flex items-center justify-between text-sm py-2 px-3 rounded-lg bg-muted/50">
+                    <div className="flex items-center gap-2">
+                      <span className="w-5 text-muted-foreground font-medium">{idx + 1}</span>
+                      <span className="font-medium truncate max-w-[150px]" title={c.company}>{c.company}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-green-600 dark:text-green-400">
+                        {c.certifiedUsers.toLocaleString()}
+                      </span>
+                      <span className="text-xs text-muted-foreground">({c.totalCerts.toLocaleString()} certs)</span>
+                    </div>
                   </div>
-                  <div className="h-2 bg-muted rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-400 rounded-full" style={{ width: `${adoption.security.before}%` }} />
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Certified</span>
-                    <span className="font-semibold text-green-600 dark:text-green-400">{adoption.security.after}%</span>
-                  </div>
-                  <div className="h-2 bg-muted rounded-full overflow-hidden">
-                    <div className="h-full bg-green-500 rounded-full" style={{ width: `${adoption.security.after}%` }} />
-                  </div>
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {(adoption.security.certifiedCount || 0).toLocaleString()} certified users
-                </div>
+                ))}
               </div>
-            </div>
-
-            <div className="mt-4 pt-4 border-t flex items-center gap-4 text-xs text-muted-foreground">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-2 bg-blue-400 rounded" />
-                <span>Learning users ({(adoption.learningUserCount || 0).toLocaleString()})</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-2 bg-green-500 rounded" />
-                <span>Certified users ({(adoption.certifiedUserCount || 0).toLocaleString()})</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       );
       })()}
 

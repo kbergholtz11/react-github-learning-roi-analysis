@@ -116,6 +116,14 @@ interface CertificationAnalytics {
       byCertification: { certification: string; scheduled: number }[];
     }[];
   };
+  // Geographic breakdown of certifications
+  geographicBreakdown?: {
+    regionBreakdown?: Array<{ region: string; certifiedUsers: number; totalCerts: number; percentage: number }>;
+    topCountries?: Array<{ country: string; region: string; certifiedUsers: number; totalCerts: number; percentage: number }>;
+    countriesByRegion?: Record<string, Array<{ country: string; certifiedUsers: number; totalCerts: number; percentage: number }>>;
+    topCompanies?: Array<{ company: string; certifiedUsers: number; totalCerts: number; percentage: number }>;
+    totalCertified?: number;
+  };
 }
 
 interface MetricsResponse {

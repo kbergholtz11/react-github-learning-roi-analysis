@@ -83,15 +83,12 @@ export default function LearningAdoptionPage() {
         // Fetch from the enriched stats endpoint
         const response = await fetch("/api/enriched/stats/learning-adoption");
         if (!response.ok) {
-          // Use mock data if endpoint not available
-          setData(getMockData());
-          return;
+          throw new Error(`Failed to fetch data: ${response.status}`);
         }
         const result = await response.json();
         setData(result);
       } catch (err) {
-        // Fallback to mock data for demo
-        setData(getMockData());
+        setError(err instanceof Error ? err.message : "Failed to load adoption data");
       } finally {
         setLoading(false);
       }
@@ -676,95 +673,4 @@ function aggregateDistribution(byType: Record<string, Record<number, number>>): 
   return result;
 }
 
-// Mock data for demonstration
-function getMockData(): AdoptionData {
-  return {
-    segments: [
-      {
-        name: "Multi-Certified",
-        description: "2+ certifications",
-        userCount: 2847,
-        copilotAdoption: 78.5,
-        actionsAdoption: 89.2,
-        securityAdoption: 67.3,
-        avgActionsLevel: 3.8,
-        avgCopilotDays: 24.5,
-      },
-      {
-        name: "Certified",
-        description: "1 certification",
-        userCount: 12453,
-        copilotAdoption: 68.2,
-        actionsAdoption: 82.1,
-        securityAdoption: 58.4,
-        avgActionsLevel: 3.2,
-        avgCopilotDays: 19.8,
-      },
-      {
-        name: "Skills + Learn",
-        description: "Both activities, no cert",
-        userCount: 8924,
-        copilotAdoption: 52.7,
-        actionsAdoption: 71.3,
-        securityAdoption: 45.2,
-        avgActionsLevel: 2.6,
-        avgCopilotDays: 14.2,
-      },
-      {
-        name: "Skills Only",
-        description: "Skills courses only",
-        userCount: 34521,
-        copilotAdoption: 41.3,
-        actionsAdoption: 58.4,
-        securityAdoption: 32.1,
-        avgActionsLevel: 2.1,
-        avgCopilotDays: 10.5,
-      },
-      {
-        name: "Learn Only",
-        description: "GitHub Learn only",
-        userCount: 18234,
-        copilotAdoption: 35.8,
-        actionsAdoption: 48.2,
-        securityAdoption: 28.7,
-        avgActionsLevel: 1.7,
-        avgCopilotDays: 8.2,
-      },
-      {
-        name: "No Learning",
-        description: "Baseline (no activities)",
-        userCount: 45000,
-        copilotAdoption: 22.4,
-        actionsAdoption: 35.6,
-        securityAdoption: 18.9,
-        avgActionsLevel: 1.2,
-        avgCopilotDays: 5.1,
-      },
-    ],
-    overall: {
-      totalLearners: 121979,
-      certifiedCount: 15300,
-      skillsOnlyCount: 34521,
-      learnOnlyCount: 18234,
-      multiModalCount: 11771,
-    },
-    actionsDistribution: {
-      byLearningType: {
-        "Certified": { 0: 1245, 1: 2456, 2: 3123, 3: 2987, 4: 1567, 5: 922 },
-        "Skills Only": { 0: 8234, 1: 10234, 2: 7865, 3: 4532, 4: 2134, 5: 1522 },
-        "Learn Only": { 0: 6234, 1: 5678, 2: 3456, 3: 1876, 4: 678, 5: 312 },
-        "No Learning": { 0: 22500, 1: 12000, 2: 6000, 3: 2500, 4: 1200, 5: 800 },
-      },
-    },
-    copilotStats: {
-      byLearningType: {
-        "Multi-Certified": { adopters: 2235, total: 2847, avgDays: 24.5 },
-        "Certified": { adopters: 8493, total: 12453, avgDays: 19.8 },
-        "Skills + Learn": { adopters: 4703, total: 8924, avgDays: 14.2 },
-        "Skills Only": { adopters: 14261, total: 34521, avgDays: 10.5 },
-        "Learn Only": { adopters: 6528, total: 18234, avgDays: 8.2 },
-        "No Learning": { adopters: 10080, total: 45000, avgDays: 5.1 },
-      },
-    },
-  };
-}
+

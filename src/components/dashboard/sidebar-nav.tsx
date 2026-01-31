@@ -13,7 +13,7 @@ import {
   Filter,
   Zap,
   Package,
-  Sparkles,
+  Lightbulb,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -37,7 +37,7 @@ const navItems = [
     title: "Overview",
     items: [
       { title: "Dashboard", href: "/", icon: Home, prefetch: true },
-      { title: "Learning Insights", href: "/insights", icon: Sparkles, prefetch: true },
+      { title: "Key Findings & ROI", href: "/insights", icon: Lightbulb, prefetch: true },
     ],
   },
   {

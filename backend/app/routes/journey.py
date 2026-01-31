@@ -41,6 +41,25 @@ def get_aggregated_journey():
         return None
 
 
+def get_aggregated_skill_journey():
+    """Read pre-aggregated skill-journey.json file for accurate skill dimension data."""
+    settings = get_settings()
+    skill_file = Path(settings.data_dir) / "aggregated" / "skill-journey.json"
+    
+    if not skill_file.exists():
+        logger.warning(f"Skill journey file not found: {skill_file}")
+        return None
+    
+    try:
+        with open(skill_file) as f:
+            data = json.load(f)
+            logger.info(f"Loaded aggregated skill journey with {data.get('totalLearners', 0)} learners")
+            return data
+    except Exception as e:
+        logger.warning(f"Failed to read aggregated skill journey: {e}")
+        return None
+
+
 @router.get("", response_model=JourneyResponse)
 async def get_journey_analytics():
     """
@@ -246,6 +265,65 @@ async def get_skill_journey():
     - Growth metrics
     """
     try:
+        # First try pre-aggregated JSON data (most accurate - uses enriched parquet)
+        aggregated = get_aggregated_skill_journey()
+        if aggregated:
+            logger.info("Using pre-aggregated skill-journey.json data")
+            
+            # Map the aggregated data format
+            raw_dims = aggregated.get("dimensionAverages", {})
+            
+            # Normalize dimension keys to snake_case (the UI expects this format)
+            dimension_key_map = {
+                "Learning": "learning",
+                "Product Usage": "product_usage",
+                "Certification": "certification",
+                "Consistency": "consistency",
+                "Growth": "growth",
+            }
+            
+            # Convert keys to snake_case format
+            dimension_averages = {}
+            for key, value in raw_dims.items():
+                normalized_key = dimension_key_map.get(key, key.lower().replace(" ", "_"))
+                dimension_averages[normalized_key] = value if isinstance(value, (int, float)) else 0
+            
+            # Ensure all dimensions are present
+            for snake_key in ["learning", "product_usage", "certification", "consistency", "growth"]:
+                if snake_key not in dimension_averages:
+                    dimension_averages[snake_key] = 0
+            
+            # Also ensure weights are snake_case
+            raw_weights = aggregated.get("weights", {})
+            weights = {}
+            for key, value in raw_weights.items():
+                normalized_key = dimension_key_map.get(key, key.lower().replace(" ", "_"))
+                weights[normalized_key] = value if isinstance(value, (int, float)) else 0
+            
+            # Default weights if missing
+            default_weights = {
+                "learning": 0.25,
+                "product_usage": 0.35,
+                "certification": 0.15,
+                "consistency": 0.15,
+                "growth": 0.10,
+            }
+            for k, v in default_weights.items():
+                if k not in weights:
+                    weights[k] = v
+            
+            return {
+                "funnel": aggregated.get("funnel", []),
+                "totalLearners": aggregated.get("totalLearners", 0),
+                "avgSkillScore": aggregated.get("avgSkillScore", 0),
+                "skillDistribution": aggregated.get("skillDistribution", {}),
+                "dimensionAverages": dimension_averages,
+                "growthMetrics": aggregated.get("growthMetrics", {}),
+                "weights": weights,
+            }
+        
+        # Fall back to calculating from CSV files (less accurate)
+        logger.warning("Falling back to CSV-based skill calculation")
         summary = get_skill_journey_summary()
         return {
             "funnel": [
