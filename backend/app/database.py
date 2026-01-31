@@ -414,6 +414,11 @@ class LearnerQueries:
                 SUM(CASE WHEN uses_security THEN 1 ELSE 0 END) as security_users,
                 SUM(total_arr_in_dollars) as total_arr,
                 COUNT(DISTINCT company_name) as unique_companies,
+                SUM(CASE WHEN 
+                    (company_name IS NOT NULL AND company_name != '') OR
+                    (exam_company IS NOT NULL AND exam_company != '') OR
+                    (partner_companies IS NOT NULL AND len(partner_companies) > 0)
+                THEN 1 ELSE 0 END) as learners_with_company,
                 COUNT(DISTINCT country) as unique_countries
             FROM learners_enriched
         """)[0]

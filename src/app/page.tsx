@@ -140,7 +140,7 @@ export default function DashboardPage() {
     count: f.count,
     percentage: maxCount > 0 ? Math.round((f.count / maxCount) * 100) : 0,
     color: stageColors[f.stage] || "#94a3b8"
-  }));
+  })).reverse();
 
   // Transform status breakdown for donut chart
   const impactSummary = statusBreakdown.map(s => ({
@@ -396,7 +396,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">With Company</span>
-                    <span className="font-semibold">{(enrichedStats.unique_companies || 0).toLocaleString()}</span>
+                    <span className="font-semibold">{(enrichedStats.learners_with_company || 0).toLocaleString()}</span>
                   </div>
                 </div>
               </div>

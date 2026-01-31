@@ -8,9 +8,15 @@ Syncs ALL learner data with full enrichment from canonical tables:
 - Query 2B: Skills Users (skills/* repos) - ADDED TO BASE (62k+ new learners!)
 - Query 3: Partner Credentials (cse-analytics cluster)
 - Query 4: User Demographics (accounts_all)
-- Query 5: Org Enrichment (relationships → account_hierarchy_dotcom)
-- Query 6: Enterprise Enrichment (relationships → account_hierarchy_enterprise)
+- Query 5: Org Enrichment (relationships → account_hierarchy_global_all)
 - Query 7: Product Usage (user_daily_activity_per_product, 90-day window)
+
+Company attribution uses account_hierarchy_global_all with priority:
+1. customer_name (billing customer - most authoritative)
+2. salesforce_account_name (CRM account)
+3. salesforce_parent_account_name (CRM parent)
+4. partner_companies (partner credential)
+5. org_name (GitHub org login fallback)
 
 Skills-only users (who engaged with skills/* repos but never registered for exams)
 are now included as first-class learners with full enrichment.
@@ -506,7 +512,7 @@ accounts_all
     first_paid_plan
 """
 
-# Query 5: Org Enrichment from relationships + account_hierarchy_dotcom + enterprise
+# Query 5: Org Enrichment using account_hierarchy_global_all (canonical unified table)
 # Now includes both ACE learners AND Skills users
 QUERY_5_ORG_ENRICHMENT = """
 // Get org enrichment for ALL learners (ACE + Skills users)
@@ -535,21 +541,16 @@ let user_orgs = relationships_all
 | where child_dotcom_id in (learner_ids)
 | summarize arg_max(day, *) by child_dotcom_id, parent_dotcom_id;
 
-// Get org details from account_hierarchy_dotcom
-let org_details = account_hierarchy_dotcom_all
+// Get org details from account_hierarchy_global_all (unified canonical table)
+// This table contains: customer_name (billing), salesforce_account_name, enterprise info, etc.
+let org_details = account_hierarchy_global_all
 | where account_type == "Organization"
 | summarize arg_max(day, *) by dotcom_id;
 
-// Get enterprise customer names (via org's enterprise_account_id)
-let enterprise_names = account_hierarchy_enterprise_all
-| summarize arg_max(day, *) by enterprise_account_id
-| project enterprise_account_id, enterprise_customer_name = customer_name;
-
-// Join user-org relationships with org details and enterprise names
+// Join user-org relationships with org details
 // NOTE: Using leftouter to preserve users whose orgs may not be in account_hierarchy
 user_orgs
 | join kind=leftouter org_details on $left.parent_dotcom_id == $right.dotcom_id
-| join kind=leftouter enterprise_names on enterprise_account_id
 | summarize
     // Take the "best" org (prefer paid, then largest)
     arg_max(is_paid, *),
@@ -565,15 +566,16 @@ by child_dotcom_id
     org_is_emu = enterprise_account_emu_enabled,
     org_enterprise_slug = enterprise_account_slug,
     org_enterprise_id = enterprise_account_id,
-    org_msft_tpid = msft_tpid,
-    org_msft_tpid_name = msft_tpid_name,
-    org_customer_name = customer_name,
-    enterprise_customer_name,
+    // Company attribution fields from account_hierarchy_global_all
+    org_customer_id = customer_id,
+    org_customer_name = customer_name,  // Billed customer name (most authoritative)
+    org_salesforce_account_name = salesforce_account_name,
+    org_salesforce_parent_name = salesforce_parent_account_name,
     org_has_enterprise_agreements = has_enterprise_agreements,
     org_count
 """
 
-# Query 6 removed - enterprise_customer_name now obtained in Query 5 via org's enterprise_account_id
+# Query 6 removed - all company data now in Query 5 via account_hierarchy_global_all
 
 # Query 7: Product Usage from user_daily_activity_per_product (90-day window)
 # Now includes both ACE learners AND Skills users
@@ -664,28 +666,35 @@ def derive_region(country: str) -> str:
 
 def resolve_company(row: pd.Series) -> tuple:
     """
-    Resolve company name using authoritative billing data only.
-    Priority order (from verified billing/partner data):
-    1. Enterprise customer_name (billing - most authoritative)
-    2. Org customer_name (billing)
-    3. Microsoft TPID name (partner program data)
-    4. Org name (GitHub org login as fallback)
+    Resolve company name using account_hierarchy_global_all canonical data.
+    Priority order (from verified billing/CRM data):
+    1. customer_name (billed customer - most authoritative, 1:1 with Zuora)
+    2. salesforce_account_name (CRM account)
+    3. salesforce_parent_account_name (CRM parent account)
+    4. Partner company (from partner credential data)
+    5. Org name (GitHub org login as fallback)
     
     Returns (company_name, source)
     """
-    # Tier 1: Enterprise customer billing name (most authoritative)
-    if pd.notna(row.get("enterprise_customer_name")) and row.get("enterprise_customer_name"):
-        return row["enterprise_customer_name"], "enterprise_billing"
-    
-    # Tier 2: Org customer billing name
+    # Tier 1: Billed customer name (most authoritative - actual paying entity)
     if pd.notna(row.get("org_customer_name")) and row.get("org_customer_name"):
-        return row["org_customer_name"], "org_billing"
+        return row["org_customer_name"], "billing_customer"
     
-    # Tier 3: Microsoft TPID (partner data)
-    if pd.notna(row.get("org_msft_tpid_name")) and row.get("org_msft_tpid_name"):
-        return row["org_msft_tpid_name"], "msft_tpid"
+    # Tier 2: Salesforce account name
+    if pd.notna(row.get("org_salesforce_account_name")) and row.get("org_salesforce_account_name"):
+        return row["org_salesforce_account_name"], "salesforce_account"
     
-    # Tier 4: GitHub org name (fallback)
+    # Tier 3: Salesforce parent account name
+    if pd.notna(row.get("org_salesforce_parent_name")) and row.get("org_salesforce_parent_name"):
+        return row["org_salesforce_parent_name"], "salesforce_parent"
+    
+    # Tier 4: Partner company (from partner credential - verified partner data)
+    partner_companies = row.get("partner_companies")
+    if partner_companies is not None:
+        if isinstance(partner_companies, (list, np.ndarray)) and len(partner_companies) > 0:
+            return str(partner_companies[0]), "partner_credential"
+    
+    # Tier 5: GitHub org name (fallback)
     if pd.notna(row.get("org_name")) and row.get("org_name"):
         return row["org_name"], "org_name"
     
