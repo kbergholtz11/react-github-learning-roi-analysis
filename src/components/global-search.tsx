@@ -38,7 +38,8 @@ import {
 const searchItems = [
   // Dashboard
   { title: "Home", href: "/", icon: Home, category: "Dashboard" },
-  { title: "Events", href: "/events", icon: Calendar, category: "Dashboard" },
+  { title: "Events & Engagement", href: "/events", icon: Calendar, category: "Dashboard" },
+  { title: "GitHub Activity", href: "/activity", icon: Activity, category: "Dashboard" },
   
   // Learner Journey
   { title: "Journey Overview", href: "/journey/overview", icon: Target, category: "Learner Journey" },

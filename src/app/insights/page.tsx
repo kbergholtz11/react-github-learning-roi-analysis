@@ -16,25 +16,28 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Lightbulb,
   TrendingUp,
   TrendingDown,
-  Target,
-  Zap,
-  Award,
-  Users,
   ArrowRight,
   CheckCircle2,
   AlertTriangle,
   ArrowUpRight,
   Bot,
-  Shield,
   BarChart3,
-  Sparkles,
-  AlertCircle,
-  Clock,
   BookOpen,
 } from "lucide-react";
+import {
+  LightBulbIcon,
+  GoalIcon,
+  ZapIcon,
+  TrophyIcon,
+  PeopleIcon,
+  CopilotIcon,
+  ShieldCheckIcon,
+  AlertIcon,
+  ClockIcon,
+  WorkflowIcon,
+} from "@primer/octicons-react";
 import { useMetrics, useJourney, useImpact, useEnrichedStats } from "@/hooks/use-unified-data";
 import { formatNumber } from "@/lib/utils";
 import {
@@ -63,7 +66,7 @@ const PRIORITY_COLORS = {
 
 const PRIORITY_ICONS = {
   high: <AlertTriangle className="h-5 w-5 text-red-500" />,
-  medium: <AlertCircle className="h-5 w-5 text-amber-500" />,
+  medium: <AlertIcon size={20} className="text-amber-500" />,
   low: <CheckCircle2 className="h-5 w-5 text-green-500" />,
   success: <CheckCircle2 className="h-5 w-5 text-green-500" />,
 };
@@ -453,7 +456,7 @@ export default function KeyFindingsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
-            <Lightbulb className="h-8 w-8 text-amber-500" />
+            <LightBulbIcon size={32} className="text-amber-500" />
             Key Findings & ROI
           </h1>
           <p className="text-muted-foreground mt-1">
@@ -461,7 +464,7 @@ export default function KeyFindingsPage() {
           </p>
         </div>
         <Badge variant="outline" className="text-sm">
-          <Clock className="h-3 w-3 mr-1" />
+          <ClockIcon size={12} className="mr-1" />
           Updated {new Date().toLocaleDateString()}
         </Badge>
       </div>
@@ -475,7 +478,7 @@ export default function KeyFindingsPage() {
           title="Retention Rate"
           value={`${keyMetrics.retentionRate}%`}
           subtitle="Learner engagement"
-          icon={Users}
+          icon={PeopleIcon}
           trend={{ value: Math.round(keyMetrics.retentionRate), isPositive: keyMetrics.retentionRate >= 80 }}
           color="green"
         />
@@ -483,7 +486,7 @@ export default function KeyFindingsPage() {
           title="Exam Pass Rate"
           value={`${keyMetrics.passRate}%`}
           subtitle={`${formatNumber(keyMetrics.totalCerts)} certs earned`}
-          icon={Target}
+          icon={GoalIcon}
           trend={{ value: keyMetrics.passRate, isPositive: keyMetrics.passRate >= 70 }}
           color="blue"
         />
@@ -491,7 +494,7 @@ export default function KeyFindingsPage() {
           title="Products Adopted"
           value={keyMetrics.avgProductsAdopted.toFixed(1)}
           subtitle="Avg per learner"
-          icon={Zap}
+          icon={ZapIcon}
           trend={{ value: Math.round(keyMetrics.avgProductsAdopted * 20), isPositive: keyMetrics.avgProductsAdopted >= 2.5 }}
           color="violet"
         />
@@ -550,7 +553,7 @@ export default function KeyFindingsPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Lightbulb className="h-5 w-5 text-amber-500" />
+              <LightBulbIcon size={20} className="text-amber-500" />
               Top Insights
             </CardTitle>
             <CardDescription>
@@ -578,7 +581,7 @@ export default function KeyFindingsPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-blue-500" />
+              <PeopleIcon size={20} className="text-blue-500" />
               Journey Funnel Efficiency
             </CardTitle>
             <CardDescription>
@@ -617,7 +620,7 @@ export default function KeyFindingsPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-purple-500" />
+              <CopilotIcon size={20} className="text-purple-500" />
               Product Adoption Impact
             </CardTitle>
             <CardDescription>
@@ -639,7 +642,7 @@ export default function KeyFindingsPage() {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Zap className="h-5 w-5 text-orange-500" />
+                  <WorkflowIcon size={20} className="text-orange-500" />
                   <span className="font-medium">Actions</span>
                 </div>
                 <span className="font-bold text-orange-600">{keyMetrics.actionsAdoption}%</span>
@@ -650,7 +653,7 @@ export default function KeyFindingsPage() {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Shield className="h-5 w-5 text-green-500" />
+                  <ShieldCheckIcon size={20} className="text-green-500" />
                   <span className="font-medium">Security</span>
                 </div>
                 <span className="font-bold text-green-600">{keyMetrics.securityAdoption}%</span>
@@ -712,7 +715,7 @@ export default function KeyFindingsPage() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Link href="/analytics/certification">
               <Button variant="outline" className="w-full justify-start gap-2 h-auto py-3">
-                <Award className="h-5 w-5 text-green-500" />
+                <TrophyIcon size={20} className="text-green-500" />
                 <div className="text-left">
                   <div className="font-medium">Certification Analytics</div>
                   <div className="text-xs text-muted-foreground">Pass rates, exams, forecasts</div>
@@ -721,7 +724,7 @@ export default function KeyFindingsPage() {
             </Link>
             <Link href="/journey/funnel">
               <Button variant="outline" className="w-full justify-start gap-2 h-auto py-3">
-                <Users className="h-5 w-5 text-blue-500" />
+                <PeopleIcon size={20} className="text-blue-500" />
                 <div className="text-left">
                   <div className="font-medium">Journey Funnel</div>
                   <div className="text-xs text-muted-foreground">Progression & drop-offs</div>

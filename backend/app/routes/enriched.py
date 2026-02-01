@@ -1680,6 +1680,253 @@ async def reload_database(request: Request) -> Dict[str, str]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/stats/github-activity")
+async def get_github_activity_stats() -> Dict[str, Any]:
+    """
+    Get comprehensive GitHub activity statistics from enriched learner data.
+    
+    This pulls from the full 367K+ learner dataset with all activity metrics.
+    
+    Returns:
+        - totalUsers: Total learners in dataset
+        - totalUsersWithActivity: Users with any GitHub activity
+        - totals: Aggregate counts for all products
+        - averages: Per-user averages
+        - productUsage: Usage stats for each product (Copilot, Actions, etc.)
+        - byCertStatus: Activity comparison certified vs non-certified
+        - byStatus: Activity by learner status
+        - topContributors: Top learners by activity
+    """
+    try:
+        db = get_database()
+        
+        # Get comprehensive activity metrics
+        result = db.query("""
+            SELECT 
+                -- Total counts
+                COUNT(*) as total_users,
+                COUNT(*) FILTER (WHERE COALESCE(total_active_days, 0) > 0) as users_with_activity,
+                COUNT(*) FILTER (WHERE COALESCE(pr_days, 0) > 0) as users_with_prs,
+                COUNT(*) FILTER (WHERE COALESCE(issues_days, 0) > 0) as users_with_issues,
+                COUNT(*) FILTER (WHERE COALESCE(copilot_days, 0) > 0) as users_with_copilot,
+                COUNT(*) FILTER (WHERE COALESCE(actions_days, 0) > 0) as users_with_actions,
+                COUNT(*) FILTER (WHERE COALESCE(security_days, 0) > 0) as users_with_security,
+                COUNT(*) FILTER (WHERE COALESCE(code_search_days, 0) > 0) as users_with_code_search,
+                COUNT(*) FILTER (WHERE COALESCE(discussions_days, 0) > 0) as users_with_discussions,
+                COUNT(*) FILTER (WHERE COALESCE(projects_days, 0) > 0) as users_with_projects,
+                COUNT(*) FILTER (WHERE COALESCE(packages_days, 0) > 0) as users_with_packages,
+                
+                -- Total days
+                COALESCE(SUM(total_active_days), 0) as total_active_days,
+                COALESCE(SUM(total_active_days_90d), 0) as total_active_days_90d,
+                COALESCE(SUM(pr_days), 0) as total_pr_days,
+                COALESCE(SUM(issues_days), 0) as total_issues_days,
+                COALESCE(SUM(copilot_days), 0) as total_copilot_days,
+                COALESCE(SUM(copilot_days_90d), 0) as total_copilot_days_90d,
+                COALESCE(SUM(actions_days), 0) as total_actions_days,
+                COALESCE(SUM(actions_days_90d), 0) as total_actions_days_90d,
+                COALESCE(SUM(security_days), 0) as total_security_days,
+                COALESCE(SUM(code_search_days), 0) as total_code_search_days,
+                COALESCE(SUM(discussions_days), 0) as total_discussions_days,
+                COALESCE(SUM(projects_days), 0) as total_projects_days,
+                COALESCE(SUM(packages_days), 0) as total_packages_days,
+                COALESCE(SUM(pages_days), 0) as total_pages_days,
+                
+                -- Engagement events
+                COALESCE(SUM(total_engagement_events), 0) as total_engagement_events,
+                COALESCE(SUM(copilot_engagement_events), 0) as copilot_engagement_events,
+                COALESCE(SUM(actions_engagement_events), 0) as actions_engagement_events,
+                
+                -- Averages (for users with any activity)
+                ROUND(AVG(CASE WHEN total_active_days > 0 THEN total_active_days ELSE NULL END), 1) as avg_active_days,
+                ROUND(AVG(CASE WHEN total_active_days_90d > 0 THEN total_active_days_90d ELSE NULL END), 1) as avg_active_days_90d,
+                ROUND(AVG(CASE WHEN pr_days > 0 THEN pr_days ELSE NULL END), 1) as avg_pr_days,
+                ROUND(AVG(CASE WHEN issues_days > 0 THEN issues_days ELSE NULL END), 1) as avg_issues_days,
+                ROUND(AVG(CASE WHEN copilot_days > 0 THEN copilot_days ELSE NULL END), 1) as avg_copilot_days,
+                ROUND(AVG(CASE WHEN actions_days > 0 THEN actions_days ELSE NULL END), 1) as avg_actions_days,
+                
+                -- Certified vs Non-certified comparison
+                ROUND(AVG(CASE WHEN exams_passed > 0 THEN total_active_days_90d ELSE NULL END), 1) as certified_avg_active_days_90d,
+                ROUND(AVG(CASE WHEN exams_passed = 0 OR exams_passed IS NULL THEN total_active_days_90d ELSE NULL END), 1) as learning_avg_active_days_90d,
+                ROUND(AVG(CASE WHEN exams_passed > 0 THEN pr_days ELSE NULL END), 1) as certified_avg_pr_days,
+                ROUND(AVG(CASE WHEN exams_passed = 0 OR exams_passed IS NULL THEN pr_days ELSE NULL END), 1) as learning_avg_pr_days,
+                ROUND(AVG(CASE WHEN exams_passed > 0 THEN copilot_days ELSE NULL END), 1) as certified_avg_copilot_days,
+                ROUND(AVG(CASE WHEN exams_passed = 0 OR exams_passed IS NULL THEN copilot_days ELSE NULL END), 1) as learning_avg_copilot_days,
+                
+                -- Count by cert status
+                COUNT(*) FILTER (WHERE exams_passed > 0) as certified_count,
+                COUNT(*) FILTER (WHERE exams_passed = 0 OR exams_passed IS NULL) as learning_count
+                
+            FROM learners_enriched
+        """)
+        
+        # Activity by learner status
+        status_result = db.query("""
+            SELECT 
+                learner_status,
+                COUNT(*) as count,
+                ROUND(AVG(COALESCE(total_active_days_90d, 0)), 1) as avg_active_days_90d,
+                ROUND(AVG(COALESCE(pr_days, 0)), 1) as avg_pr_days,
+                ROUND(AVG(COALESCE(issues_days, 0)), 1) as avg_issues_days,
+                ROUND(AVG(COALESCE(copilot_days, 0)), 1) as avg_copilot_days,
+                ROUND(AVG(COALESCE(actions_days, 0)), 1) as avg_actions_days,
+                SUM(CASE WHEN total_active_days > 0 THEN 1 ELSE 0 END) as with_activity
+            FROM learners_enriched
+            WHERE learner_status IS NOT NULL
+            GROUP BY learner_status
+            ORDER BY count DESC
+        """)
+        
+        # Top contributors by total active days
+        top_contributors = db.query("""
+            SELECT 
+                COALESCE(userhandle, email, 'unknown') as handle,
+                learner_status,
+                exams_passed,
+                total_active_days,
+                total_active_days_90d,
+                pr_days,
+                issues_days,
+                copilot_days,
+                actions_days,
+                total_engagement_events
+            FROM learners_enriched
+            WHERE total_active_days > 0
+            ORDER BY total_active_days DESC
+            LIMIT 25
+        """)
+        
+        if result:
+            row = result[0]
+            return {
+                "totalUsers": int(row.get("total_users", 0) or 0),
+                "totalUsersWithActivity": int(row.get("users_with_activity", 0) or 0),
+                "usersWithPRs": int(row.get("users_with_prs", 0) or 0),
+                "usersWithIssues": int(row.get("users_with_issues", 0) or 0),
+                "usersWithCopilot": int(row.get("users_with_copilot", 0) or 0),
+                "usersWithActions": int(row.get("users_with_actions", 0) or 0),
+                "usersWithSecurity": int(row.get("users_with_security", 0) or 0),
+                "totals": {
+                    "activeDays": int(row.get("total_active_days", 0) or 0),
+                    "activeDays90d": int(row.get("total_active_days_90d", 0) or 0),
+                    "prDays": int(row.get("total_pr_days", 0) or 0),
+                    "issuesDays": int(row.get("total_issues_days", 0) or 0),
+                    "copilotDays": int(row.get("total_copilot_days", 0) or 0),
+                    "copilotDays90d": int(row.get("total_copilot_days_90d", 0) or 0),
+                    "actionsDays": int(row.get("total_actions_days", 0) or 0),
+                    "actionsDays90d": int(row.get("total_actions_days_90d", 0) or 0),
+                    "securityDays": int(row.get("total_security_days", 0) or 0),
+                    "codeSearchDays": int(row.get("total_code_search_days", 0) or 0),
+                    "discussionsDays": int(row.get("total_discussions_days", 0) or 0),
+                    "projectsDays": int(row.get("total_projects_days", 0) or 0),
+                    "packagesDays": int(row.get("total_packages_days", 0) or 0),
+                    "pagesDays": int(row.get("total_pages_days", 0) or 0),
+                    "engagementEvents": int(row.get("total_engagement_events", 0) or 0),
+                    "copilotEvents": int(row.get("copilot_engagement_events", 0) or 0),
+                    "actionsEvents": int(row.get("actions_engagement_events", 0) or 0),
+                },
+                "averages": {
+                    "activeDays": float(row.get("avg_active_days", 0) or 0),
+                    "activeDays90d": float(row.get("avg_active_days_90d", 0) or 0),
+                    "prDays": float(row.get("avg_pr_days", 0) or 0),
+                    "issuesDays": float(row.get("avg_issues_days", 0) or 0),
+                    "copilotDays": float(row.get("avg_copilot_days", 0) or 0),
+                    "actionsDays": float(row.get("avg_actions_days", 0) or 0),
+                },
+                "productUsage": {
+                    "copilot": {
+                        "users": int(row.get("users_with_copilot", 0) or 0),
+                        "totalDays": int(row.get("total_copilot_days", 0) or 0),
+                        "totalDays90d": int(row.get("total_copilot_days_90d", 0) or 0),
+                        "events": int(row.get("copilot_engagement_events", 0) or 0),
+                    },
+                    "actions": {
+                        "users": int(row.get("users_with_actions", 0) or 0),
+                        "totalDays": int(row.get("total_actions_days", 0) or 0),
+                        "totalDays90d": int(row.get("total_actions_days_90d", 0) or 0),
+                        "events": int(row.get("actions_engagement_events", 0) or 0),
+                    },
+                    "security": {
+                        "users": int(row.get("users_with_security", 0) or 0),
+                        "totalDays": int(row.get("total_security_days", 0) or 0),
+                    },
+                    "codeSearch": {
+                        "users": int(row.get("users_with_code_search", 0) or 0),
+                        "totalDays": int(row.get("total_code_search_days", 0) or 0),
+                    },
+                    "discussions": {
+                        "users": int(row.get("users_with_discussions", 0) or 0),
+                        "totalDays": int(row.get("total_discussions_days", 0) or 0),
+                    },
+                    "projects": {
+                        "users": int(row.get("users_with_projects", 0) or 0),
+                        "totalDays": int(row.get("total_projects_days", 0) or 0),
+                    },
+                    "packages": {
+                        "users": int(row.get("users_with_packages", 0) or 0),
+                        "totalDays": int(row.get("total_packages_days", 0) or 0),
+                    },
+                    "pullRequests": {
+                        "users": int(row.get("users_with_prs", 0) or 0),
+                        "totalDays": int(row.get("total_pr_days", 0) or 0),
+                    },
+                    "issues": {
+                        "users": int(row.get("users_with_issues", 0) or 0),
+                        "totalDays": int(row.get("total_issues_days", 0) or 0),
+                    },
+                },
+                "byCertStatus": {
+                    "certified": {
+                        "count": int(row.get("certified_count", 0) or 0),
+                        "avgActiveDays90d": float(row.get("certified_avg_active_days_90d", 0) or 0),
+                        "avgPrDays": float(row.get("certified_avg_pr_days", 0) or 0),
+                        "avgCopilotDays": float(row.get("certified_avg_copilot_days", 0) or 0),
+                    },
+                    "learning": {
+                        "count": int(row.get("learning_count", 0) or 0),
+                        "avgActiveDays90d": float(row.get("learning_avg_active_days_90d", 0) or 0),
+                        "avgPrDays": float(row.get("learning_avg_pr_days", 0) or 0),
+                        "avgCopilotDays": float(row.get("learning_avg_copilot_days", 0) or 0),
+                    },
+                },
+                "byStatus": [
+                    {
+                        "status": r.get("learner_status"),
+                        "count": int(r.get("count", 0) or 0),
+                        "avgActiveDays90d": float(r.get("avg_active_days_90d", 0) or 0),
+                        "avgPrDays": float(r.get("avg_pr_days", 0) or 0),
+                        "avgIssuesDays": float(r.get("avg_issues_days", 0) or 0),
+                        "avgCopilotDays": float(r.get("avg_copilot_days", 0) or 0),
+                        "avgActionsDays": float(r.get("avg_actions_days", 0) or 0),
+                        "withActivity": int(r.get("with_activity", 0) or 0),
+                    }
+                    for r in (status_result or [])
+                ],
+                "topContributors": [
+                    {
+                        "handle": r.get("handle"),
+                        "status": r.get("learner_status"),
+                        "certifications": int(r.get("exams_passed", 0) or 0),
+                        "totalActiveDays": int(r.get("total_active_days", 0) or 0),
+                        "activeDays90d": int(r.get("total_active_days_90d", 0) or 0),
+                        "prDays": int(r.get("pr_days", 0) or 0),
+                        "issuesDays": int(r.get("issues_days", 0) or 0),
+                        "copilotDays": int(r.get("copilot_days", 0) or 0),
+                        "actionsDays": int(r.get("actions_days", 0) or 0),
+                        "engagementEvents": int(r.get("total_engagement_events", 0) or 0),
+                    }
+                    for r in (top_contributors or [])
+                ],
+                "source": "enriched_parquet"
+            }
+        
+        return {"totalUsersWithActivity": 0, "source": "enriched_parquet"}
+        
+    except Exception as e:
+        logger.error(f"Error getting GitHub activity stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/sync/status")
 async def get_sync_status() -> Dict[str, Any]:
     """

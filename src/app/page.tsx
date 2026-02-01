@@ -10,28 +10,39 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
-  Users, 
-  Award, 
-  TrendingUp, 
   ArrowRight,
   ArrowUpRight,
-  Sparkles,
-  GraduationCap,
-  Zap,
-  Activity,
-  Target,
-  AlertCircle,
-  Shield,
-  Clock,
-  RefreshCw,
-  Calendar,
-  AlertTriangle,
+  BarChart3,
   CheckCircle2,
-  XCircle,
-  BarChart3
+  RefreshCw,
+  AlertTriangle,
+  TrendingUp,
+  Activity,
 } from "lucide-react";
+import {
+  PeopleIcon,
+  TrophyIcon,
+  GraphIcon,
+  SparkleIcon,
+  MortarBoardIcon,
+  ZapIcon,
+  PulseIcon,
+  GoalIcon,
+  AlertIcon,
+  ShieldCheckIcon,
+  ClockIcon,
+  SyncIcon,
+  CalendarIcon,
+  CheckCircleIcon,
+  XCircleIcon,
+  GitCommitIcon,
+  GitPullRequestIcon,
+  CopilotIcon,
+  WorkflowIcon,
+  OrganizationIcon,
+} from "@primer/octicons-react";
 import { useMetrics, useSkillsCourses, useSkillJourney } from "@/hooks/use-unified-data";
-import { useCopilotTrend, useEnrichedStats, useJourney, useImpact } from "@/hooks/use-unified-data";
+import { useCopilotTrend, useEnrichedStats, useJourney, useImpact, useEvents, useGitHubActivity } from "@/hooks/use-unified-data";
 
 // Quick Navigation Cards - defined outside component to avoid recreation
 const quickNavCards = [
@@ -39,28 +50,28 @@ const quickNavCards = [
     title: "Learning Impact",
     description: "See how learning drives platform engagement",
     href: "/impact",
-    icon: TrendingUp,
+    icon: GraphIcon,
     color: "from-green-500 to-emerald-500",
   },
   {
     title: "Journey Overview",
     description: "Explore the full learner journey",
     href: "/journey/overview",
-    icon: Target,
+    icon: GoalIcon,
     color: "from-blue-500 to-cyan-500",
   },
   {
-    title: "Behavior Change",
-    description: "Track workflow transformations",
-    href: "/behavior",
-    icon: Activity,
+    title: "GitHub Activity",
+    description: "Track platform engagement metrics",
+    href: "/activity",
+    icon: PulseIcon,
     color: "from-violet-500 to-purple-500",
   },
   {
     title: "Compare Cohorts",
     description: "Learners vs non-learners analysis",
     href: "/compare",
-    icon: Users,
+    icon: PeopleIcon,
     color: "from-amber-500 to-orange-500",
   },
 ];
@@ -109,7 +120,7 @@ function LoadingSkeleton() {
 function ErrorState({ error }: { error: Error }) {
   return (
     <div className="flex flex-col items-center justify-center h-96 text-center">
-      <AlertCircle className="h-12 w-12 text-destructive mb-4" />
+      <AlertIcon size={48} className="text-destructive mb-4" />
       <h2 className="text-xl font-semibold mb-2">Failed to load dashboard</h2>
       <p className="text-muted-foreground mb-4">{error.message}</p>
       <Button onClick={() => window.location.reload()}>Retry</Button>
@@ -125,6 +136,8 @@ export default function DashboardPage() {
   const { data: skillsData } = useSkillsCourses();
   const { data: journeyData } = useJourney();
   const { data: skillJourneyData } = useSkillJourney();
+  const { data: eventsData } = useEvents();
+  const { data: activityData } = useGitHubActivity();
 
   // Memoize expensive data transformations
   const { metrics, funnel, statusBreakdown, certificationAnalytics } = useMemo(() => {
@@ -247,7 +260,7 @@ export default function DashboardPage() {
           </p>
         </div>
         <Badge variant="default" className="bg-gradient-to-r from-violet-500 to-purple-600">
-          <Sparkles className="h-3 w-3 mr-1" />
+          <SparkleIcon size={12} className="mr-1" />
           Impact Score: {metrics.impactScore}/100
         </Badge>
       </div>
@@ -258,26 +271,26 @@ export default function DashboardPage() {
           title="Active Learners"
           value={metrics.totalLearners.toLocaleString()}
           description="In learning journey"
-          icon={<Users className="h-4 w-4" />}
+          icon={<PeopleIcon size={16} />}
         />
         <MetricCard
           title="Certified Users"
           value={metrics.certifiedUsers.toLocaleString()}
           description={`${metrics.overallPassRate}% pass rate`}
-          icon={<Award className="h-4 w-4" />}
+          icon={<TrophyIcon size={16} />}
         />
         <MetricCard
           title="Avg. Usage Change"
           value={`${metrics.avgUsageIncrease >= 0 ? '+' : ''}${metrics.avgUsageIncrease}%`}
           description="After learning completion"
           trend={metrics.avgUsageIncrease >= 0 ? { value: Math.abs(metrics.avgUsageIncrease), isPositive: true } : { value: Math.abs(metrics.avgUsageIncrease), isPositive: false }}
-          icon={<TrendingUp className="h-4 w-4" />}
+          icon={<GraphIcon size={16} />}
         />
         <MetricCard
           title="Products Adopted"
           value={metrics.avgProductsAdopted.toString()}
           description="Avg per learner"
-          icon={<Zap className="h-4 w-4" />}
+          icon={<ZapIcon size={16} />}
         />
       </div>
 
@@ -285,11 +298,11 @@ export default function DashboardPage() {
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid">
           <TabsTrigger value="overview" className="gap-2">
-            <Target className="h-4 w-4" />
+            <GoalIcon size={16} />
             Overview
           </TabsTrigger>
           <TabsTrigger value="certifications" className="gap-2">
-            <Award className="h-4 w-4" />
+            <TrophyIcon size={16} />
             Certifications
           </TabsTrigger>
           <TabsTrigger value="skills" className="gap-2">
@@ -297,7 +310,7 @@ export default function DashboardPage() {
             Skills
           </TabsTrigger>
           <TabsTrigger value="velocity" className="gap-2">
-            <Clock className="h-4 w-4" />
+            <ClockIcon size={16} />
             Velocity
           </TabsTrigger>
         </TabsList>
@@ -308,7 +321,7 @@ export default function DashboardPage() {
           <Card className="border-2 border-primary/20">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <GraduationCap className="h-5 w-5 text-primary" />
+                <MortarBoardIcon size={20} className="text-primary" />
                 Learning Journey Funnel
               </CardTitle>
               <CardDescription>
@@ -347,7 +360,7 @@ export default function DashboardPage() {
             <Card className="col-span-4">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Sparkles className="h-5 w-5 text-violet-500" />
+                  <CopilotIcon size={20} className="text-violet-500" />
                   Copilot Adoption Trend
                 </CardTitle>
                 <CardDescription>Daily active learners using GitHub Copilot (30 days)</CardDescription>
@@ -403,7 +416,7 @@ export default function DashboardPage() {
                   <div className="flex items-center justify-between p-4 bg-violet-50 dark:bg-violet-950/30 rounded-lg">
                     <div className="flex items-center gap-3">
                       <div className="p-2 rounded-lg bg-violet-100 dark:bg-violet-900">
-                        <Sparkles className="h-5 w-5 text-violet-600" />
+                        <CopilotIcon size={20} className="text-violet-600" />
                       </div>
                       <div>
                         <span className="font-medium">Copilot</span>
@@ -420,7 +433,7 @@ export default function DashboardPage() {
                   <div className="flex items-center justify-between p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
                     <div className="flex items-center gap-3">
                       <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900">
-                        <Zap className="h-5 w-5 text-blue-600" />
+                        <WorkflowIcon size={20} className="text-blue-600" />
                       </div>
                       <div>
                         <span className="font-medium">Actions</span>
@@ -437,7 +450,7 @@ export default function DashboardPage() {
                   <div className="flex items-center justify-between p-4 bg-amber-50 dark:bg-amber-950/30 rounded-lg">
                     <div className="flex items-center gap-3">
                       <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900">
-                        <Shield className="h-5 w-5 text-amber-600" />
+                        <ShieldCheckIcon size={20} className="text-amber-600" />
                       </div>
                       <div>
                         <span className="font-medium">Security</span>
@@ -454,7 +467,7 @@ export default function DashboardPage() {
                   <div className="flex items-center justify-between p-4 bg-green-50 dark:bg-green-950/30 rounded-lg">
                     <div className="flex items-center gap-3">
                       <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900">
-                        <Users className="h-5 w-5 text-green-600" />
+                        <OrganizationIcon size={20} className="text-green-600" />
                       </div>
                       <div>
                         <span className="font-medium">With Company</span>
@@ -476,6 +489,97 @@ export default function DashboardPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* GitHub Activity & Events Summary */}
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* GitHub Activity Summary */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <GitCommitIcon size={20} className="text-green-500" />
+                  GitHub Activity
+                </CardTitle>
+                <CardDescription>Development contributions from learners</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {activityData ? (
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="text-center p-3 bg-green-50 dark:bg-green-950/30 rounded-lg">
+                      <div className="text-2xl font-bold text-green-600">
+                        {activityData.totals.activeDays.toLocaleString()}
+                      </div>
+                      <p className="text-xs text-muted-foreground">Active Days</p>
+                    </div>
+                    <div className="text-center p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
+                      <div className="text-2xl font-bold text-blue-600">
+                        {activityData.totals.prDays.toLocaleString()}
+                      </div>
+                      <p className="text-xs text-muted-foreground">PR Days</p>
+                    </div>
+                    <div className="text-center p-3 bg-violet-50 dark:bg-violet-950/30 rounded-lg">
+                      <div className="text-2xl font-bold text-violet-600">
+                        {activityData.totals.copilotDays.toLocaleString()}
+                      </div>
+                      <p className="text-xs text-muted-foreground">Copilot Days</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="h-[80px] flex items-center justify-center text-muted-foreground">
+                    <p>Loading activity data...</p>
+                  </div>
+                )}
+                <Button variant="ghost" size="sm" className="w-full mt-4" asChild>
+                  <Link href="/activity">
+                    View Activity Details <ArrowRight className="h-4 w-4 ml-2" />
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Events Summary */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CalendarIcon size={20} className="text-amber-500" />
+                  Events & Engagement
+                </CardTitle>
+                <CardDescription>Bootcamps, workshops, and partner events</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {eventsData ? (
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="text-center p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg">
+                      <div className="text-2xl font-bold text-amber-600">
+                        {eventsData.summary.totalUsers.toLocaleString()}
+                      </div>
+                      <p className="text-xs text-muted-foreground">Attendees</p>
+                    </div>
+                    <div className="text-center p-3 bg-green-50 dark:bg-green-950/30 rounded-lg">
+                      <div className="text-2xl font-bold text-green-600">
+                        {eventsData.summary.attendanceRate}%
+                      </div>
+                      <p className="text-xs text-muted-foreground">Attendance Rate</p>
+                    </div>
+                    <div className="text-center p-3 bg-violet-50 dark:bg-violet-950/30 rounded-lg">
+                      <div className="text-2xl font-bold text-violet-600">
+                        {eventsData.impact.certificationRateOfAttendees}%
+                      </div>
+                      <p className="text-xs text-muted-foreground">→ Certified</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="h-[80px] flex items-center justify-center text-muted-foreground">
+                    <p>Loading events data...</p>
+                  </div>
+                )}
+                <Button variant="ghost" size="sm" className="w-full mt-4" asChild>
+                  <Link href="/events">
+                    View Events Details <ArrowRight className="h-4 w-4 ml-2" />
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         {/* Certifications Tab */}
@@ -497,7 +601,7 @@ export default function DashboardPage() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <Target className="h-4 w-4 text-blue-500" />
+                  <GoalIcon size={16} className="text-blue-500" />
                   Pass Rate
                 </CardTitle>
               </CardHeader>
@@ -679,7 +783,7 @@ export default function DashboardPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5 text-green-500" />
+                  <CalendarIcon size={20} className="text-green-500" />
                   Exam Forecast (Next 3 Months)
                 </CardTitle>
                 <CardDescription>
@@ -789,7 +893,7 @@ export default function DashboardPage() {
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <Award className="h-4 w-4 text-violet-500" />
+                    <TrophyIcon size={16} className="text-violet-500" />
                     Certified
                   </CardTitle>
                 </CardHeader>
@@ -855,7 +959,7 @@ export default function DashboardPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-blue-500" />
+                <ClockIcon size={20} className="text-blue-500" />
                 Journey Stage Velocity
               </CardTitle>
               <CardDescription>

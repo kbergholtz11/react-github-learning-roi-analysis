@@ -1,23 +1,40 @@
 "use client";
 
+import Link from "next/link";
 import { MetricCard, SimpleAreaChart, DonutChart } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { 
-  TrendingUp, 
-  Users, 
-  Zap, 
-  Clock, 
   ArrowRight,
   CheckCircle2,
-  Target,
+  MessageSquare,
+  AlertCircle,
   Sparkles,
-  AlertCircle
+  Target,
+  Users,
+  TrendingUp,
+  Zap,
+  Clock,
+  GitCommit,
+  Calendar,
+  Activity,
 } from "lucide-react";
+import {
+  GraphIcon,
+  PeopleIcon,
+  ZapIcon,
+  ClockIcon,
+  GoalIcon,
+  CopilotIcon,
+  AlertIcon,
+  GitCommitIcon,
+  GitPullRequestIcon,
+  CalendarIcon,
+} from "@primer/octicons-react";
 import { Button } from "@/components/ui/button";
-import { useImpact } from "@/hooks/use-unified-data";
+import { useImpact, useGitHubActivity, useEvents } from "@/hooks/use-unified-data";
 
 function LoadingSkeleton() {
   return (
@@ -43,7 +60,7 @@ function LoadingSkeleton() {
 function ErrorState({ error }: { error: Error }) {
   return (
     <div className="flex flex-col items-center justify-center h-96 text-center">
-      <AlertCircle className="h-12 w-12 text-destructive mb-4" />
+      <AlertIcon size={48} className="text-destructive mb-4" />
       <h2 className="text-xl font-semibold mb-2">Failed to load impact data</h2>
       <p className="text-muted-foreground mb-4">{error.message}</p>
       <Button onClick={() => window.location.reload()}>Retry</Button>
@@ -53,6 +70,8 @@ function ErrorState({ error }: { error: Error }) {
 
 export default function LearningImpactPage() {
   const { data, isLoading, error } = useImpact();
+  const { data: activityData } = useGitHubActivity();
+  const { data: eventsData } = useEvents();
 
   if (isLoading) return <LoadingSkeleton />;
   if (error) return <ErrorState error={error as Error} />;
@@ -82,7 +101,7 @@ export default function LearningImpactPage() {
           </p>
         </div>
         <Badge variant="default" className="bg-gradient-to-r from-violet-500 to-purple-600">
-          <Sparkles className="h-3 w-3 mr-1" />
+          <CopilotIcon size={12} className="mr-1" />
           Impact Score: {impactScore}/100
         </Badge>
       </div>
@@ -91,7 +110,7 @@ export default function LearningImpactPage() {
       <Card className="border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Target className="h-5 w-5 text-primary" />
+            <GoalIcon size={20} className="text-primary" />
             Learning to Impact Flow
           </CardTitle>
           <CardDescription>
@@ -156,26 +175,26 @@ export default function LearningImpactPage() {
           title="Active Learners"
           value={safeMetrics.activeLearners.toLocaleString()}
           description="Enrolled in learning paths"
-          icon={<Users className="h-4 w-4" />}
+          icon={<PeopleIcon size={16} />}
         />
         <MetricCard
           title="Avg Usage Change"
           value={`${safeMetrics.avgUsageIncrease >= 0 ? '+' : ''}${safeMetrics.avgUsageIncrease}%`}
           description="After completing courses"
           trend={safeMetrics.avgUsageIncrease >= 0 ? { value: Math.abs(safeMetrics.avgUsageIncrease), isPositive: true } : { value: Math.abs(safeMetrics.avgUsageIncrease), isPositive: false }}
-          icon={<TrendingUp className="h-4 w-4" />}
+          icon={<GraphIcon size={16} />}
         />
         <MetricCard
           title="Features Adopted"
           value={safeMetrics.featuresAdopted.toString()}
           description="New features per learner"
-          icon={<Zap className="h-4 w-4" />}
+          icon={<ZapIcon size={16} />}
         />
         <MetricCard
           title="Time to Value"
           value={`${safeMetrics.timeToValue}%`}
           description="Faster onboarding"
-          icon={<Clock className="h-4 w-4" />}
+          icon={<ClockIcon size={16} />}
         />
       </div>
 
@@ -336,6 +355,105 @@ export default function LearningImpactPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Activity & Events Impact */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* GitHub Activity Impact */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <GitCommitIcon size={20} className="text-green-500" />
+              Development Activity Impact
+            </CardTitle>
+            <CardDescription>Learner contributions to GitHub</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {activityData ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="text-center p-3 bg-green-50 dark:bg-green-950/30 rounded-lg">
+                    <div className="text-2xl font-bold text-green-600">
+                      {activityData.averages.activeDays}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Avg Active Days/User</p>
+                  </div>
+                  <div className="text-center p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
+                    <div className="text-2xl font-bold text-blue-600">
+                      {activityData.averages.prDays}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Avg PR Days/User</p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="h-4 w-4 text-violet-500" />
+                    <span className="text-sm">Total Copilot Days</span>
+                  </div>
+                  <span className="font-semibold">
+                    {activityData.totals.copilotDays.toLocaleString()}
+                  </span>
+                </div>
+                <Button variant="ghost" size="sm" className="w-full" asChild>
+                  <Link href="/activity">
+                    View Full Activity Report <ArrowRight className="h-4 w-4 ml-2" />
+                  </Link>
+                </Button>
+              </div>
+            ) : (
+              <div className="h-[120px] flex items-center justify-center text-muted-foreground">
+                <p>Loading activity data...</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Events Impact */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CalendarIcon size={20} className="text-amber-500" />
+              Events → Certification Pipeline
+            </CardTitle>
+            <CardDescription>Event attendance driving certification</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {eventsData ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="text-center p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg">
+                    <div className="text-2xl font-bold text-amber-600">
+                      {eventsData.summary.attendanceRate}%
+                    </div>
+                    <p className="text-xs text-muted-foreground">Attendance Rate</p>
+                  </div>
+                  <div className="text-center p-3 bg-violet-50 dark:bg-violet-950/30 rounded-lg">
+                    <div className="text-2xl font-bold text-violet-600">
+                      {eventsData.impact.certificationRateOfAttendees}%
+                    </div>
+                    <p className="text-xs text-muted-foreground">→ Get Certified</p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <PeopleIcon size={16} className="text-green-500" />
+                    <span className="text-sm">Attendees Who Certified</span>
+                  </div>
+                  <span className="font-semibold">{eventsData.impact.eventAttendeesWhoCertified.toLocaleString()}</span>
+                </div>
+                <Button variant="ghost" size="sm" className="w-full" asChild>
+                  <Link href="/events">
+                    View Events Dashboard <ArrowRight className="h-4 w-4 ml-2" />
+                  </Link>
+                </Button>
+              </div>
+            ) : (
+              <div className="h-[120px] flex items-center justify-center text-muted-foreground">
+                <p>Loading events data...</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Key Insights */}
       <Card className="bg-gradient-to-br from-green-500/10 to-emerald-500/5 border-green-500/20">

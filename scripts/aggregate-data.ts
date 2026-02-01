@@ -391,6 +391,17 @@ interface IndividualExamRaw {
   source: string;
 }
 
+// Events data (from events.csv)
+interface EventRaw {
+  user_handle: string;
+  events_registered: number;
+  events_attended: number;
+  events_no_show: number;
+  first_event_date: string;
+  last_event_date: string;
+  event_categories: string;
+}
+
 // Load core data
 const certifiedUsers = parseCSV<CertifiedUserRaw>("certified_users.csv");
 const unifiedUsers = parseCSV<UnifiedUserRaw>("unified_users.csv");
@@ -407,6 +418,7 @@ const skillsEnrollments = parseCSV<SkillsEnrollmentRaw>("skills_enrollments.csv"
 const skillsAllEnrollments = parseCSV<SkillsAllEnrollmentRaw>("skills_all_enrollments.csv");
 const skillsCourses = parseCSV<SkillsCourseRaw>("skills_courses.csv");
 const individualExams = parseCSV<IndividualExamRaw>("individual_exams.csv");
+const eventsData = parseCSV<EventRaw>("events.csv");
 
 // Log enrichment data status
 if (learnersEnriched.length > 0) console.log(`👥 Learners Enriched: ${learnersEnriched.length} users with activity data`);
@@ -417,6 +429,7 @@ if (githubActivity.length > 0) console.log(`📊 GitHub activity data: ${githubA
 if (skillsEnrollments.length > 0) console.log(`🎓 Skills enrollments: ${skillsEnrollments.length} enrollments`);
 if (skillsCourses.length > 0) console.log(`📚 Skills courses: ${skillsCourses.length} courses`);
 if (individualExams.length > 0) console.log(`📝 Individual exams: ${individualExams.length} exam records`);
+if (eventsData.length > 0) console.log(`📅 Events data: ${eventsData.length} users with event attendance`);
 
 console.log("\n📊 Aggregating metrics...\n");
 
@@ -2183,6 +2196,116 @@ if (githubActivity.length > 0) {
   };
   writeJSON("github-activity.json", { ...activityData, generatedAt: new Date().toISOString() });
   console.log("✅ Written github-activity.json");
+}
+
+// Events aggregation (bootcamps, workshops, partner events)
+if (eventsData.length > 0) {
+  // Parse categories from comma-separated string
+  const parseCategories = (cats: string): string[] => {
+    if (!cats || cats === "") return [];
+    return String(cats).split(",").map(c => c.trim()).filter(c => c);
+  };
+  
+  // Build event handle set for lookup (convert to string in case parsed as number)
+  const eventHandles = new Set(eventsData.map(e => String(e.user_handle || "").toLowerCase()).filter(h => h));
+  
+  // Calculate totals
+  const totalRegistered = eventsData.reduce((sum, e) => sum + (Number(e.events_registered) || 0), 0);
+  const totalAttended = eventsData.reduce((sum, e) => sum + (Number(e.events_attended) || 0), 0);
+  const totalNoShows = eventsData.reduce((sum, e) => sum + (Number(e.events_no_show) || 0), 0);
+  const attendanceRate = totalRegistered > 0 ? Math.round(totalAttended / totalRegistered * 1000) / 10 : 0;
+  
+  // Category breakdown
+  const categoryCount: Record<string, { users: number; registrations: number; attended: number }> = {};
+  eventsData.forEach(e => {
+    const cats = parseCategories(e.event_categories);
+    cats.forEach(cat => {
+      if (!categoryCount[cat]) categoryCount[cat] = { users: 0, registrations: 0, attended: 0 };
+      categoryCount[cat].users++;
+      categoryCount[cat].registrations += Number(e.events_registered) || 0;
+      categoryCount[cat].attended += Number(e.events_attended) || 0;
+    });
+  });
+  
+  const categoryBreakdown = Object.entries(categoryCount)
+    .map(([category, stats]) => ({
+      category,
+      ...stats,
+      attendanceRate: stats.registrations > 0 
+        ? Math.round(stats.attended / stats.registrations * 1000) / 10 
+        : 0,
+    }))
+    .sort((a, b) => b.users - a.users);
+  
+  // Cross-reference with learners (who attends events and also certifies)
+  const eventAttendeeHandles = new Set(
+    eventsData.filter(e => Number(e.events_attended) > 0).map(e => String(e.user_handle || "").toLowerCase())
+  );
+  const eventAttendeesWhoCertified = learnersEnriched.filter(l => 
+    eventAttendeeHandles.has(String(l.userhandle || "").toLowerCase()) && Number(l.exams_passed) > 0
+  ).length;
+  const eventAttendeesTotal = learnersEnriched.filter(l => 
+    eventAttendeeHandles.has(String(l.userhandle || "").toLowerCase())
+  ).length;
+  
+  // Monthly trends
+  const monthlyEvents: Record<string, { registered: number; attended: number; users: number }> = {};
+  eventsData.forEach(e => {
+    if (!e.first_event_date) return;
+    const month = String(e.first_event_date).slice(0, 7);
+    if (!monthlyEvents[month]) monthlyEvents[month] = { registered: 0, attended: 0, users: 0 };
+    monthlyEvents[month].registered += Number(e.events_registered) || 0;
+    monthlyEvents[month].attended += Number(e.events_attended) || 0;
+    monthlyEvents[month].users++;
+  });
+  
+  const monthlyTrends = Object.entries(monthlyEvents)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, data]) => ({
+      month,
+      ...data,
+      attendanceRate: data.registered > 0 
+        ? Math.round(data.attended / data.registered * 1000) / 10 
+        : 0,
+    }));
+  
+  // Top attendees
+  const topAttendees = [...eventsData]
+    .sort((a, b) => (Number(b.events_attended) || 0) - (Number(a.events_attended) || 0))
+    .slice(0, 20)
+    .map(e => ({
+      handle: e.user_handle,
+      registered: Number(e.events_registered) || 0,
+      attended: Number(e.events_attended) || 0,
+      noShows: Number(e.events_no_show) || 0,
+      categories: parseCategories(e.event_categories),
+      firstEvent: e.first_event_date,
+      lastEvent: e.last_event_date,
+    }));
+  
+  const eventAggregation = {
+    summary: {
+      totalUsers: eventsData.length,
+      totalRegistrations: totalRegistered,
+      totalAttended,
+      totalNoShows,
+      attendanceRate,
+      avgEventsPerUser: Math.round(totalRegistered / eventsData.length * 10) / 10,
+    },
+    impact: {
+      eventAttendeesInLearnerPool: eventAttendeesTotal,
+      eventAttendeesWhoCertified,
+      certificationRateOfAttendees: eventAttendeesTotal > 0 
+        ? Math.round(eventAttendeesWhoCertified / eventAttendeesTotal * 1000) / 10 
+        : 0,
+    },
+    categoryBreakdown,
+    monthlyTrends,
+    topAttendees,
+  };
+  
+  writeJSON("events.json", { ...eventAggregation, generatedAt: new Date().toISOString() });
+  console.log("✅ Written events.json");
 }
 
 // Skills courses aggregation

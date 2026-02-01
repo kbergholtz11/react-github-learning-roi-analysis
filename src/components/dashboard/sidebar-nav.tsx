@@ -2,19 +2,21 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { BarChart2 } from "lucide-react";
 import {
-  Home,
-  Users,
-  TrendingUp,
-  Target,
-  GraduationCap,
-  Award,
-  BarChart2,
-  Filter,
-  Zap,
-  Package,
-  Lightbulb,
-} from "lucide-react";
+  HomeIcon,
+  PeopleIcon,
+  GraphIcon,
+  GoalIcon,
+  MortarBoardIcon,
+  TrophyIcon,
+  FilterIcon,
+  ZapIcon,
+  PackageIcon,
+  LightBulbIcon,
+  CalendarIcon,
+  PulseIcon,
+} from "@primer/octicons-react";
 import { cn } from "@/lib/utils";
 import {
   Sidebar,
@@ -36,32 +38,34 @@ const navItems = [
   {
     title: "Overview",
     items: [
-      { title: "Dashboard", href: "/", icon: Home, prefetch: true },
-      { title: "Key Findings & ROI", href: "/insights", icon: Lightbulb, prefetch: true },
+      { title: "Dashboard", href: "/", icon: HomeIcon, prefetch: true },
+      { title: "Key Findings & ROI", href: "/insights", icon: LightBulbIcon, prefetch: true },
     ],
   },
   {
     title: "Learning Journey",
     items: [
-      { title: "Journey Overview", href: "/journey/overview", icon: Target, prefetch: true },
-      { title: "Journey Funnel", href: "/journey/funnel", icon: Filter, prefetch: true },
-      { title: "Learner Explorer", href: "/journey/explorer", icon: Users, prefetch: false },
+      { title: "Journey Overview", href: "/journey/overview", icon: GoalIcon, prefetch: true },
+      { title: "Journey Funnel", href: "/journey/funnel", icon: FilterIcon, prefetch: true },
+      { title: "Events & Engagement", href: "/events", icon: CalendarIcon, prefetch: true },
+      { title: "Learner Explorer", href: "/journey/explorer", icon: PeopleIcon, prefetch: false },
     ],
   },
   {
     title: "Skills & Certifications",
     items: [
-      { title: "Skills Analysis", href: "/skills", icon: Zap, prefetch: true },
+      { title: "Skills Analysis", href: "/skills", icon: ZapIcon, prefetch: true },
       { title: "Skills Deep Dive", href: "/skills/analytics", icon: BarChart2, prefetch: false },
-      { title: "Certifications", href: "/analytics/certification", icon: Award, prefetch: true },
+      { title: "Certifications", href: "/analytics/certification", icon: TrophyIcon, prefetch: true },
     ],
   },
   {
     title: "Impact & Adoption",
     items: [
-      { title: "Learning Impact", href: "/impact", icon: TrendingUp, prefetch: true },
-      { title: "Product Adoption", href: "/adoption", icon: Package, prefetch: true },
-      { title: "Learning → Adoption", href: "/insights/adoption", icon: Zap, prefetch: true },
+      { title: "Learning Impact", href: "/impact", icon: GraphIcon, prefetch: true },
+      { title: "GitHub Activity", href: "/activity", icon: PulseIcon, prefetch: true },
+      { title: "Product Adoption", href: "/adoption", icon: PackageIcon, prefetch: true },
+      { title: "Learning → Adoption", href: "/insights/adoption", icon: ZapIcon, prefetch: true },
       { title: "Compare Cohorts", href: "/compare", icon: BarChart2, prefetch: false },
     ],
   },
@@ -75,7 +79,7 @@ export function DashboardSidebar() {
       <SidebarHeader className="border-b border-border/40 px-6 py-4">
         <Link href="/" className="flex items-center gap-3" aria-label="Learning Journey Analytics - Go to home">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 text-white" aria-hidden="true">
-            <GraduationCap className="h-5 w-5" />
+            <MortarBoardIcon size={20} />
           </div>
           <div className="flex flex-col">
             <span className="text-sm font-semibold">Learning Journey</span>
@@ -113,7 +117,9 @@ export function DashboardSidebar() {
                         prefetch={item.prefetch}
                         aria-current={pathname === item.href ? 'page' : undefined}
                       >
-                        <item.icon className="h-4 w-4" aria-hidden="true" />
+                        {typeof item.icon === 'function' && 'displayName' in item.icon 
+                          ? <item.icon size={16} aria-hidden="true" />
+                          : <item.icon className="h-4 w-4" aria-hidden="true" />}
                         {item.title}
                       </Link>
                     </SidebarMenuButton>

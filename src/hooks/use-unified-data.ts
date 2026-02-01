@@ -986,6 +986,180 @@ export function useSkillsCourses() {
 }
 
 // ============================================================================
+// Events Hook (Bootcamps, Workshops, Partner Events)
+// ============================================================================
+
+export interface EventsData {
+  summary: {
+    totalUsers: number;
+    totalRegistrations: number;
+    totalAttended: number;
+    totalNoShows: number;
+    attendanceRate: number;
+    avgEventsPerUser: number;
+  };
+  impact: {
+    eventAttendeesInLearnerPool: number;
+    eventAttendeesWhoCertified: number;
+    certificationRateOfAttendees: number;
+  };
+  categoryBreakdown: Array<{
+    category: string;
+    users: number;
+    registrations: number;
+    attended: number;
+    attendanceRate: number;
+  }>;
+  monthlyTrends: Array<{
+    month: string;
+    registered: number;
+    attended: number;
+    users: number;
+    attendanceRate: number;
+  }>;
+  topAttendees: Array<{
+    handle: string;
+    registered: number;
+    attended: number;
+    noShows: number;
+    categories: string[];
+    firstEvent: string;
+    lastEvent: string;
+  }>;
+  generatedAt?: string;
+  source?: string;
+}
+
+export function useEvents() {
+  return useQuery<EventsData>({
+    queryKey: ["events"],
+    queryFn: async () => {
+      const res = await fetch("/api/events");
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.message || "Failed to fetch events data");
+      }
+      return res.json();
+    },
+    staleTime: 1000 * 60 * 10,
+    retry: false,
+  });
+}
+
+// ============================================================================
+// GitHub Activity Hook (Uses enriched parquet - 367K+ users)
+// ============================================================================
+
+export interface ProductUsageStats {
+  users: number;
+  totalDays: number;
+  totalDays90d?: number;
+  events?: number;
+}
+
+export interface GitHubActivityData {
+  totalUsers: number;
+  totalUsersWithActivity: number;
+  usersWithPRs: number;
+  usersWithIssues: number;
+  usersWithCopilot: number;
+  usersWithActions: number;
+  usersWithSecurity: number;
+  totals: {
+    activeDays: number;
+    activeDays90d: number;
+    prDays: number;
+    issuesDays: number;
+    copilotDays: number;
+    copilotDays90d: number;
+    actionsDays: number;
+    actionsDays90d: number;
+    securityDays: number;
+    codeSearchDays: number;
+    discussionsDays: number;
+    projectsDays: number;
+    packagesDays: number;
+    pagesDays: number;
+    engagementEvents: number;
+    copilotEvents: number;
+    actionsEvents: number;
+  };
+  averages: {
+    activeDays: number;
+    activeDays90d: number;
+    prDays: number;
+    issuesDays: number;
+    copilotDays: number;
+    actionsDays: number;
+  };
+  productUsage: {
+    copilot: ProductUsageStats;
+    actions: ProductUsageStats;
+    security: ProductUsageStats;
+    codeSearch: ProductUsageStats;
+    discussions: ProductUsageStats;
+    projects: ProductUsageStats;
+    packages: ProductUsageStats;
+    pullRequests: ProductUsageStats;
+    issues: ProductUsageStats;
+  };
+  byCertStatus: {
+    certified: {
+      count: number;
+      avgActiveDays90d: number;
+      avgPrDays: number;
+      avgCopilotDays: number;
+    };
+    learning: {
+      count: number;
+      avgActiveDays90d: number;
+      avgPrDays: number;
+      avgCopilotDays: number;
+    };
+  };
+  byStatus: Array<{
+    status: string;
+    count: number;
+    avgActiveDays90d: number;
+    avgPrDays: number;
+    avgIssuesDays: number;
+    avgCopilotDays: number;
+    avgActionsDays: number;
+    withActivity: number;
+  }>;
+  topContributors: Array<{
+    handle: string;
+    status: string;
+    certifications: number;
+    totalActiveDays: number;
+    activeDays90d: number;
+    prDays: number;
+    issuesDays: number;
+    copilotDays: number;
+    actionsDays: number;
+    engagementEvents: number;
+  }>;
+  source: string;
+}
+
+export function useGitHubActivity() {
+  return useQuery<GitHubActivityData>({
+    queryKey: ["githubActivity"],
+    queryFn: async () => {
+      // Use backend enriched endpoint (367K+ users with full activity data)
+      const res = await fetch(`${BACKEND_URL}/api/enriched/stats/github-activity`);
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.message || "Failed to fetch GitHub activity data");
+      }
+      return res.json();
+    },
+    staleTime: 1000 * 60 * 10,
+    retry: 1,
+  });
+}
+
+// ============================================================================
 // Re-export for backwards compatibility
 // ============================================================================
 
